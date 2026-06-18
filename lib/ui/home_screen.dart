@@ -1,12 +1,14 @@
-// ui/home_screen.dart — the thin-slice UI. Log a lift, watch it rank. This is
-// the tracer bullet through the whole stack; the body graph (the visual payoff,
-// reusing the prototype's SVG assets) replaces/augments this list next.
+// ui/home_screen.dart — overall rank, the front/back body graph (tap a muscle
+// to log its lift), and the ranked-metric list.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/metrics.dart';
+import '../data/body_figure_data.dart';
 import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log, RankResult, est1rm;
 import '../state/providers.dart';
+import 'body_graph.dart';
+import 'metric_detail_sheet.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -18,7 +20,7 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Physical')),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openLogSheet(context),
+        onPressed: () => openLogSheet(context),
         icon: const Icon(Icons.add),
         label: const Text('Log'),
       ),
@@ -26,17 +28,37 @@ class HomeScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         children: [
           _OverallCard(overall),
+          const SizedBox(height: 12),
+          // ── Body graph: tap a muscle to log its lift ──
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: _figure('Front', frontRegions, context)),
+            const SizedBox(width: 8),
+            Expanded(child: _figure('Back', backRegions, context)),
+          ]),
           const SizedBox(height: 8),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Text('RANKED METRICS',
                 style: TextStyle(fontSize: 11, letterSpacing: 2, color: Colors.grey)),
           ),
-          for (final m in rankedMetrics)
-            _MetricRow(metric: m, latest: latest[m.id]),
+          for (final m in rankedMetrics) _MetricRow(metric: m, latest: latest[m.id]),
         ],
       ),
     );
+  }
+
+  Widget _figure(String label, List<BodyRegion> regions, BuildContext context) {
+    return Column(children: [
+      AspectRatio(
+        aspectRatio: 148 / 420,
+        child: BodyGraph(
+          regions: regions,
+          onTapMetric: (mid) => openDetailSheet(context, mid),
+        ),
+      ),
+      const SizedBox(height: 4),
+      Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+    ]);
   }
 }
 
@@ -54,7 +76,8 @@ class _OverallCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('OVERALL', style: TextStyle(fontSize: 11, letterSpacing: 2, color: Colors.grey)),
+          const Text('OVERALL',
+              style: TextStyle(fontSize: 11, letterSpacing: 2, color: Colors.grey)),
           const SizedBox(height: 6),
           Text('${r.tier} ${r.sub}',
               style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: c)),
@@ -77,6 +100,7 @@ class _MetricRow extends ConsumerWidget {
       return ListTile(
         title: Text(metric.label),
         trailing: const Text('—', style: TextStyle(color: Colors.grey)),
+        onTap: () => openDetailSheet(context, metric.id),
       );
     }
     final r = eng.scoreLog(latest!);
@@ -90,67 +114,75 @@ class _MetricRow extends ConsumerWidget {
     }
     final frac = r.rankValue - idx;
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(width: 10, height: 10, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-            const SizedBox(width: 8),
-            Expanded(child: Text(metric.label, style: const TextStyle(fontWeight: FontWeight.w600))),
-            Text('${r.tier} ${r.sub}', style: TextStyle(color: c, fontWeight: FontWeight.w700)),
+      child: InkWell(
+        onTap: () => openDetailSheet(context, metric.id),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(width: 10, height: 10,
+                  decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+              const SizedBox(width: 8),
+              Expanded(child: Text(metric.label,
+                  style: const TextStyle(fontWeight: FontWeight.w600))),
+              Text('${r.tier} ${r.sub}',
+                  style: TextStyle(color: c, fontWeight: FontWeight.w700)),
+            ]),
+            const SizedBox(height: 4),
+            Text('Latest ${latest!.value.toStringAsFixed(1)} ${metric.unit}'
+                '${metric.bodyweightScaled && latest!.bodyweight != null ? ' @ ${latest!.bodyweight!.toStringAsFixed(0)} kg BW' : ''}'
+                '  ·  top ${r.topPct.toStringAsFixed(1)}%',
+                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 6),
+            LinearProgressIndicator(value: frac, color: c, backgroundColor: c.withOpacity(0.15)),
+            if (next.isNotEmpty)
+              Padding(padding: const EdgeInsets.only(top: 4),
+                  child: Text(next, style: const TextStyle(fontSize: 11, color: Colors.grey))),
           ]),
-          const SizedBox(height: 4),
-          Text('Latest ${latest!.value.toStringAsFixed(1)} ${metric.unit}'
-              '${metric.bodyweightScaled && latest!.bodyweight != null ? ' @ ${latest!.bodyweight!.toStringAsFixed(0)} kg BW' : ''}'
-              '  ·  top ${r.topPct.toStringAsFixed(1)}%',
-              style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 6),
-          LinearProgressIndicator(value: frac, color: c, backgroundColor: c.withOpacity(0.15)),
-          if (next.isNotEmpty)
-            Padding(padding: const EdgeInsets.only(top: 4),
-                child: Text(next, style: const TextStyle(fontSize: 11, color: Colors.grey))),
-        ]),
+        ),
       ),
     );
   }
 }
 
-void _openLogSheet(BuildContext context) {
+void openLogSheet(BuildContext context, {String? initialMetricId}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    builder: (_) => const Padding(
-      padding: EdgeInsets.only(left: 16, right: 16, top: 16),
-      child: _LogSheet(),
+    builder: (_) => Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
+      child: _LogSheet(initialMetricId: initialMetricId),
     ),
   );
 }
 
 class _LogSheet extends ConsumerStatefulWidget {
-  const _LogSheet();
+  final String? initialMetricId;
+  const _LogSheet({this.initialMetricId});
   @override
   ConsumerState<_LogSheet> createState() => _LogSheetState();
 }
 
 class _LogSheetState extends ConsumerState<_LogSheet> {
-  late MetricDef _metric = rankedMetrics.first;
+  late MetricDef _metric;
   final _weight = TextEditingController();
   final _reps = TextEditingController(text: '5');
   final _value = TextEditingController();
   final _bw = TextEditingController();
 
-  List<MetricDef> get _loggable =>
-      [...rankedMetrics, metricById('bodyweight')];
+  List<MetricDef> get _loggable => [...rankedMetrics, metricById('bodyweight')];
 
   @override
   void initState() {
     super.initState();
+    _metric = _loggable.firstWhere((m) => m.id == widget.initialMetricId,
+        orElse: () => rankedMetrics.first);
     final bw = ref.read(currentBodyweightProvider);
     if (bw != null) _bw.text = bw.toStringAsFixed(0);
   }
 
   void _save() {
-    Log? log;
+    Log log;
     if (_metric.isStrength) {
       final w = double.tryParse(_weight.text);
       final reps = int.tryParse(_reps.text);
@@ -194,6 +226,7 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
         const SizedBox(height: 16),
         SizedBox(width: double.infinity,
             child: FilledButton(onPressed: _save, child: const Text('Save'))),
+        const SizedBox(height: 8),
       ]),
     );
   }
