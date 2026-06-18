@@ -1,0 +1,588 @@
+{
+  "_note": "Golden vectors from physical_rank_engine.py \u2014 the Dart port must match.",
+  "metric_cases": [
+    {
+      "metric": "bench",
+      "value": 40,
+      "bodyweight": 75,
+      "expected": {
+        "percentile": 43.132101,
+        "rank_value": 2.156605,
+        "tier": "Silver",
+        "sub": "I",
+        "top_pct": 56.867899
+      }
+    },
+    {
+      "metric": "bench",
+      "value": 55,
+      "bodyweight": 75,
+      "expected": {
+        "percentile": 66.261683,
+        "rank_value": 3.313084,
+        "tier": "Gold",
+        "sub": "I",
+        "top_pct": 33.738317
+      }
+    },
+    {
+      "metric": "bench",
+      "value": 75,
+      "bodyweight": 75,
+      "expected": {
+        "percentile": 84.056904,
+        "rank_value": 4.40569,
+        "tier": "Platinum",
+        "sub": "II",
+        "top_pct": 15.943096
+      }
+    },
+    {
+      "metric": "bench",
+      "value": 95,
+      "bodyweight": 75,
+      "expected": {
+        "percentile": 92.459948,
+        "rank_value": 5.351421,
+        "tier": "Diamond",
+        "sub": "II",
+        "top_pct": 7.540052
+      }
+    },
+    {
+      "metric": "bench",
+      "value": 112,
+      "bodyweight": 75,
+      "expected": {
+        "percentile": 95.933857,
+        "rank_value": 5.847694,
+        "tier": "Diamond",
+        "sub": "III",
+        "top_pct": 4.066143
+      }
+    },
+    {
+      "metric": "bench",
+      "value": 150,
+      "bodyweight": 75,
+      "expected": {
+        "percentile": 98.889373,
+        "rank_value": 6.944687,
+        "tier": "Champion",
+        "sub": "III",
+        "top_pct": 1.110627
+      }
+    },
+    {
+      "metric": "bench",
+      "value": 165,
+      "bodyweight": 75,
+      "expected": {
+        "percentile": 99.313176,
+        "rank_value": 7.347973,
+        "tier": "Titan",
+        "sub": "II",
+        "top_pct": 0.686824
+      }
+    },
+    {
+      "metric": "bench",
+      "value": 100,
+      "bodyweight": 70,
+      "expected": {
+        "percentile": 94.718865,
+        "rank_value": 5.674124,
+        "tier": "Diamond",
+        "sub": "III",
+        "top_pct": 5.281135
+      }
+    },
+    {
+      "metric": "bench",
+      "value": 100,
+      "bodyweight": 75,
+      "expected": {
+        "percentile": 93.72588,
+        "rank_value": 5.532269,
+        "tier": "Diamond",
+        "sub": "II",
+        "top_pct": 6.27412
+      }
+    },
+    {
+      "metric": "bench",
+      "value": 100,
+      "bodyweight": 85,
+      "expected": {
+        "percentile": 91.560528,
+        "rank_value": 5.222933,
+        "tier": "Diamond",
+        "sub": "I",
+        "top_pct": 8.439472
+      }
+    },
+    {
+      "metric": "bench",
+      "value": 100,
+      "bodyweight": 95,
+      "expected": {
+        "percentile": 89.203506,
+        "rank_value": 4.920351,
+        "tier": "Platinum",
+        "sub": "III",
+        "top_pct": 10.796494
+      }
+    },
+    {
+      "metric": "squat",
+      "value": 70,
+      "bodyweight": 75,
+      "expected": {
+        "percentile": 53.467212,
+        "rank_value": 2.673361,
+        "tier": "Silver",
+        "sub": "III",
+        "top_pct": 46.532788
+      }
+    },
+    {
+      "metric": "squat",
+      "value": 105,
+      "bodyweight": 75,
+      "expected": {
+        "percentile": 83.868131,
+        "rank_value": 4.386813,
+        "tier": "Platinum",
+        "sub": "II",
+        "top_pct": 16.131869
+      }
+    },
+    {
+      "metric": "squat",
+      "value": 140,
+      "bodyweight": 75,
+      "expected": {
+        "percentile": 94.834933,
+        "rank_value": 5.690705,
+        "tier": "Diamond",
+        "sub": "III",
+        "top_pct": 5.165067
+      }
+    },
+    {
+      "metric": "squat",
+      "value": 180,
+      "bodyweight": 75,
+      "expected": {
+        "percentile": 98.56707,
+        "rank_value": 6.783535,
+        "tier": "Champion",
+        "sub": "III",
+        "top_pct": 1.43293
+      }
+    },
+    {
+      "metric": "squat",
+      "value": 220,
+      "bodyweight": 75,
+      "expected": {
+        "percentile": 99.578793,
+        "rank_value": 7.643104,
+        "tier": "Titan",
+        "sub": "II",
+        "top_pct": 0.421207
+      }
+    },
+    {
+      "metric": "deadlift",
+      "value": 60,
+      "bodyweight": 80,
+      "expected": {
+        "percentile": 16.076929,
+        "rank_value": 0.803846,
+        "tier": "Wood",
+        "sub": "III",
+        "top_pct": 83.923071
+      }
+    },
+    {
+      "metric": "deadlift",
+      "value": 110,
+      "bodyweight": 80,
+      "expected": {
+        "percentile": 67.698693,
+        "rank_value": 3.384935,
+        "tier": "Gold",
+        "sub": "II",
+        "top_pct": 32.301307
+      }
+    },
+    {
+      "metric": "deadlift",
+      "value": 200,
+      "bodyweight": 80,
+      "expected": {
+        "percentile": 97.062235,
+        "rank_value": 6.031118,
+        "tier": "Champion",
+        "sub": "I",
+        "top_pct": 2.937765
+      }
+    },
+    {
+      "metric": "ohp",
+      "value": 30,
+      "bodyweight": 80,
+      "expected": {
+        "percentile": 51.444696,
+        "rank_value": 2.572235,
+        "tier": "Silver",
+        "sub": "II",
+        "top_pct": 48.555304
+      }
+    },
+    {
+      "metric": "ohp",
+      "value": 55,
+      "bodyweight": 80,
+      "expected": {
+        "percentile": 90.76026,
+        "rank_value": 5.108609,
+        "tier": "Diamond",
+        "sub": "I",
+        "top_pct": 9.23974
+      }
+    },
+    {
+      "metric": "ohp",
+      "value": 90,
+      "bodyweight": 80,
+      "expected": {
+        "percentile": 99.120583,
+        "rank_value": 7.133981,
+        "tier": "Titan",
+        "sub": "I",
+        "top_pct": 0.879417
+      }
+    },
+    {
+      "metric": "vo2max",
+      "value": 35,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 7.4307,
+        "rank_value": 0.371535,
+        "tier": "Wood",
+        "sub": "II",
+        "top_pct": 92.5693
+      }
+    },
+    {
+      "metric": "vo2max",
+      "value": 45,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 36.944134,
+        "rank_value": 1.847207,
+        "tier": "Bronze",
+        "sub": "III",
+        "top_pct": 63.055866
+      }
+    },
+    {
+      "metric": "vo2max",
+      "value": 52,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 67.163936,
+        "rank_value": 3.358197,
+        "tier": "Gold",
+        "sub": "II",
+        "top_pct": 32.836064
+      }
+    },
+    {
+      "metric": "vo2max",
+      "value": 60,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 90.878878,
+        "rank_value": 5.125554,
+        "tier": "Diamond",
+        "sub": "I",
+        "top_pct": 9.121122
+      }
+    },
+    {
+      "metric": "vo2max",
+      "value": 68,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 98.686585,
+        "rank_value": 6.843293,
+        "tier": "Champion",
+        "sub": "III",
+        "top_pct": 1.313415
+      }
+    },
+    {
+      "metric": "resting_hr",
+      "value": 85,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 6.68072,
+        "rank_value": 0.334036,
+        "tier": "Wood",
+        "sub": "II",
+        "top_pct": 93.31928
+      }
+    },
+    {
+      "metric": "resting_hr",
+      "value": 75,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 30.853754,
+        "rank_value": 1.542688,
+        "tier": "Bronze",
+        "sub": "II",
+        "top_pct": 69.146246
+      }
+    },
+    {
+      "metric": "resting_hr",
+      "value": 65,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 69.146246,
+        "rank_value": 3.457312,
+        "tier": "Gold",
+        "sub": "II",
+        "top_pct": 30.853754
+      }
+    },
+    {
+      "metric": "resting_hr",
+      "value": 55,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 93.31928,
+        "rank_value": 5.474183,
+        "tier": "Diamond",
+        "sub": "II",
+        "top_pct": 6.68072
+      }
+    },
+    {
+      "metric": "resting_hr",
+      "value": 45,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 99.379033,
+        "rank_value": 7.421148,
+        "tier": "Titan",
+        "sub": "II",
+        "top_pct": 0.620967
+      }
+    },
+    {
+      "metric": "plank",
+      "value": 40,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 12.65349,
+        "rank_value": 0.632675,
+        "tier": "Wood",
+        "sub": "II",
+        "top_pct": 87.34651
+      }
+    },
+    {
+      "metric": "plank",
+      "value": 75,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 50.0,
+        "rank_value": 2.5,
+        "tier": "Silver",
+        "sub": "II",
+        "top_pct": 50.0
+      }
+    },
+    {
+      "metric": "plank",
+      "value": 120,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 80.360041,
+        "rank_value": 4.036004,
+        "tier": "Platinum",
+        "sub": "I",
+        "top_pct": 19.639959
+      }
+    },
+    {
+      "metric": "plank",
+      "value": 200,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 96.273337,
+        "rank_value": 5.896191,
+        "tier": "Diamond",
+        "sub": "III",
+        "top_pct": 3.726663
+      }
+    },
+    {
+      "metric": "run5k_kmh",
+      "value": 8.5,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 13.852801,
+        "rank_value": 0.69264,
+        "tier": "Wood",
+        "sub": "III",
+        "top_pct": 86.147199
+      }
+    },
+    {
+      "metric": "run5k_kmh",
+      "value": 11.0,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 50.0,
+        "rank_value": 2.5,
+        "tier": "Silver",
+        "sub": "II",
+        "top_pct": 50.0
+      }
+    },
+    {
+      "metric": "run5k_kmh",
+      "value": 14.0,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 90.394249,
+        "rank_value": 5.056321,
+        "tier": "Diamond",
+        "sub": "I",
+        "top_pct": 9.605751
+      }
+    }
+  ],
+  "threshold_cases": [
+    {
+      "metric": "bench",
+      "tier": "Bronze",
+      "bodyweight": 75,
+      "expected_kg": 27.927064
+    },
+    {
+      "metric": "bench",
+      "tier": "Silver",
+      "bodyweight": 75,
+      "expected_kg": 38.309988
+    },
+    {
+      "metric": "bench",
+      "tier": "Gold",
+      "bodyweight": 75,
+      "expected_kg": 50.299108
+    },
+    {
+      "metric": "bench",
+      "tier": "Platinum",
+      "bodyweight": 75,
+      "expected_kg": 68.999672
+    },
+    {
+      "metric": "bench",
+      "tier": "Diamond",
+      "bodyweight": 75,
+      "expected_kg": 87.400612
+    },
+    {
+      "metric": "bench",
+      "tier": "Champion",
+      "bodyweight": 75,
+      "expected_kg": 120.603753
+    },
+    {
+      "metric": "bench",
+      "tier": "Titan",
+      "bodyweight": 75,
+      "expected_kg": 153.228919
+    },
+    {
+      "metric": "vo2max",
+      "tier": "Gold",
+      "bodyweight": null,
+      "expected_kg": 50.280124
+    },
+    {
+      "metric": "vo2max",
+      "tier": "Diamond",
+      "bodyweight": null,
+      "expected_kg": 59.533964
+    },
+    {
+      "metric": "vo2max",
+      "tier": "Titan",
+      "bodyweight": null,
+      "expected_kg": 68.937131
+    }
+  ],
+  "overall_cases": [
+    {
+      "logs": [
+        {
+          "metric": "bench",
+          "value": 95,
+          "bodyweight": 78
+        },
+        {
+          "metric": "squat",
+          "value": 140,
+          "bodyweight": 80
+        },
+        {
+          "metric": "vo2max",
+          "value": 52
+        },
+        {
+          "metric": "resting_hr",
+          "value": 60
+        },
+        {
+          "metric": "plank",
+          "value": 130
+        }
+      ],
+      "expected": {
+        "tier": "Platinum",
+        "sub": "II",
+        "top_pct": 14.162692,
+        "rank_value": 4.583731
+      }
+    },
+    {
+      "logs": [
+        {
+          "metric": "bench",
+          "value": 60,
+          "bodyweight": 75
+        },
+        {
+          "metric": "vo2max",
+          "value": 40
+        }
+      ],
+      "expected": {
+        "tier": "Silver",
+        "sub": "I",
+        "top_pct": 56.106685,
+        "rank_value": 2.194666
+      }
+    }
+  ]
+}
