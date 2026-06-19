@@ -1,0 +1,19 @@
+# Postgres + TimescaleDB for production-like local dev.
+#   docker compose up -d
+#   export DATABASE_URL=postgresql+psycopg2://physical:physical@localhost:5432/physical
+#   uvicorn app.main:app --reload        # creates tables on first start
+#   psql "$DATABASE_URL" -f scripts/timescale_init.sql   # convert to hypertable
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: physical
+      POSTGRES_PASSWORD: physical
+      POSTGRES_DB: physical
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

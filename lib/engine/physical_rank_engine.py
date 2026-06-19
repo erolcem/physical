@@ -115,23 +115,46 @@ def _S(mid, un_r, tr_r, note):
                     _strength_mix(_P_TRAIN, un_r, _GRIP_CV, tr_r, _TR_CV), note)
 
 STANDARDS = {
+    # ── Strength compounds (grounded mixtures) ──
     "bench":    _S("bench",    0.50, 1.15, "mix: untrained 0.50x / trained 1.15x"),
     "squat":    _S("squat",    0.75, 1.60, "mix: untrained 0.75x / trained 1.60x"),
     "deadlift": _S("deadlift", 0.95, 2.00, "mix: untrained 0.95x / trained 2.00x"),
     "ohp":      _S("ohp",      0.32, 0.70, "mix: untrained 0.32x / trained 0.70x"),
+    "pullup":   _S("pullup",   0.80, 1.50, "provisional"),
+    "hip_thrust": _S("hip_thrust", 1.00, 2.50, "provisional"),
+    "rdl":      _S("rdl",      0.80, 1.80, "provisional"),
+    "calf_raise": _S("calf_raise", 0.80, 1.80, "provisional"),
+    "crunch":   _S("crunch",   0.50, 1.00, "provisional"),
+    # Isolation lifts — 1RM estimate unreliable (rep-volume model is a TODO);
+    # flagged provisional in the client UI.
+    "lateral_raise": _S("lateral_raise", 0.10, 0.30, "provisional — isolation"),
+    "curl":          _S("curl",          0.20, 0.50, "provisional — isolation"),
+    "skull_crusher": _S("skull_crusher", 0.20, 0.50, "provisional — isolation"),
+    "forearm_curl":  _S("forearm_curl",  0.20, 0.40, "provisional — isolation"),
 
+    # ── Performance ──
     "vo2max":     Standard("vo2max", +1, False, Dist("normal", 48.0, 9.0),
                            "HUNT men 45.4±8.9, youth-nudged"),
-    "resting_hr": Standard("resting_hr", -1, False, Dist("normal", 70.0, 10.0),
-                           "genpop RHR ~70±10 (lower better)"),
     "plank":      Standard("plank", +1, False, Dist("lognormal", math.log(80), 0.5),
                            "plank hold sec (WKU norm, genpop/form-adjusted) — form-dependent"),
     "vert":       Standard("vert", +1, False, Dist("normal", 43.0, 11.0),
                            "CMJ-with-arms norms, genpop young male"),
     "run5k_kmh":  Standard("run5k_kmh", +1, False, Dist("lognormal", math.log(8.5), 0.28),
                            "5k speed vs GENERAL pop (selection-bias corrected) — FLAG"),
+    "deadhang":   Standard("deadhang", +1, False, Dist("lognormal", math.log(60), 0.5),
+                           "deadhang hold sec — provisional"),
+    "hamstring_mobility": Standard("hamstring_mobility", +1, False, Dist("normal", 15.0, 5.0),
+                           "sit-and-reach cm — provisional, mobility unmodelled"),
+    "body_fat_pct": Standard("body_fat_pct", -1, False, Dist("normal", 20.0, 6.0),
+                           "young male genpop ~20±6%, lower better, provisional"),
+
+    # ── Recovery ──
+    "resting_hr": Standard("resting_hr", -1, False, Dist("normal", 70.0, 10.0),
+                           "genpop RHR ~70±10 (lower better)"),
     "hrv":        Standard("hrv", +1, False, Dist("lognormal", math.log(50), 0.5),
                            "HRV ms — method-dependent, FLAG"),
+    "sleep_score": Standard("sleep_score", +1, False, Dist("normal", 77.0, 8.0),
+                           "Fitbit/Google Health sleep score — most users 72-83 (IQR), provisional"),
 }
 
 

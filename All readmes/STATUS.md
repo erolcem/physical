@@ -85,9 +85,9 @@ inverse-normal) are hand-rolled in Dart and parity-tested.
 ## Key decisions (locked)
 - Reference population = **full healthy young male** (not just trained lifters) —
   for reachable, motivating, consistent ranks.
-- Strength consolidated to **4 compound lifts** (bench/squat/deadlift/OHP) with
-  defensible standards; body-graph muscles map to the lift that drives them;
-  uncovered muscles (biceps/triceps/forearms/abs/calves) render inert for now.
+- Strength is **12 lifts** (4 grounded compounds bench/squat/ohp + pullup/hip-thrust/
+  rdl + 6 isolation lifts, the latter flagged provisional); every body-graph muscle
+  maps to the lift that drives it and is now lit (no inert regions).
 - **Aesthetics are not ranked** (tracked scores only) — validity + wellbeing.
   *Now enforced in code:* skin/oral/eye/hair/grooming/voice are `MetricTier.tracked`
   with **no engine standard**, so they can't get a tier or feed the overall score.
@@ -111,22 +111,32 @@ inverse-normal) are hand-rolled in Dart and parity-tested.
 
 ## Roadmap (build order)
 0. ✅ Engine + corrected math + standards  
-1. ✅ Graphs/body-graph MVP (manual logging) ← *we are here; polish largely done, pending Erol's immersion check*  
+1. ✅ Graphs/body-graph MVP (manual logging) — polish done, pending Erol's immersion check  
 2. Habits (completion/verification/quest + calendar)  
-3. Integrations (HealthKit→canonical→cloud) + AI coach (PII-scrubbed, tool-calling)  
+3. Integrations (HealthKit→canonical→cloud) + AI coach (PII-scrubbed, tool-calling)
+   — 🟡 *started:* canonical store + rank API stood up (see Backend below); HealthKit/
+   Fitbit adapters + accounts + coach still to come.  
 4. Social/QoL + Android (Health Connect)
 
+## Backend (Phase-3 canonical store — first slice built)
+`backend/` — Python + FastAPI, SQLAlchemy schema that runs on **SQLite (dev/tests)**
+and **Postgres + TimescaleDB (prod, docker-compose + `scripts/timescale_init.sql`)**.
+- **Imports `physical_rank_engine.py` directly** (single source of truth) — ranks
+  computed server-side match the client. *The Python engine was out of sync (only
+  10 metrics); it's now synced to all 22 + parity preserved.*
+- Endpoints: `/health`, `/users/{id}/profile` (GET/PUT), `/users/{id}/samples`
+  (bulk ingest, idempotent dedup on `(user,metric,source,source_id)`, server-side
+  1RM from raw `{weight,reps}`), `/users/{id}/ranks` (overall + per-category +
+  per-metric, strength scored at bodyweight-at-time, tracked metrics excluded).
+- **13 backend tests pass** (`backend/tests`). Not yet built: auth/accounts, the
+  HealthKit/Fitbit adapters, the AI coach. App is still local-first; sync is opt-in.
+
 ## Candidate next steps
-- ~~Inner figure / 3-figure layout~~ done. ~~Per-muscle metrics~~ done (all 22 lit).
-  ~~Rank badges~~ done (faithful metallic SVG + halo). ~~Mobile sizing~~ /
-  ~~graphs y-axis + correlation~~ done this session.
-- **Erol's immersion/motivation check** on real logged data — the Phase-1 exit
-  gate. Run on Linux/Chrome/Android (no Mac needed).
+- **Erol's immersion/motivation check** on real logged data — the Phase-1 exit gate.
+- **Wire the Flutter app to the backend** (sync canonical samples up; opt-in, local-first stays).
+- **Accounts/auth** (needed once data leaves the device) + the **HealthKit/Fitbit adapters**.
 - **Isolation-lift rep-volume-at-load model** (replaces the flagged 1RM estimate).
-- Ground remaining provisional standards (deadhang, mobility; pullup/hip-thrust/rdl
-  anchors).
-- **Backend bring-up (FastAPI + TimescaleDB canonical store)** — after the
-  immersion check passes.
+- Ground remaining provisional standards (deadhang, mobility; pullup/hip-thrust/rdl anchors).
 
 ## iOS / deployment
 See `IOS_DEPLOY.md`. For testing on a personal iPhone: **Xcode free provisioning,
@@ -135,5 +145,5 @@ Apple Developer Program. App is local-first, so it runs on device without a back
 
 ## How to resume in a fresh chat
 Paste this file + the current `lib/` files (or at least `rank_engine.dart`,
-`metrics.dart`, `STANDARDS_METHODOLOGY.md`) and say what you want next. That's
-enough to rehydrate fully.
+`metrics.dart`, `STANDARDS_METHODOLOGY.md`); for backend work add `backend/README.md`
++ `backend/app/`. That's enough to rehydrate fully.
