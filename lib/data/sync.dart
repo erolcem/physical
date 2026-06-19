@@ -1,0 +1,62 @@
+// data/sync.dart — opt-in sync of local logs to the backend canonical store.
+// Local-first is preserved: ranks are still computed on-device; this just mirrors
+// the same logs up so the backend (and, later, Google Health) share one store.
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../engine/rank_engine.dart' show Log;
+import '../state/providers.dart';
+import 'api_client.dart';
+
+// Dev defaults. localhost works for Linux desktop & web; an Android emulator
+// would use 10.0.2.2. No auth yet, so a fixed local user id — replaced once
+// accounts land (the moment data really leaves the device).
+const String kBackendUrl = 'http://localhost:8000';
+const String kLocalUserId = 'local-dev';
+
+final apiClientProvider =
+    Provider<ApiClient>((ref) => ApiClient(baseUrl: kBackendUrl));
+
+/// One local log → one canonical sample. `source_id` is stable per (metric, ts)
+/// so re-syncing the same log is idempotent (the backend dedups on
+/// user+metric+source+source_id).
+Map<String, dynamic> canonicalSample(Log log) => {
+      'metric_id': log.metricId,
+      'ts': log.ts,
+      'value': log.value,
+      'bodyweight_at_ts': log.bodyweight,
+      'source': 'manual',
+      'source_id': '${log.metricId}@${log.ts}',
+    };
+
+class SyncResult {
+  final int total, ingested, skipped;
+  final String? backendOverall; // e.g. "Gold II", for parity display
+  SyncResult(this.total, this.ingested, this.skipped, this.backendOverall);
+}
+
+/// Pure: push all logs, then read back the server's overall rank. No Riverpod,
+/// so it's unit-testable with a fake [ApiClient].
+Future<SyncResult> performSync(
+    ApiClient api, String userId, Map<String, List<Log>> logs) async {
+  final samples = [
+    for (final list in logs.values)
+      for (final log in list) canonicalSample(log)
+  ];
+  final res = await api.ingestSamples(userId, samples);
+  String? overall;
+  try {
+    final ranks = await api.fetchRanks(userId);
+    final o = ranks['overall'] as Map<String, dynamic>?;
+    if (o != null) overall = '${o['tier']} ${o['sub']}';
+  } catch (_) {
+    // ranks are a nice-to-have for the confirmation message; ignore failures.
+  }
+  return SyncResult(samples.length, (res['ingested'] ?? 0) as int,
+      (res['skipped'] ?? 0) as int, overall);
+}
+
+/// UI entry point: sync the current local logs.
+Future<SyncResult> syncNow(WidgetRef ref) {
+  final api = ref.read(apiClientProvider);
+  final logs = ref.read(logsProvider);
+  return performSync(api, kLocalUserId, logs);
+}
