@@ -9,6 +9,7 @@ import '../engine/rank_engine.dart' show Log, RankResult, est1rm;
 import '../state/providers.dart';
 import 'body_graph.dart';
 import 'metric_detail_sheet.dart';
+import 'progress_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -18,7 +19,14 @@ class HomeScreen extends ConsumerWidget {
     final overall = ref.watch(overallProvider);
     final latest = ref.watch(latestLogsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Physical')),
+      appBar: AppBar(title: const Text('Physical'), actions: [
+        IconButton(
+          icon: const Icon(Icons.show_chart),
+          tooltip: 'Progress',
+          onPressed: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const ProgressScreen())),
+        ),
+      ]),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => openLogSheet(context),
         icon: const Icon(Icons.add),

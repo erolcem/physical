@@ -1,9 +1,19 @@
-// main.dart — app entry. ProviderScope makes Riverpod state available app-wide.
+// main.dart — app entry. Loads the persistent repository before the app starts,
+// then overrides the provider so all state reads from on-device storage.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'data/persistent_repository.dart';
+import 'state/providers.dart';
 import 'ui/home_screen.dart';
 
-void main() => runApp(const ProviderScope(child: PhysicalApp()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final repo = await PersistentRepository.create();
+  runApp(ProviderScope(
+    overrides: [repositoryProvider.overrideWithValue(repo)],
+    child: const PhysicalApp(),
+  ));
+}
 
 class PhysicalApp extends StatelessWidget {
   const PhysicalApp({super.key});
