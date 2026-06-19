@@ -1,5 +1,5 @@
 {
-  "_note": "Golden vectors from physical_rank_engine.py \u2014 the Dart port must match.",
+  "_note": "Golden vectors from physical_rank_engine.py — the Dart port must match.",
   "metric_cases": [
     {
       "metric": "bench",
@@ -191,42 +191,6 @@
         "tier": "Titan",
         "sub": "II",
         "top_pct": 0.509811
-      }
-    },
-    {
-      "metric": "deadlift",
-      "value": 60,
-      "bodyweight": 80,
-      "expected": {
-        "percentile": 7.246262,
-        "rank_value": 0.362313,
-        "tier": "Wood",
-        "sub": "II",
-        "top_pct": 92.753738
-      }
-    },
-    {
-      "metric": "deadlift",
-      "value": 110,
-      "bodyweight": 80,
-      "expected": {
-        "percentile": 78.722722,
-        "rank_value": 3.936136,
-        "tier": "Gold",
-        "sub": "III",
-        "top_pct": 21.277278
-      }
-    },
-    {
-      "metric": "deadlift",
-      "value": 200,
-      "bodyweight": 80,
-      "expected": {
-        "percentile": 95.081041,
-        "rank_value": 5.725863,
-        "tier": "Diamond",
-        "sub": "III",
-        "top_pct": 4.918959
       }
     },
     {

@@ -1,4 +1,4 @@
-# Physical — Project Status & Handoff (v0.7)
+# Physical — Project Status & Handoff (v0.8)
 
 **Purpose of this file:** if a chat gets long, start a fresh one and paste this
 in alongside the current code files. It captures where the project is so work
@@ -23,17 +23,34 @@ honest or the gamification collapses.** Later phases add habits and an AI coach.
     `direction` flag, z-space overall, **bodyweight-at-time** (lifts scored
     against the weight when lifted), and **two-component mixture** strength
     standards (untrained mass + trained tail).
-- **Flutter app** (thin slice, runs on iOS):
-  - Home: overall rank card, **front/back body graph** (muscles colored by tier,
-    tap → detail), ranked-metric list.
+- **Flutter app** (runs on iOS; develop/preview on Linux/Chrome/Android — no Mac needed):
+  - Home: overall rank card (**tap → category breakdown sheet**: Strength/
+    Performance/Recovery sub-ranks with bars), **front/inner/back body graph**
+    (all 22 ranked metrics mapped + lit; tap → detail), and **separate
+    Strength / Performance / Recovery / Aesthetics** metric grids.
   - **Metric detail sheet**: rank, progress, derived **tier ladder**
-    (achieved/next/locked), log history (delete), inline log form.
-  - **Persistence** via shared_preferences (write-through; survives restart).
-  - **Progress view** (`ui/progress_screen.dart`, fl_chart): per-metric rank
-    history over logged sessions, reached via the app-bar chart icon.
-  - **Rank badges** (`ui/badge.dart`): procedural hexagon medallion by tier, on the
-    overall card + detail-sheet header. (Procedural for now; swap for prototype SVGs.)
+    (achieved/next/locked), log history (delete), inline log form. Provisional
+    metrics show a ⚠ estimate warning; tracked metrics show value (no medallion).
+  - **Persistence** via shared_preferences (write-through; survives restart —
+    covered by a round-trip test).
+  - **Progress / graphs view** (`ui/progress_screen.dart`, fl_chart): a list of
+    **category cards** (Strength/Performance/Recovery/Aesthetics/Sleep/Diet/
+    Activity&Vitals/Body); each opens its **own graph page** (`CategoryGraphPage`)
+    with that category's metrics as chips, **y-axis labels** (tier names in
+    rank-space for ranked, native units for unranked, % for multi-compare),
+    timeframe chips, a **Pearson correlation readout** for two-metric compares,
+    and per-metric manual logging (diet/food/exercise included; auto-sync Phase 3).
+  - **Rank badges** (`ui/badge.dart`): faithful metallic SVG medallions (the
+    prototype's white-facet shading) with a radial halo + glow, bigger and
+    decluttered (sub-rank shown as adjacent text, not on the gem).
+  - **Mobile layout**: content constrained to a centered ≤500px phone column so
+    it reads as intentional on any screen; overall-card sub-rank ticks now track
+    the real bar width (was a screen-width approximation).
   - State: Riverpod. Storage seam: `Repository` interface.
+  - **Tests:** 67 green — 48 engine-parity + 18 system-verification
+    (`system_verification_test.dart`: registry↔engine integrity, PDF categories,
+    every exercise ranks, weights/1RM, direction, category ranks, overall,
+    persistence) + boot smoke.
 
 ## Architecture & stack (decided)
 - **Client:** Flutter/Dart, iOS first. Rank engine = pure Dart package.
@@ -72,29 +89,44 @@ inverse-normal) are hand-rolled in Dart and parity-tested.
   defensible standards; body-graph muscles map to the lift that drives them;
   uncovered muscles (biceps/triceps/forearms/abs/calves) render inert for now.
 - **Aesthetics are not ranked** (tracked scores only) — validity + wellbeing.
+  *Now enforced in code:* skin/oral/eye/hair/grooming/voice are `MetricTier.tracked`
+  with **no engine standard**, so they can't get a tier or feed the overall score.
+- **Categories follow the PDF Table 1** (the source of truth): Performance =
+  VO₂max/5k/vert/plank/deadhang/mobility/body-fat; Recovery = sleep-score/HRV/
+  resting-HR; Strength = the 12 lifts. **Sleep score is ranked**, standardised from
+  Fitbit/Google sleep-score data (`normal(77, 8)` — most users 72–83; provisional).
 - Tiers: Wood→Bronze→Silver→Gold→Platinum→Diamond→Champion→Titan (+ Glory,
   uncapped) at top 80/60/40/20/10/3/1/<0.1%.
 
 ## Provisional / open
 - Strength **medians** modelled from grip-norms + prevalence; untrained centre is
   still an estimate (the one soft number). See `STANDARDS_METHODOLOGY.md`.
+- **Isolation lifts** (curl/lateral-raise/skull-crusher/forearm-curl/calf-raise/
+  crunch) are ranked off a 1RM estimate the methodology doc flags as unreliable.
+  They're now flagged **`provisional`** in the registry and show a ⚠ note in the
+  detail sheet; the proper **rep-volume-at-load model is still a TODO**.
 - Performance metrics **now grounded** (vert/plank/5k); 5k & plank are method-
   sensitive, mobility still unmodelled.
 - HRV is measurement-method dependent (flagged).
 
 ## Roadmap (build order)
 0. ✅ Engine + corrected math + standards  
-1. ✅ Graphs/body-graph MVP (manual logging) ← *we are here, polishing*  
+1. ✅ Graphs/body-graph MVP (manual logging) ← *we are here; polish largely done, pending Erol's immersion check*  
 2. Habits (completion/verification/quest + calendar)  
 3. Integrations (HealthKit→canonical→cloud) + AI coach (PII-scrubbed, tool-calling)  
 4. Social/QoL + Android (Health Connect)
 
 ## Candidate next steps
-- Inner figure (organs → VO₂max/HRV/plank) to complete the 3-figure layout.
-- Per-muscle metrics (light up the inert muscles).
-- Ground performance-metric standards (plank/vert/5k).
-- ~~Rank badges~~ done (procedural; prototype SVGs optional later).
-- **Backend bring-up (FastAPI + TimescaleDB canonical store) — NEXT.**
+- ~~Inner figure / 3-figure layout~~ done. ~~Per-muscle metrics~~ done (all 22 lit).
+  ~~Rank badges~~ done (faithful metallic SVG + halo). ~~Mobile sizing~~ /
+  ~~graphs y-axis + correlation~~ done this session.
+- **Erol's immersion/motivation check** on real logged data — the Phase-1 exit
+  gate. Run on Linux/Chrome/Android (no Mac needed).
+- **Isolation-lift rep-volume-at-load model** (replaces the flagged 1RM estimate).
+- Ground remaining provisional standards (deadhang, mobility; pullup/hip-thrust/rdl
+  anchors).
+- **Backend bring-up (FastAPI + TimescaleDB canonical store)** — after the
+  immersion check passes.
 
 ## iOS / deployment
 See `IOS_DEPLOY.md`. For testing on a personal iPhone: **Xcode free provisioning,

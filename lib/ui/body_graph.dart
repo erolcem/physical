@@ -1,6 +1,7 @@
-// ui/body_graph.dart — paints a front or back figure, colouring each muscle by
-// its metric's tier (inert grey if no metric/data), and routes taps back to the
-// metric via point-in-polygon hit testing. Wrap in AspectRatio(148/420).
+// ui/body_graph.dart — paints a front, back, or inner figure, colouring each
+// muscle by its metric's tier (inert grey if no metric/data), and routes taps
+// back to the metric via point-in-polygon hit testing.
+// Wrap in AspectRatio(148/420).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/body_figure_data.dart';
@@ -13,7 +14,8 @@ const Color _inert = Color(0xFF5A6072);
 class BodyGraph extends ConsumerWidget {
   final List<BodyRegion> regions;
   final void Function(String metricId) onTapMetric;
-  const BodyGraph({required this.regions, required this.onTapMetric, super.key});
+  final bool isHeadOnly;
+  const BodyGraph({required this.regions, required this.onTapMetric, this.isHeadOnly = false, super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -26,9 +28,15 @@ class BodyGraph extends ConsumerWidget {
       var isRanked = false;
       if (metricId != null) {
         final log = latest[metricId];
-        if (log != null && eng.standards.containsKey(metricId)) {
-          c = tierColor(eng.scoreLog(log).tier);
-          isRanked = true;
+        if (log != null) {
+          if (eng.standards.containsKey(metricId)) {
+            c = tierColor(eng.scoreLog(log).tier);
+            isRanked = true;
+          } else {
+            // Tracked/Aesthetics metric with data
+            c = const Color(0xFF4CE0C3);
+            isRanked = true; // trigger glow
+          }
         }
       }
       colors[r.muscle] = c;
@@ -54,7 +62,7 @@ class BodyGraph extends ConsumerWidget {
         },
         child: CustomPaint(
           size: Size(w, w * 420 / 148),
-          painter: _BodyPainter(regions, colors, ranked),
+          painter: _BodyPainter(regions, colors, ranked, isHeadOnly: isHeadOnly),
         ),
       );
     });
@@ -77,11 +85,18 @@ class _BodyPainter extends CustomPainter {
   final List<BodyRegion> regions;
   final Map<String, Color> colors;
   final Map<String, bool> ranked;
-  _BodyPainter(this.regions, this.colors, this.ranked);
+  final bool isHeadOnly;
+  _BodyPainter(this.regions, this.colors, this.ranked, {this.isHeadOnly = false});
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (isHeadOnly) {
+      canvas.scale(2.5, 2.5);
+      canvas.translate(-size.width * 0.3, -size.height * 0.01);
+    }
     final scale = size.width / 148.0;
+    final center = Offset(size.width / 2, size.height * 0.4);
+
     Path path(List<Offset> pts) {
       final p = Path()..moveTo(pts[0].dx * scale, pts[0].dy * scale);
       for (var i = 1; i < pts.length; i++) {
@@ -90,29 +105,69 @@ class _BodyPainter extends CustomPainter {
       return p..close();
     }
 
+    // ── Radial gradient background glow (from old .bodygraph-section::before)
+    final bgGlowPaint = Paint()
+      ..shader = RadialGradient(
+        center: Alignment.center,
+        radius: 0.8,
+        colors: [
+          const Color(0xFF3ECAB4).withValues(alpha: 0.06),
+          const Color(0xFF3ECAB4).withValues(alpha: 0.0),
+        ],
+        stops: const [0.0, 1.0],
+      ).createShader(Rect.fromCenter(
+        center: center,
+        width: size.width * 1.6,
+        height: size.height * 1.2,
+      ));
+    canvas.drawRect(Offset.zero & size, bgGlowPaint);
+
+    // ── Silhouette + neck
     canvas.drawPath(path(parsePoly(silhouette)),
         Paint()..color = const Color(0xFF1C1E3A));
-    canvas.drawPath(path(parsePoly(neck)), Paint()..color = const Color(0xFF3A3F58));
+    canvas.drawPath(path(parsePoly(neck)),
+        Paint()..color = const Color(0xFF3A3F58));
 
+    // ── Muscle / organ regions
     for (final r in regions) {
       final c = colors[r.muscle] ?? _inert;
       final isRanked = ranked[r.muscle] ?? false;
       for (final ps in r.polys) {
         final pth = path(parsePoly(ps));
+
         if (isRanked) {
+          // Drop-shadow glow behind ranked muscle
           canvas.drawPath(
-              pth,
-              Paint()
-                ..color = c.withOpacity(0.5)
-                ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
-        }
-        canvas.drawPath(pth, Paint()..color = c.withOpacity(isRanked ? 0.9 : 0.18));
-        canvas.drawPath(
             pth,
             Paint()
-              ..color = c.withOpacity(isRanked ? 0.9 : 0.3)
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 0.6);
+              ..color = c.withValues(alpha: 0.45)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+          );
+          // Stronger inner glow
+          canvas.drawPath(
+            pth,
+            Paint()
+              ..color = c.withValues(alpha: 0.25)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14),
+          );
+        }
+
+        // Fill
+        canvas.drawPath(
+          pth,
+          Paint()..color = c.withValues(alpha: isRanked ? 0.88 : 0.15),
+        );
+
+        // Stroke — brighter and slightly thicker for ranked muscles
+        canvas.drawPath(
+          pth,
+          Paint()
+            ..color = c.withValues(alpha: isRanked ? 1.0 : 0.3)
+            ..style = PaintingStyle.stroke
+            ..strokeJoin = StrokeJoin.round
+            ..strokeCap = StrokeCap.round
+            ..strokeWidth = isRanked ? 1.0 : 0.6,
+        );
       }
     }
   }

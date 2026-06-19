@@ -39,13 +39,21 @@ class InMemoryRepository implements Repository {
 /// Shared first-run demo seed so the app shows real ranks immediately.
 /// Strength lifts carry the bodyweight at the time of the lift.
 void applyDemoSeed(Repository r) {
-  r.saveLog('bodyweight', Log('bodyweight', 78));
-  r.saveLog('bench', Log('bench', est1rm(90, 5), bodyweight: 78));
-  r.saveLog('squat', Log('squat', est1rm(130, 5), bodyweight: 78));
-  r.saveLog('deadlift', Log('deadlift', est1rm(160, 3), bodyweight: 78));
-  r.saveLog('ohp', Log('ohp', est1rm(55, 5), bodyweight: 78));
-  r.saveLog('vo2max', Log('vo2max', 51));
-  r.saveLog('resting_hr', Log('resting_hr', 58));
-  r.saveLog('plank', Log('plank', 150));
-  r.saveLog('vert', Log('vert', 52));
+  final now = DateTime.now();
+  void addProg(String id, List<double> vals, {double? bw, bool str = false}) {
+    for (var i = 0; i < vals.length; i++) {
+      final t = now.subtract(Duration(days: (vals.length - 1 - i) * 3));
+      r.saveLog(id, Log(id, str ? est1rm(vals[i], 5) : vals[i], bodyweight: bw, ts: t.toIso8601String()));
+    }
+  }
+
+  addProg('bodyweight', [80, 79.5, 79, 78.5, 78]);
+  addProg('bench', [75, 78, 80, 85, 90], bw: 78, str: true);
+  addProg('squat', [110, 115, 120, 125, 130], bw: 78, str: true);
+
+  addProg('ohp', [45, 48, 50, 52, 55], bw: 78, str: true);
+  addProg('vo2max', [45, 46, 48, 49, 51]);
+  addProg('resting_hr', [65, 63, 61, 60, 58]);
+  addProg('plank', [90, 105, 120, 135, 150]);
+  addProg('vert', [45, 47, 49, 50, 52]);
 }

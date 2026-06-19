@@ -2,6 +2,7 @@
 // ranks (computed by the validated engine) to the UI. Chosen for clean,
 // testable, dependency-injected state that maps well from the prototype's bus.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/metrics.dart';
 import '../data/repository.dart';
 import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log;
@@ -52,6 +53,19 @@ final overallProvider = Provider<eng.RankResult>((ref) {
   final latest = ref.watch(latestLogsProvider);
   final logs = latest.values.where((l) => eng.standards.containsKey(l.metricId));
   return eng.overall(logs.toList());
+});
+
+/// Per-category rank (z-space average of the latest logged ranked metric in
+/// each category). Only ranked categories with ≥1 logged metric appear.
+/// Keys are category ids: 'strength' | 'performance' | 'recovery'.
+final categoryRanksProvider = Provider<Map<String, eng.RankResult>>((ref) {
+  final latest = ref.watch(latestLogsProvider);
+  final byCat = <String, List<Log>>{};
+  for (final l in latest.values) {
+    if (!eng.standards.containsKey(l.metricId)) continue;
+    (byCat[metricById(l.metricId).category] ??= []).add(l);
+  }
+  return {for (final e in byCat.entries) e.key: eng.overall(e.value)};
 });
 
 /// Rank for a single metric's latest log (null if never logged).

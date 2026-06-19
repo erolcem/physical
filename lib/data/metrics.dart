@@ -14,8 +14,11 @@ class MetricDef {
   final bool bodyweightScaled; // strength lifts only
   final String input; // 'weight_reps' | 'score'
   final String exercise; // example movement / how to measure
+  final bool autoSync; // true if logged automatically via HealthKit/Fitbit
+  final bool provisional; // rank comes from a weak/estimated standard — flag it in the UI
+
   const MetricDef(this.id, this.label, this.category, this.tier, this.unit,
-      {this.bodyweightScaled = false, this.input = 'score', this.exercise = ''});
+      {this.bodyweightScaled = false, this.input = 'score', this.exercise = '', this.autoSync = false, this.provisional = false});
 
   bool get isStrength => input == 'weight_reps';
 }
@@ -26,31 +29,105 @@ const List<MetricDef> metrics = [
   // ── RANKED · strength (bodyweight-scaled) ──
   MetricDef('bench', 'Chest (Bench)', 'strength', MetricTier.ranked, 'kg',
       bodyweightScaled: true, input: 'weight_reps', exercise: 'Bench Press'),
-  MetricDef('squat', 'Legs (Squat)', 'strength', MetricTier.ranked, 'kg',
-      bodyweightScaled: true, input: 'weight_reps', exercise: 'Back Squat'),
-  MetricDef('deadlift', 'Posterior (Deadlift)', 'strength', MetricTier.ranked, 'kg',
-      bodyweightScaled: true, input: 'weight_reps', exercise: 'Deadlift'),
-  MetricDef('ohp', 'Shoulders (OHP)', 'strength', MetricTier.ranked, 'kg',
+  MetricDef('ohp', 'Front Shoulder (OHP)', 'strength', MetricTier.ranked, 'kg',
       bodyweightScaled: true, input: 'weight_reps', exercise: 'Overhead Press'),
-  // ── RANKED · performance / recovery (score metrics) ──
-  MetricDef('vo2max', 'VO₂ Max', 'recovery', MetricTier.ranked, 'ml/kg/min',
+  // Isolation lifts: 1RM estimation is unreliable here (STANDARDS_METHODOLOGY §2);
+  // ranks are provisional until the rep-volume-at-load model is built.
+  MetricDef('lateral_raise', 'Medial Shoulder', 'strength', MetricTier.ranked, 'kg',
+      bodyweightScaled: true, input: 'weight_reps', exercise: 'Lateral Raise', provisional: true),
+  MetricDef('curl', 'Bicep', 'strength', MetricTier.ranked, 'kg',
+      bodyweightScaled: true, input: 'weight_reps', exercise: 'Bicep Curl', provisional: true),
+  MetricDef('skull_crusher', 'Tricep', 'strength', MetricTier.ranked, 'kg',
+      bodyweightScaled: true, input: 'weight_reps', exercise: 'Skull Crusher', provisional: true),
+  MetricDef('forearm_curl', 'Forearm', 'strength', MetricTier.ranked, 'kg',
+      bodyweightScaled: true, input: 'weight_reps', exercise: 'Forearm Curl', provisional: true),
+  MetricDef('pullup', 'Lats (Pullup)', 'strength', MetricTier.ranked, 'kg',
+      bodyweightScaled: true, input: 'weight_reps', exercise: 'Weighted Pullup'),
+  MetricDef('hip_thrust', 'Glute', 'strength', MetricTier.ranked, 'kg',
+      bodyweightScaled: true, input: 'weight_reps', exercise: 'Hip Thrust'),
+  MetricDef('squat', 'Quads (Squat)', 'strength', MetricTier.ranked, 'kg',
+      bodyweightScaled: true, input: 'weight_reps', exercise: 'Back Squat'),
+
+  MetricDef('rdl', 'Hamstrings (RDL)', 'strength', MetricTier.ranked, 'kg',
+      bodyweightScaled: true, input: 'weight_reps', exercise: 'Romanian Deadlift'),
+  MetricDef('calf_raise', 'Calves', 'strength', MetricTier.ranked, 'kg',
+      bodyweightScaled: true, input: 'weight_reps', exercise: 'Standing Calf Raise', provisional: true),
+  MetricDef('crunch', 'Abs', 'strength', MetricTier.ranked, 'kg',
+      bodyweightScaled: true, input: 'weight_reps', exercise: 'Abs Crunch', provisional: true),
+
+  // ── RANKED · performance (per PDF Table 1: VO₂max, 5k, vert, plank, deadhang,
+  //    mobility, body-fat all sit under Performance) ──
+  MetricDef('vo2max', 'VO₂ Max', 'performance', MetricTier.ranked, 'ml/kg/min',
       exercise: 'Lab test or watch estimate'),
-  MetricDef('resting_hr', 'Resting HR', 'recovery', MetricTier.ranked, 'bpm',
-      exercise: 'Morning resting heart rate'),
   MetricDef('plank', 'Plank', 'performance', MetricTier.ranked, 'sec',
       exercise: 'Max forearm plank hold'),
   MetricDef('vert', 'Vertical Jump', 'performance', MetricTier.ranked, 'cm',
       exercise: 'Max vertical jump'),
   MetricDef('run5k_kmh', '5k Speed', 'performance', MetricTier.ranked, 'km/h',
       exercise: 'Avg speed over 5 km'),
-  // ── TRACKED · foreground, NOT ranked (aesthetics) ──
+  MetricDef('deadhang', 'Deadhang', 'performance', MetricTier.ranked, 'sec',
+      exercise: 'Max deadhang time'),
+  MetricDef('hamstring_mobility', 'Hamstring Mobility', 'performance', MetricTier.ranked, 'cm',
+      exercise: 'Sit and reach'),
+  MetricDef('body_fat_pct', 'Body Fat %', 'performance', MetricTier.ranked, '%',
+      exercise: 'Caliper / DEXA / smart scale'),
+
+  // ── RANKED · recovery (per PDF Table 1: Sleep score, HRV, Resting HR) ──
+  MetricDef('resting_hr', 'Resting HR', 'recovery', MetricTier.ranked, 'bpm',
+      exercise: 'Morning resting heart rate'),
+  MetricDef('hrv', 'HRV', 'recovery', MetricTier.ranked, 'ms',
+      exercise: 'Heart rate variability'),
+  // Sleep score: standardised from Fitbit/Google Health sleep-score readings
+  // (vendor 0–100). Auto-synced in Phase 3; manually loggable for now.
+  MetricDef('sleep_score', 'Sleep Score', 'recovery', MetricTier.ranked, '/100',
+      exercise: 'Nightly sleep score (Google Health / Fitbit)'),
+
+  // ── TRACKED · Aesthetics (unranked by design — no defensible population
+  //    distribution; ranking appearance is a wellbeing risk. Graphs only.) ──
   MetricDef('skin', 'Skin Health', 'aesthetics', MetricTier.tracked, '/100',
-      exercise: 'Tracked score — no rank'),
+      exercise: 'Self-assessed score'),
+  MetricDef('oral', 'Oral Health', 'aesthetics', MetricTier.tracked, '/100',
+      exercise: 'Self-assessed score'),
+  MetricDef('eye', 'Eye Health', 'aesthetics', MetricTier.tracked, '/100',
+      exercise: 'Self-assessed score'),
   MetricDef('hair', 'Hair Density', 'aesthetics', MetricTier.tracked, '/cm²',
-      exercise: 'Tracked score — no rank'),
-  // ── BACKGROUND · AI context, never surfaced as a score ──
-  MetricDef('steps', 'Steps', 'context', MetricTier.background, 'count'),
-  MetricDef('bodyweight', 'Bodyweight', 'context', MetricTier.background, 'kg',
+      exercise: 'Self-assessed score'),
+  MetricDef('grooming', 'Grooming', 'aesthetics', MetricTier.tracked, '/100',
+      exercise: 'Self-assessed score'),
+  MetricDef('voice', 'Voice Quality', 'aesthetics', MetricTier.tracked, '/100',
+      exercise: 'Self-assessed score'),
+
+  // ── BACKGROUND · strength context ──
+  MetricDef('lifting_sets', 'Lifting Exercise Sets', 'strength', MetricTier.background, 'sets',
+      exercise: 'Logged per workout session'),
+
+  // ── BACKGROUND · health (automatically logged via API) ──
+  MetricDef('heart_rate', 'Heart Rate', 'health', MetricTier.background, 'bpm', autoSync: true),
+  MetricDef('skin_temp', 'Skin Temp Variation', 'health', MetricTier.background, '°C', autoSync: true),
+  MetricDef('cardio_load', 'Cardio Load', 'health', MetricTier.background, 'score', autoSync: true),
+  MetricDef('daily_readiness', 'Daily Readiness', 'health', MetricTier.background, 'score', autoSync: true),
+  MetricDef('exercises', 'Exercises', 'health', MetricTier.background, 'count', autoSync: true),
+  MetricDef('steps', 'Steps', 'health', MetricTier.background, 'count', autoSync: true),
+  MetricDef('active_zone', 'Active Zone Mins', 'health', MetricTier.background, 'min', autoSync: true),
+
+  // ── BACKGROUND · sleep sub-metrics (all from API) ──
+  MetricDef('sleep_duration', 'Sleep Duration', 'sleep', MetricTier.background, 'hrs', autoSync: true),
+  MetricDef('sleep_schedule', 'Sleep Schedule', 'sleep', MetricTier.background, 'time', autoSync: true),
+  MetricDef('rem_sleep', 'REM Sleep', 'sleep', MetricTier.background, 'min', autoSync: true),
+  MetricDef('deep_sleep', 'Deep Sleep', 'sleep', MetricTier.background, 'min', autoSync: true),
+  MetricDef('sleep_efficiency', 'Sleep Efficiency', 'sleep', MetricTier.background, '%', autoSync: true),
+  MetricDef('time_to_sleep', 'Time to Sound Sleep', 'sleep', MetricTier.background, 'min', autoSync: true),
+  MetricDef('sound_sleep', 'Sound Sleep', 'sleep', MetricTier.background, 'min', autoSync: true),
+  MetricDef('restlessness', 'Restlessness', 'sleep', MetricTier.background, 'count', autoSync: true),
+  MetricDef('full_awakenings', 'Full Awakenings', 'sleep', MetricTier.background, 'count', autoSync: true),
+  MetricDef('sleep_interruptions', 'Interruptions', 'sleep', MetricTier.background, 'count', autoSync: true),
+
+  // ── BACKGROUND · diet ──
+  MetricDef('energy_burned', 'Total Energy Burned', 'diet', MetricTier.background, 'kcal', autoSync: true),
+  MetricDef('food_logs', 'Food Logs', 'diet', MetricTier.background, 'kcal', autoSync: true),
+
+  // ── BACKGROUND · general / profile ──
+  MetricDef('bodyweight', 'Bodyweight', 'general', MetricTier.background, 'kg',
       exercise: 'Scales every strength rank'),
 ];
 

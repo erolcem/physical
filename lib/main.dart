@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'data/persistent_repository.dart';
 import 'state/providers.dart';
-import 'ui/home_screen.dart';
+import 'ui/main_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,7 +34,7 @@ class PhysicalApp extends StatelessWidget {
           margin: const EdgeInsets.symmetric(vertical: 5),
         ),
       ),
-      home: const HomeScreen(),
+      home: const MainScreen(),
     );
   }
 }

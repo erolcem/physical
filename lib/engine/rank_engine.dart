@@ -154,7 +154,7 @@ Standard _strengthMix(String mid, double unR, double trR, String note) {
 final Map<String, Standard> standards = {
   'bench': _strengthMix('bench', 0.50, 1.15, 'mix untrained0.50/trained1.15'),
   'squat': _strengthMix('squat', 0.75, 1.60, 'mix untrained0.75/trained1.60'),
-  'deadlift': _strengthMix('deadlift', 0.95, 2.00, 'mix untrained0.95/trained2.00'),
+
   'ohp': _strengthMix('ohp', 0.32, 0.70, 'mix untrained0.32/trained0.70'),
   'vo2max': const Standard('vo2max', 1, false, Dist('normal', 48.0, 9.0),
       'HUNT men 45.4±8.9, youth-nudged'),
@@ -168,6 +168,28 @@ final Map<String, Standard> standards = {
       '5k speed vs general pop (selection-bias corrected), FLAG'),
   'hrv': Standard('hrv', 1, false, Dist('lognormal', math.log(50), 0.5),
       'HRV ms — method-dependent, FLAG'),
+  'lateral_raise': _strengthMix('lateral_raise', 0.1, 0.3, 'provisional'),
+  'curl': _strengthMix('curl', 0.2, 0.5, 'provisional'),
+  'skull_crusher': _strengthMix('skull_crusher', 0.2, 0.5, 'provisional'),
+  'forearm_curl': _strengthMix('forearm_curl', 0.2, 0.4, 'provisional'),
+  'pullup': _strengthMix('pullup', 0.8, 1.5, 'provisional'),
+  'hip_thrust': _strengthMix('hip_thrust', 1.0, 2.5, 'provisional'),
+  'rdl': _strengthMix('rdl', 0.8, 1.8, 'provisional'),
+  'calf_raise': _strengthMix('calf_raise', 0.8, 1.8, 'provisional'),
+  'crunch': _strengthMix('crunch', 0.5, 1.0, 'provisional'),
+  // Sleep score standardised from Fitbit/Google Health sleep-score readings:
+  // Fitbit reports most users score 72–83 (≈ IQR) → median ~77, sd≈(83-72)/1.35≈8.
+  // So 90+ ≈ top ~5% ("excellent"), 60 ≈ bottom quartile. Provisional but sourced.
+  'sleep_score': const Standard('sleep_score', 1, false, Dist('normal', 77.0, 8.0),
+      'Fitbit/Google Health sleep score — most users 72–83 (IQR), provisional'),
+  'deadhang': Standard('deadhang', 1, false, Dist('lognormal', math.log(60), 0.5), 'provisional'),
+  'hamstring_mobility': Standard('hamstring_mobility', 1, false, Dist('normal', 15.0, 5.0), 'provisional'),
+  'body_fat_pct': const Standard('body_fat_pct', -1, false, Dist('normal', 20.0, 6.0),
+      'young male genpop ~20±6%, lower better, provisional'),
+  // NOTE: aesthetics (skin/oral/eye/hair/grooming/voice) are intentionally absent.
+  // They have no defensible population distribution, so they are TRACKED-only
+  // (graphs, never ranked) per the design doc. Keep them out of this map so they
+  // can never be assigned a tier or feed the overall/category scores.
 };
 
 // ─── Core ───────────────────────────────────────────────────────────────────
@@ -233,8 +255,8 @@ class Log {
   final String metricId;
   final double value;
   final double? bodyweight;
-  final String? ts;
-  Log(this.metricId, this.value, {this.bodyweight, this.ts});
+  final String ts;
+  Log(this.metricId, this.value, {this.bodyweight, String? ts}) : ts = ts ?? DateTime.now().toIso8601String();
 }
 
 RankResult scoreLog(Log log) => tierOf(log.metricId, log.value, log.bodyweight);

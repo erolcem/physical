@@ -70,7 +70,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
     final logs = ref.watch(logsProvider)[m.id] ?? const [];
     final latest = logs.isNotEmpty ? logs.last : null;
     final ranked = latest != null && eng.standards.containsKey(m.id);
-    final r = ranked ? eng.scoreLog(latest!) : null;
+    final r = ranked ? eng.scoreLog(latest) : null;
     final c = r != null ? tierColor(r.tier) : const Color(0xFF5A6072);
     final bw = m.bodyweightScaled ? ref.watch(currentBodyweightProvider) : null;
     final curIdx = r != null ? r.rankValue.floor() : 0;
@@ -85,7 +85,19 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             // ── Header ──
             Row(children: [
-              RankBadge(tier: r?.tier ?? 'Wood', sub: r?.sub, size: 40),
+              if (r != null)
+                RankBadge(tier: r.tier, sub: r.sub, size: 54)
+              else
+                // Tracked / unranked metric — no tier, so no medallion.
+                Container(
+                  width: 54, height: 54,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF4CE0C3).withValues(alpha: 0.12),
+                    border: Border.all(color: const Color(0xFF4CE0C3).withValues(alpha: 0.4)),
+                  ),
+                  child: const Icon(Icons.insights, color: Color(0xFF4CE0C3), size: 26),
+                ),
               const SizedBox(width: 12),
               Expanded(child: Text(m.label,
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800))),
@@ -99,20 +111,31 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
             if (r != null) ...[
               Text('Top ${r.topPct.toStringAsFixed(1)}% of young men',
                   style: TextStyle(color: c, fontWeight: FontWeight.w600)),
+              if (m.provisional) ...[
+                const SizedBox(height: 4),
+                Text('⚠ Provisional standard — 1RM estimate is unreliable for isolation lifts, so this rank is an estimate.',
+                    style: TextStyle(color: Colors.amber.withValues(alpha: 0.8), fontSize: 11, fontWeight: FontWeight.w500)),
+              ],
               const SizedBox(height: 8),
               LinearProgressIndicator(
                   value: r.rankValue - curIdx, color: c, backgroundColor: c.withOpacity(0.15)),
-            ] else
+            ] else if (latest != null)
+              // Tracked (unranked) metric with data — show the value, no tier.
+              Text('Latest: ${latest.value.toStringAsFixed(1)} ${m.unit}  ·  tracked, not ranked',
+                  style: const TextStyle(color: Color(0xFF4CE0C3), fontWeight: FontWeight.w600))
+            else
               const Text('No logs yet — add one below.',
                   style: TextStyle(color: Colors.grey)),
 
             // ── Milestone ladder (derived thresholds) ──
-            const SizedBox(height: 18),
-            const Text('TIER LADDER',
-                style: TextStyle(fontSize: 10, letterSpacing: 2, color: Colors.grey)),
-            const SizedBox(height: 6),
-            for (var i = 0; i < _ladderTiers.length; i++)
-              _ladderRow(m, _ladderTiers[i], i + 1, curIdx, bw),
+            if (ranked) ...[
+              const SizedBox(height: 18),
+              const Text('TIER LADDER',
+                  style: TextStyle(fontSize: 10, letterSpacing: 2, color: Colors.grey)),
+              const SizedBox(height: 6),
+              for (var i = 0; i < _ladderTiers.length; i++)
+                _ladderRow(m, _ladderTiers[i], i + 1, curIdx, bw),
+            ],
 
             // ── History ──
             if (logs.isNotEmpty) ...[
@@ -182,7 +205,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
   Widget _historyRow(MetricDef m, Log log, int index) {
     final r = eng.standards.containsKey(m.id) ? eng.scoreLog(log) : null;
     final c = r != null ? tierColor(r.tier) : Colors.grey;
-    final date = log.ts != null ? DateTime.tryParse(log.ts!) : null;
+    final date = DateTime.tryParse(log.ts);
     final dateStr = date != null
         ? '${date.day}/${date.month}/${date.year % 100}'
         : '';
