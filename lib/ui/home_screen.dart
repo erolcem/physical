@@ -7,6 +7,7 @@ import '../data/body_figure_data.dart';
 import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log, RankResult, est1rm;
 import '../state/providers.dart';
+import 'badge.dart';
 import 'body_graph.dart';
 import 'metric_detail_sheet.dart';
 import 'progress_screen.dart';
@@ -83,14 +84,20 @@ class _OverallCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('OVERALL',
-              style: TextStyle(fontSize: 11, letterSpacing: 2, color: Colors.grey)),
-          const SizedBox(height: 6),
-          Text('${r.tier} ${r.sub}',
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: c)),
-          Text('Top ${r.topPct.toStringAsFixed(1)}% of young men',
-              style: TextStyle(color: c)),
+        child: Row(children: [
+          RankBadge(tier: r.tier, sub: r.sub, size: 68),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('OVERALL',
+                  style: TextStyle(fontSize: 11, letterSpacing: 2, color: Colors.grey)),
+              const SizedBox(height: 6),
+              Text('${r.tier} ${r.sub}',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: c)),
+              Text('Top ${r.topPct.toStringAsFixed(1)}% of young men',
+                  style: TextStyle(color: c)),
+            ]),
+          ),
         ]),
       ),
     );

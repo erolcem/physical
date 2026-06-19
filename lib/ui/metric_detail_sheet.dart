@@ -7,6 +7,7 @@ import '../data/metrics.dart';
 import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log, est1rm;
 import '../state/providers.dart';
+import 'badge.dart';
 
 const List<String> _ladderTiers = [
   'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Champion', 'Titan'
@@ -84,9 +85,8 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             // ── Header ──
             Row(children: [
-              Container(width: 14, height: 14,
-                  decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-              const SizedBox(width: 10),
+              RankBadge(tier: r?.tier ?? 'Wood', sub: r?.sub, size: 40),
+              const SizedBox(width: 12),
               Expanded(child: Text(m.label,
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800))),
               if (r != null)

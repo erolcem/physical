@@ -1,4 +1,4 @@
-# Physical — Project Status & Handoff (v0.5)
+# Physical — Project Status & Handoff (v0.7)
 
 **Purpose of this file:** if a chat gets long, start a fresh one and paste this
 in alongside the current code files. It captures where the project is so work
@@ -31,6 +31,8 @@ honest or the gamification collapses.** Later phases add habits and an AI coach.
   - **Persistence** via shared_preferences (write-through; survives restart).
   - **Progress view** (`ui/progress_screen.dart`, fl_chart): per-metric rank
     history over logged sessions, reached via the app-bar chart icon.
+  - **Rank badges** (`ui/badge.dart`): procedural hexagon medallion by tier, on the
+    overall card + detail-sheet header. (Procedural for now; swap for prototype SVGs.)
   - State: Riverpod. Storage seam: `Repository` interface.
 
 ## Architecture & stack (decided)
@@ -76,7 +78,8 @@ inverse-normal) are hand-rolled in Dart and parity-tested.
 ## Provisional / open
 - Strength **medians** modelled from grip-norms + prevalence; untrained centre is
   still an estimate (the one soft number). See `STANDARDS_METHODOLOGY.md`.
-- Performance metrics (plank, vert, 5k) on provisional norms — next grounding pass.
+- Performance metrics **now grounded** (vert/plank/5k); 5k & plank are method-
+  sensitive, mobility still unmodelled.
 - HRV is measurement-method dependent (flagged).
 
 ## Roadmap (build order)
@@ -90,8 +93,13 @@ inverse-normal) are hand-rolled in Dart and parity-tested.
 - Inner figure (organs → VO₂max/HRV/plank) to complete the 3-figure layout.
 - Per-muscle metrics (light up the inert muscles).
 - Ground performance-metric standards (plank/vert/5k).
-- Port the SVG rank badges (`badge.js`) for a richer header.
-- Backend bring-up (FastAPI + TimescaleDB canonical store).
+- ~~Rank badges~~ done (procedural; prototype SVGs optional later).
+- **Backend bring-up (FastAPI + TimescaleDB canonical store) — NEXT.**
+
+## iOS / deployment
+See `IOS_DEPLOY.md`. For testing on a personal iPhone: **Xcode free provisioning,
+free, no App Store** (7-day rebuild cycle). TestFlight / App Store need the $99/yr
+Apple Developer Program. App is local-first, so it runs on device without a backend.
 
 ## How to resume in a fresh chat
 Paste this file + the current `lib/` files (or at least `rank_engine.dart`,

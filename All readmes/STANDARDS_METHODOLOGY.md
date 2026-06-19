@@ -1,4 +1,4 @@
-# Physical — Standards Methodology (v0.2)
+# Physical — Standards Methodology (v0.4)
 
 How every ranked metric's population distribution is sourced and modelled. This
 is the reference for *why* the numbers in `physical_rank_engine.py` are what they
@@ -41,33 +41,38 @@ land high (benching your bodyweight ≈ top ~15–20%), which is both accurate a
 motivating. Consistency also requires one reference population across *all*
 metrics — strength can't be "vs lifters" while VO₂max is "vs everyone".
 
-### How the distribution is built
-The general young-male strength distribution is dominated by **training status**,
-not the biological spread of untrained strength. So we anchor it from prevalence
-+ the trained tail, rather than a (non-existent) general-population 1RM dataset:
+### How the distribution is built — two-component mixture (v0.3)
+The general young-male strength distribution is dominated by **training status**.
+Whole-population strength is unimodal and modestly spread; the long right tail in
+bench/squat is created by *training*, not by biological variation. So each lift is
+modelled as a **mixture of two lognormals on the allometric score** `s = 1RM/BW^0.67`:
 
-- **Training prevalence (anchor for where trained levels sit in percentile terms).**
-  CDC/NHIS 2020: **44.5%** of men aged 18–44 met the muscle-strengthening
-  guideline — but that counts push-ups/sit-ups. The slice doing structured
-  barbell work that yields a real, progressing 1RM is smaller, ~15–25%. ACSM
-  reviews put ~30% of all adults doing *any* muscle-strengthening ≥2×/week and
-  ~60% doing none.
-- **Trained tail (anchor for absolute load).** Established trained levels
-  (≈ bodyweight bench = a serious-trainee milestone; ≈ 2× bodyweight = near
-  competitive) provide the absolute kg at the high percentiles.
+- **Untrained component** (weight `1 − p_train`). The majority who don't train
+  structurally. Centre is low (per-lift, below the lifting-app "untrained" mark);
+  spread `CV ≈ 0.18`, taken from whole-population **grip-strength norms** — young
+  men average ~50 kg dominant-hand grip (49.7 kg for men 25–29 in the NIH-Toolbox
+  normative study), and grip is **normally distributed within each age band**,
+  giving the untrained mass its modest, unimodal spread.
+- **Trained component** (weight `p_train ≈ 0.22`). The slice doing structured
+  barbell work that yields a real, progressing 1RM. CDC/NHIS 2020: **44.5%** of men
+  18–44 met the muscle-strengthening guideline (which counts push-ups/sit-ups), so
+  the *serious-lifting* subset is ~20–25%. Centre and spread (`CV ≈ 0.30`) come from
+  trained standards (intermediate ≈ bodyweight-plus bench; tail reaches 2×+ BW).
 
-We fit a **lognormal on the allometric score** `s = 1RM / BW^0.67` through two
-transparent anchors per lift, expressed at a reference bodyweight of 80 kg:
+Mixture parameters (ratios are × bodyweight, at reference BW 80 kg):
 
-| Lift | Low anchor (≈ top 15%) | High anchor (≈ top 1%) | Implied median | Confidence |
+| Lift | Untrained centre | Trained centre | Resulting median | Resulting tiers |
 |---|---|---|---|---|
-| Bench | 1.00× BW | 2.00× BW | ~0.55× BW | tail solid, median soft |
-| Squat | 1.40× BW | 2.50× BW | ~0.8× BW | tail solid, median soft |
-| Deadlift | 1.75× BW | 3.00× BW | ~1.0× BW | tail solid, median soft |
-| OHP | 0.60× BW | 1.10× BW | ~0.35× BW | tail solid, median soft |
+| Bench | 0.50× BW | 1.15× BW | ~0.54× BW | 1×BW = top 16%, 2×BW = top 0.8% |
+| Squat | 0.75× BW | 1.60× BW | ~0.82× BW | 1.5×BW = top 14%, 2.5×BW = top 1.6% |
+| Deadlift | 0.95× BW | 2.00× BW | ~1.03× BW | 2×BW = top 12%, 2.5×BW = top 5% |
+| OHP | 0.32× BW | 0.70× BW | ~0.35× BW | 1×BW = top 3%, 1.5×BW = top 0.1% |
 
-The fit is in `fit_lognormal_from_anchors()`, so a standard is *defined by its
-anchors* — to retune, edit the anchor, not the engine.
+Built in `_strength_mix()` / `MixtureDist` (cdf = weighted sum; quantile by
+bisection). Retuning = edit the centres / weight / CVs; the engine is untouched.
+The mid/upper ranks match the previous single-lognormal cut (bench bodyweight
+moved 15.9% → 15.6%), so anything already validated is preserved; the **low end is
+now grounded** rather than extrapolated.
 
 ### Allometric scaling (`BW^0.67`)
 Cross-sectional strength scales ~`BW^(2/3)` (surface-law). Dividing by `BW^0.67`
@@ -75,11 +80,11 @@ makes the score size-fair: the *average* man of any bodyweight has the same
 score. It sits between simple ratio (over-credits light lifters) and absolute kg
 (over-credits heavy lifters). Exponent is a tunable constant (`_ALLO`).
 
-### Known weak spot
-The **median** of each lift is the least-certain number (it's an output of the
-tail anchors, and untrained 1RMs are barely measured). **Refinement plan:** model
-the untrained baseline from NHANES handgrip + Bohannon norms and the trained tail
-separately, then fit a proper two-component mixture. Until then: `provisional`.
+### Residual weak spot
+The **untrained component's centre** is still an estimate — untrained 1RMs are
+barely measured directly, so grip data constrains the *spread* but not the exact
+per-lift mean. Tightening it (e.g. from any direct untrained-1RM study, or a
+grip→press regression) is the remaining refinement; the structure is now correct.
 
 ### Isolation lifts (curls, lateral raises, etc.)
 Estimated 1RM is unreliable for these and few train them to a true max. They move
@@ -109,12 +114,17 @@ bodyweight prompts for one once.
 
 | Metric | Distribution | Source | Confidence |
 |---|---|---|---|
-| VO₂max | normal(48, 9) | HUNT (Loe et al.): men 45.4 ± 8.9 ml/kg/min; nudged up for youth | High |
-| Resting HR (↓ better) | normal(70, 10), direction −1 | general adult RHR ~70 ± 10 | Medium-High |
-| Plank | lognormal(ln 75, 0.55) | max-hold norms, genpop | Provisional |
-| Vertical jump | normal(41, 12) | young-male jump norms | Provisional |
-| 5k speed | normal(11.0, 2.3) km/h | recreational/genpop (~27 min median) | Provisional |
-| HRV | lognormal(ln 50, 0.5) | **method-dependent** (device/time/posture) | Low — FLAG |
+| VO₂max | normal(48, 9) | HUNT: men 45.4 ± 8.9 ml/kg/min, youth-nudged | High |
+| Resting HR (↓ better) | normal(70, 10), dir −1 | general adult RHR ~70 ± 10 | Medium-High |
+| Vertical jump | normal(43, 11) | CMJ-with-arms norms (untrained ~40–50 cm; method-sensitive) | Medium |
+| Plank | lognormal(ln 80, 0.5) | WKU normative study (males median ~110 s, active-biased → ~80 s genpop); **form-dependent** | Medium-Low |
+| 5k speed | lognormal(ln 8.5, 0.28) | **selection-bias corrected** — race data is runners-only; general young-male median is a slow jog ~8.5 km/h, sub-30 min ≈ top 25% | Low — FLAG |
+| HRV | lognormal(ln 50, 0.5) | method-dependent (device/time/posture) | Low — FLAG |
+
+**5k is the strength problem again:** published 5k data is self-selected runners,
+not the population. Against *all* young men (most of whom don't run a 5k), being
+able to run one at all is already above median; we set the population median to a
+slow jog and let the runner range form the upper tiers. Flagged provisional.
 
 VO₂max and resting HR have real general-population data and are the most trusted.
 HRV is the shakiest — its distribution depends heavily on measurement method, so
@@ -133,12 +143,14 @@ is re-run on every standards change before it ships.
 
 ## 6. Refinement backlog (priority order)
 
-1. **General-population strength medians** — NHANES handgrip + Bohannon → two-
-   component (untrained ∪ trained) mixture per lift. *Highest priority.*
+1. ~~General-population strength medians → two-component mixture per lift.~~
+   **DONE (v0.3)** — grip-grounded untrained mass + prevalence-weighted trained
+   tail. Residual: tighten the untrained centre from a direct untrained-1RM source.
 2. **Per-lift trained anchors** — replace round-number ratios with values read off
    trained datasets at the prevalence-implied percentile.
-3. **Performance metrics** (plank, vert, 5k, mobility) — swap provisional norms for
-   cited fitness-test datasets (ACSM / military / academic).
+3. ~~Performance metrics (plank, vert, 5k).~~ **DONE (v0.4)** — vert (CMJ norms),
+   plank (WKU normative study, form-adjusted), 5k (selection-bias corrected vs
+   general pop). Residual: mobility unmodelled; 5k & plank stay method-sensitive.
 4. **HRV measurement model** — pin the method (e.g. morning RMSSD) and source a
    matching distribution, or demote to tracked.
 5. **Allometric exponent** — fit `_ALLO` to the adopted dataset instead of 0.67.

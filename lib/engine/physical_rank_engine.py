@@ -1,0 +1,281 @@
+"""
+Physical — Rank Engine (reference implementation)  v0.3
+=======================================================
+Pure, deterministic reference. The Flutter app ports this to Dart; the FastAPI
+backend imports it directly. Parity is enforced by golden_vectors.json.
+
+CHANGES IN v0.3
+  • Strength standards are now a TWO-COMPONENT MIXTURE per lift (untrained mass
+    + trained tail) instead of a single guessed lognormal — see
+    STANDARDS_METHODOLOGY.md §2. Grounded in: whole-population grip-strength
+    norms (young men ~50 kg mean, normally distributed, CV ~0.18) for the
+    untrained spread; CDC muscle-strengthening prevalence (~22% train seriously)
+    for the mixture weight; trained standards for the tail. The mid/upper ranks
+    are ~unchanged from v0.2 (bench bodyweight ≈ top 16%); the low end is now
+    real rather than extrapolated.
+
+CARRIED FROM v0.2
+  • Bodyweight-at-time: strength scored against weight WHEN LIFTED (snapshot).
+  • Allometric BW scaling (/BW^0.67); distribution-CDF percentiles; derived tier
+    thresholds; explicit direction flag; z-space overall.
+
+Strength MEDIANS are now data-grounded but the untrained component's centre is
+still an estimate (untrained 1RMs are barely measured directly); flagged
+provisional. Config-driven: tuning is a data edit, not a code change.
+"""
+
+from __future__ import annotations
+from dataclasses import dataclass
+from statistics import NormalDist
+import math
+
+# ─── Tiers ────────────────────────────────────────────────────────────────
+TIERS = ["Wood", "Bronze", "Silver", "Gold", "Platinum",
+         "Diamond", "Champion", "Titan", "Glory"]
+TIER_TOP_PCT = {"Bronze": 80.0, "Silver": 60.0, "Gold": 40.0, "Platinum": 20.0,
+                "Diamond": 10.0, "Champion": 3.0, "Titan": 1.0, "Glory": 0.1}
+TIER_ENTRY_P = [0.0, 0.20, 0.40, 0.60, 0.80, 0.90, 0.97, 0.99, 0.999]
+SUB = ["I", "II", "III"]
+_Z = NormalDist()
+_ALLO = 0.67
+
+
+# ─── Distributions (Dist and MixtureDist share cdf/quantile) ───────────────
+@dataclass(frozen=True)
+class Dist:
+    kind: str            # "normal" | "lognormal"
+    mu: float
+    sigma: float
+
+    def cdf(self, x):
+        if self.kind == "normal":
+            return NormalDist(self.mu, self.sigma).cdf(x)
+        return 0.0 if x <= 0 else NormalDist(self.mu, self.sigma).cdf(math.log(x))
+
+    def quantile(self, p):
+        p = min(max(p, 1e-9), 1 - 1e-9)
+        q = NormalDist(self.mu, self.sigma).inv_cdf(p)
+        return q if self.kind == "normal" else math.exp(q)
+
+
+class MixtureDist:
+    """Weighted mixture of component distributions. cdf is the weighted sum;
+    quantile is found by bisection (cdf is monotone increasing)."""
+    def __init__(self, comps):       # comps: list of (weight, Dist)
+        self.comps = comps
+
+    def cdf(self, x):
+        return sum(w * d.cdf(x) for w, d in self.comps)
+
+    def quantile(self, p):
+        p = min(max(p, 1e-9), 1 - 1e-9)
+        lo, hi = 1e-6, 200.0
+        for _ in range(70):
+            mid = (lo + hi) / 2
+            if self.cdf(mid) < p:
+                lo = mid
+            else:
+                hi = mid
+        return (lo + hi) / 2
+
+
+def _lognorm_from_median_cv(median, cv):
+    return Dist("lognormal", math.log(median), math.sqrt(math.log(1 + cv * cv)))
+
+
+def _strength_mix(p_train, un_ratio, un_cv, tr_ratio, tr_cv):
+    """Mixture on the allometric score s = 1RM / BW^0.67, anchored at REF_BW.
+    A ratio r (x BW) maps to a score s = r * REF_BW^(1-0.67)."""
+    s_un = un_ratio * _REF_BW ** (1 - _ALLO)
+    s_tr = tr_ratio * _REF_BW ** (1 - _ALLO)
+    return MixtureDist([(1 - p_train, _lognorm_from_median_cv(s_un, un_cv)),
+                        (p_train,      _lognorm_from_median_cv(s_tr, tr_cv))])
+
+
+@dataclass(frozen=True)
+class Standard:
+    metric_id: str
+    direction: int
+    bodyweight_scaled: bool
+    dist: object              # Dist | MixtureDist
+    source: str
+    provisional: bool = True
+
+
+# ─── Standards: healthy young male, GENERAL population ─────────────────────
+_REF_BW = 80.0
+# Strength: untrained mass (grip-grounded CV 0.18) + trained tail (prevalence
+# weight 0.22, trained-standard median/spread). Ratios are x bodyweight.
+_GRIP_CV = 0.18
+_P_TRAIN = 0.22
+_TR_CV = 0.30
+
+def _S(mid, un_r, tr_r, note):
+    return Standard(mid, +1, True,
+                    _strength_mix(_P_TRAIN, un_r, _GRIP_CV, tr_r, _TR_CV), note)
+
+STANDARDS = {
+    "bench":    _S("bench",    0.50, 1.15, "mix: untrained 0.50x / trained 1.15x"),
+    "squat":    _S("squat",    0.75, 1.60, "mix: untrained 0.75x / trained 1.60x"),
+    "deadlift": _S("deadlift", 0.95, 2.00, "mix: untrained 0.95x / trained 2.00x"),
+    "ohp":      _S("ohp",      0.32, 0.70, "mix: untrained 0.32x / trained 0.70x"),
+
+    "vo2max":     Standard("vo2max", +1, False, Dist("normal", 48.0, 9.0),
+                           "HUNT men 45.4±8.9, youth-nudged"),
+    "resting_hr": Standard("resting_hr", -1, False, Dist("normal", 70.0, 10.0),
+                           "genpop RHR ~70±10 (lower better)"),
+    "plank":      Standard("plank", +1, False, Dist("lognormal", math.log(80), 0.5),
+                           "plank hold sec (WKU norm, genpop/form-adjusted) — form-dependent"),
+    "vert":       Standard("vert", +1, False, Dist("normal", 43.0, 11.0),
+                           "CMJ-with-arms norms, genpop young male"),
+    "run5k_kmh":  Standard("run5k_kmh", +1, False, Dist("lognormal", math.log(8.5), 0.28),
+                           "5k speed vs GENERAL pop (selection-bias corrected) — FLAG"),
+    "hrv":        Standard("hrv", +1, False, Dist("lognormal", math.log(50), 0.5),
+                           "HRV ms — method-dependent, FLAG"),
+}
+
+
+# ─── Core engine ───────────────────────────────────────────────────────────
+def _score(std, value, bodyweight):
+    if std.bodyweight_scaled:
+        if not bodyweight or bodyweight <= 0:
+            raise ValueError(f"{std.metric_id} needs bodyweight-at-time")
+        return value / (bodyweight ** _ALLO)
+    return value
+
+
+def percentile(metric_id, value, bodyweight=None):
+    std = STANDARDS[metric_id]
+    below = std.dist.cdf(_score(std, value, bodyweight))
+    P = below if std.direction == +1 else 1.0 - below
+    return min(max(P, 0.0), 1.0)
+
+
+def _tier_idx(P):
+    idx = 0
+    for i, e in enumerate(TIER_ENTRY_P):
+        if P >= e:
+            idx = i
+    return idx
+
+
+def _rank_value_from_P(P):
+    idx = _tier_idx(P)
+    lo = TIER_ENTRY_P[idx]
+    hi = TIER_ENTRY_P[idx + 1] if idx + 1 < len(TIER_ENTRY_P) else 1.0
+    frac = 0.0 if hi <= lo else min(max((P - lo) / (hi - lo), 0.0), 1.0)
+    return idx + frac
+
+
+def rank_value(metric_id, value, bodyweight=None):
+    return _rank_value_from_P(percentile(metric_id, value, bodyweight))
+
+
+def tier_of(metric_id, value, bodyweight=None):
+    P = percentile(metric_id, value, bodyweight)
+    rv = _rank_value_from_P(P)
+    idx = int(rv)
+    return {"tier": TIERS[idx], "sub": SUB[min(int((rv - idx) * 3), 2)],
+            "top_pct": (1 - P) * 100, "percentile": P * 100, "rank_value": rv}
+
+
+def threshold(metric_id, tier, bodyweight=None):
+    std = STANDARDS[metric_id]
+    P_entry = TIER_ENTRY_P[TIERS.index(tier)]
+    cdf_p = P_entry if std.direction == +1 else 1.0 - P_entry
+    x = std.dist.quantile(cdf_p)
+    return x * (bodyweight ** _ALLO) if std.bodyweight_scaled else x
+
+
+@dataclass
+class Log:
+    metric_id: str
+    value: float
+    bodyweight: float | None = None
+    ts: str | None = None
+
+
+def score_log(log: Log):
+    return tier_of(log.metric_id, log.value, log.bodyweight)
+
+
+def overall(logs):
+    zs = []
+    for log in logs:
+        if log.metric_id not in STANDARDS:
+            continue
+        P = min(max(percentile(log.metric_id, log.value, log.bodyweight), 1e-6), 1 - 1e-6)
+        zs.append(_Z.inv_cdf(P))
+    if not zs:
+        return {"tier": "Wood", "sub": "I", "top_pct": 99.9, "rank_value": 0.0}
+    Pbar = _Z.cdf(sum(zs) / len(zs))
+    rv = _rank_value_from_P(Pbar)
+    idx = int(rv)
+    return {"tier": TIERS[idx], "sub": SUB[min(int((rv - idx) * 3), 2)],
+            "top_pct": (1 - Pbar) * 100, "rank_value": rv}
+
+
+def est_1rm(weight, reps):
+    if reps <= 0 or weight <= 0:
+        return 0.0
+    if reps == 1:
+        return weight
+    r = min(reps, 12)
+    return round(((weight * (1 + r / 30)) +
+                  (weight / (1.0278 - 0.0278 * r)) +
+                  ((100 * weight) / (101.3 - 2.67123 * r))) / 3, 2)
+
+
+# ═══ SELF-TEST + BELIEVABILITY ═════════════════════════════════════════════
+def run_self_tests():
+    print("STRUCTURAL TESTS")
+    print("-" * 64)
+    bw = 80
+    ok = all(percentile("bench", w, bw) <= percentile("bench", w + 5, bw)
+             for w in range(20, 200, 5))
+    print(f"  [{'PASS' if ok else 'FAIL'}] bench percentile monotonic in weight")
+
+    l1, l2 = 4.0 * 65 ** _ALLO, 4.0 * 100 ** _ALLO
+    p1, p2 = percentile("bench", l1, 65), percentile("bench", l2, 100)
+    print(f"  [{'PASS' if abs(p1-p2) < 1e-9 else 'FAIL'}] equal allometric score "
+          f"=> equal percentile ({p1*100:.2f}% vs {p2*100:.2f}%)")
+
+    ok = percentile("resting_hr", 50) > percentile("resting_hr", 80)
+    print(f"  [{'PASS' if ok else 'FAIL'}] resting HR 50 ranks above 80")
+
+    t = threshold("bench", "Diamond", bw)
+    landed = tier_of("bench", t, bw)
+    print(f"  [{'PASS' if abs(landed['top_pct']-10.0) < 0.5 else 'FAIL'}] derived "
+          f"Diamond bench threshold ({t:.1f}kg) lands at top {landed['top_pct']:.1f}%")
+
+    correct = score_log(Log("bench", 100, 75))
+    wrong = tier_of("bench", 100, 90)
+    print(f"  [{'PASS' if abs(correct['top_pct']-wrong['top_pct']) > 0.5 else 'FAIL'}] "
+          f"past lift keeps snapshot rank ({correct['tier']} {correct['sub']}, "
+          f"top {correct['top_pct']:.1f}%) not current-BW rank ({wrong['tier']} "
+          f"{wrong['sub']}, top {wrong['top_pct']:.1f}%)")
+    print()
+
+
+def believability():
+    print("BELIEVABILITY — mixture-modelled strength (75 kg young male)")
+    print("=" * 70)
+    bw = 75
+    for lift in ["bench", "squat", "deadlift", "ohp"]:
+        med = threshold(lift, "Bronze", bw)  # not median, just to anchor display
+        print(f"\n{lift.upper()}  (population median "
+              f"{STANDARDS[lift].dist.quantile(0.5)*bw**_ALLO:.0f} kg)")
+        for r in [0.5, 0.75, 1.0, 1.5, 2.0, 2.5]:
+            t = tier_of(lift, r * bw, bw)
+            print(f"  {r:.2f}x BW ({r*bw:5.1f} kg) -> {t['tier']:<9}{t['sub']:<3} "
+                  f"top {t['top_pct']:5.1f}%")
+    print("\nDERIVED bench tier ladder @ 75 kg BW")
+    for tier in ["Bronze","Silver","Gold","Platinum","Diamond","Champion","Titan"]:
+        kg = threshold("bench", tier, bw)
+        print(f"  {tier:<9} {kg:5.1f} kg ({kg/bw:.2f}x)  [top {TIER_TOP_PCT[tier]:.0f}%]")
+    print("=" * 70)
+
+
+if __name__ == "__main__":
+    run_self_tests()
+    believability()
