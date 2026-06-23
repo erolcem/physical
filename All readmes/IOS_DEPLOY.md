@@ -1,10 +1,51 @@
 # Physical — Getting it onto an iPhone
 
-**Short answer to "how do I download it?":** to test on *your own* iPhone you do
-**not** need the App Store and you do **not** need to pay anything. You build it
-from your Mac straight onto your phone with a free Apple ID. The paid stuff
-($99/yr) only matters when you want it to stay installed without weekly rebuilds,
-or when you want *other people* to install it.
+> **Erol's situation: no Mac, developing on Linux.** iOS apps can only be *built
+> and code-signed on macOS*, so the routes below that say "from your Mac" don't
+> apply directly. Use **Route 0 (Codemagic cloud build → TestFlight)** instead.
+> The rest of this doc is kept for reference / for when a Mac is available.
+
+## Route 0 — No Mac: build in the cloud (Codemagic) → TestFlight  ← *current plan*
+
+You can get Physical onto your iPhone without owning a Mac by letting a cloud
+macOS machine build and sign it. The repo already has a ready `codemagic.yaml`.
+
+**What it costs:** the **$99/yr Apple Developer Program** (required for TestFlight)
++ Codemagic's **free tier** (cloud macOS minutes). No Mac purchase.
+
+**One-time setup:**
+1. **Enrol** in the Apple Developer Program — developer.apple.com ($99/yr).
+   Identity verification can take ~24–48h, so start this first.
+2. **App Store Connect** → create a new app with bundle id
+   `com.cemiloglu.physical`. Copy its numeric **Apple ID** into
+   `APP_STORE_APPLE_ID` in `codemagic.yaml`.
+3. **Codemagic** (codemagic.io, sign in with GitHub) → add the `physical` repo →
+   Teams → Integrations → add an **App Store Connect API key**, name it
+   `codemagic_asc` (matches `integrations.app_store_connect` in the yaml).
+4. **Start build.** Codemagic creates the signing cert/profile, builds the IPA,
+   and uploads to TestFlight.
+5. On your iPhone: install Apple's **TestFlight** app, accept the invite, run it.
+
+**Why TestFlight, not the App Store, for now:** TestFlight is Apple's beta
+channel — your own device + invited testers, minimal review. The public App Store
+needs full review + screenshots + privacy metadata; that's for release, not for
+"checking the app."
+
+**HealthKit later (Phase 3):** reading the Apple Health app on iOS is the iPhone
+analogue of "Google Health" — it uses **HealthKit**, which needs the paid program
+(already covered), a HealthKit **entitlement**, and an
+`NSHealthShareUsageDescription` string in `ios/Runner/Info.plist`. Not needed to
+ship the current build; flagged so it's not a surprise.
+
+---
+
+## Reference: routes that assume a Mac
+
+**Short answer (with a Mac):** to test on *your own* iPhone you do **not** need the
+App Store and you do **not** need to pay anything — you build it from your Mac
+straight onto your phone with a free Apple ID. The paid stuff ($99/yr) only
+matters when you want it to stay installed without weekly rebuilds, or when you
+want *other people* to install it.
 
 ## The three routes
 
