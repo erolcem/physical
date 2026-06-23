@@ -48,13 +48,18 @@ def sync(user_id: str = Query(...), days: int = Query(7, ge=1, le=30),
     client = GoogleHealthClient(_valid_access_token(db, token))
 
     samples: list[dict] = []
+    errors: dict[str, str] = {}
     for metric_id, data_type in DATA_TYPES.items():
         if metric_id == "sleep":
             continue  # sleep rollup shape is verified live before mapping
-        samples += mapping.to_samples(metric_id, client.daily_rollup(data_type, days))
+        try:
+            samples += mapping.to_samples(metric_id, client.daily_rollup(data_type, days))
+        except Exception as e:  # one bad data type shouldn't sink the whole sync
+            errors[data_type] = str(e)[:400]
 
     ingested, skipped = _ingest(db, user_id, samples)
-    return {"pulled": len(samples), "ingested": ingested, "skipped": skipped, "days": days}
+    return {"pulled": len(samples), "ingested": ingested, "skipped": skipped,
+            "errors": errors, "days": days}
 
 
 # ── helpers ──

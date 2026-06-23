@@ -31,15 +31,34 @@ _EXTRACTORS = {
     "active_zone": _active_zone,
 }
 
+# Keys on a rollupDataPoint that are metadata, not the value union.
+_META_KEYS = {"civilStartTime", "civilEndTime", "startTime", "endTime",
+              "dataSource", "dataSourceFamily"}
 
-def to_samples(metric_id: str, datapoints: list[dict]) -> list[dict]:
+
+def _day_of(point: dict) -> str | None:
+    cst = point.get("civilStartTime")
+    if cst and cst.get("year"):
+        return f"{int(cst['year']):04d}-{int(cst['month']):02d}-{int(cst['day']):02d}"
+    iso = point.get("startTime") or point.get("date") or ""
+    return iso[:10] or None
+
+
+def to_samples(metric_id: str, rollup_points: list[dict]) -> list[dict]:
     out = []
-    for p in datapoints:
-        day = (p.get("startTime") or p.get("date") or p.get("startDate") or "")[:10]
-        value_obj = p.get("value") or p.get("rollupValue") or p.get("rollUpValue") or {}
+    for p in rollup_points:
+        day = _day_of(p)
+        if not day:
+            continue
+        # The value lives under a type-named key (steps/heartRate/weight/...);
+        # take the first non-metadata object so we don't depend on the exact name.
+        value_obj = next((v for k, v in p.items()
+                          if k not in _META_KEYS and isinstance(v, dict)), None)
+        if value_obj is None:
+            continue
         extract = _EXTRACTORS.get(metric_id, _first_number)
         val = extract(value_obj)
-        if val is None or not day:
+        if val is None:
             continue
         out.append({
             "metric_id": metric_id, "ts": f"{day}T00:00:00", "value": float(val),

@@ -34,14 +34,15 @@ class GoogleHealthClient:
         end = dt.date.today()
         start = end - dt.timedelta(days=days)
         url = f"{BASE}/users/me/dataTypes/{data_type}/dataPoints:dailyRollUp"
-        body = {
-            "startTime": f"{start.isoformat()}T00:00:00Z",
-            "endTime": f"{end.isoformat()}T23:59:59Z",
-        }
+        # The endpoint takes a CivilTimeInterval `range`, not start/end timestamps.
+        body = {"range": {
+            "start": {"year": start.year, "month": start.month, "day": start.day},
+            "end": {"year": end.year, "month": end.month, "day": end.day},
+        }}
         r = httpx.post(url, headers=self._headers, json=body, timeout=30)
         if r.status_code == 404:
             return []
-        r.raise_for_status()
-        data = r.json()
-        # tolerant to the exact container name until verified live
-        return data.get("dataPoints") or data.get("rollups") or data.get("rollUps") or []
+        if r.status_code >= 400:
+            # Surface Google's actual error message instead of a bare 500.
+            raise RuntimeError(f"{r.status_code} {r.text[:400]}")
+        return r.json().get("rollupDataPoints", [])
