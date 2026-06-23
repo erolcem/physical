@@ -60,36 +60,43 @@ Dedup key is `(user, metric, source, source_id)`. Manual logs without a
 (aesthetics, sleep sub-metrics, etc.) are stored but never ranked — they have no
 engine standard.
 
-## Fitbit / Google Health integration (cloud adapter)
+## Google Health API integration (cloud adapter)
 
-Pulls the **full** Fitbit data range — including the metrics HealthKit can't get
-from Fitbit (HRV, cardio/VO₂max score, sleep, resting HR) — server-side, and
-normalises them into the same canonical sample store.
+Pulls the full Fitbit/Pixel data range — including metrics HealthKit can't get
+from Fitbit (HRV, VO₂max, resting HR, sleep) — server-side via the **Google Health
+API** (the legacy Fitbit Web API is deprecated for new apps; full turndown Sep 2026).
 
-**One-time setup (you do this once, with your Fitbit account):**
-1. Go to **dev.fitbit.com → Manage → Register an App**.
-2. Fill in:
-   - **OAuth 2.0 Application Type:** `Personal` (gives intraday access to *your own* data — no API approval needed).
-   - **Callback URL:** `http://localhost:8000/integrations/fitbit/callback`
-   - **Default Access Type:** `Read Only`
-3. After registering, copy the **OAuth 2.0 Client ID** and **Client Secret**, and export them before starting the backend:
-   ```bash
-   export FITBIT_CLIENT_ID=xxxxxx
-   export FITBIT_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-   uvicorn app.main:app --reload
-   ```
+**Prerequisites (one-time, your accounts):**
+1. **Migrate your Fitbit account to a Google account** — support.google.com/fitbit
+   (the data is only reachable via Google once migrated).
+2. **Google Cloud Console** → create/select a project → **enable the Google Health API**.
+3. **OAuth consent screen** → set it to **External**, **Testing** mode, and add your
+   own Google email under **Test users**. Add the Google Health scopes
+   (`…/auth/googlehealth.*.readonly`). *These scopes are "Restricted": testing mode
+   works for your own account; a public/production launch needs a security review.*
+4. **Credentials → Create OAuth client ID → Web application.** Add
+   `https://www.google.com` as an **Authorized redirect URI**. Copy the **Client ID**
+   and **Client Secret**.
+
+```bash
+export GOOGLE_CLIENT_ID=xxxxxx.apps.googleusercontent.com
+export GOOGLE_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxx
+uvicorn app.main:app --reload
+```
 
 **Connect & sync:**
-1. Open `http://localhost:8000/integrations/fitbit/authorize?user_id=local-dev` in a
-   browser → approve on Fitbit → it redirects back and stores your tokens.
-2. Pull data: `curl -X POST "http://localhost:8000/integrations/fitbit/sync?user_id=local-dev&days=7"`
-   → `{"pulled": N, "ingested": N, "skipped": 0, ...}`.
-3. `GET /users/local-dev/ranks` now reflects your real Fitbit-derived metrics.
+1. Open `http://localhost:8000/integrations/google/authorize?user_id=local-dev` →
+   approve. Google redirects to `https://www.google.com/?...&code=XXXX` — copy the
+   `code` value from that URL.
+2. `curl -X POST "http://localhost:8000/integrations/google/exchange?user_id=local-dev&code=XXXX"`
+   → stores your tokens.
+3. `curl -X POST "http://localhost:8000/integrations/google/sync?user_id=local-dev&days=7"`
+   → pulls and ingests. Then `GET /users/local-dev/ranks` reflects the real data.
 
-Mapped today: resting HR, HRV, VO₂max (cardio score), steps, active-zone minutes,
-energy burned, weight/body-fat, sleep efficiency/duration/stages. (Fitbit's 0–100
-*sleep score* isn't in the public API, so it stays a manual/derived metric.)
-Tokens auto-refresh; re-syncing a day is idempotent (dedup on `source_id`).
+Mapped: resting HR, HRV, VO₂max, steps, active-zone minutes, energy burned,
+weight, body-fat (sleep pending live-schema verification). Re-syncing a day is
+idempotent (dedup on `source_id`). **Note:** in OAuth testing mode Google refresh
+tokens expire after 7 days, so you re-authorize weekly until the security review.
 
 ## Note on the shared engine
 The backend and the Flutter client must agree, so `physical_rank_engine.py` is

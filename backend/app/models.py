@@ -52,13 +52,13 @@ class Sample(Base):
     )
 
 
-class FitbitToken(Base):
-    """Per-user Fitbit OAuth tokens for the cloud (Google Health) adapter."""
-    __tablename__ = "fitbit_tokens"
+class GoogleHealthToken(Base):
+    """Per-user Google OAuth tokens for the Google Health API cloud adapter.
+    Note: in OAuth 'testing' mode Google refresh tokens expire after 7 days."""
+    __tablename__ = "google_health_tokens"
 
     user_id: Mapped[str] = mapped_column(String, primary_key=True)
     access_token: Mapped[str] = mapped_column(String)
     refresh_token: Mapped[str] = mapped_column(String)
     expires_at: Mapped[dt.datetime] = mapped_column(DateTime)
     scope: Mapped[str | None] = mapped_column(String, nullable=True)
-    fitbit_user_id: Mapped[str | None] = mapped_column(String, nullable=True)

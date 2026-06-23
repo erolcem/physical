@@ -13,11 +13,14 @@ class Settings:
     database_url: str = os.environ.get("DATABASE_URL", "sqlite:///./physical.db")
     # Allometric/standard config lives in the rank engine itself; nothing here.
 
-    # Fitbit / Google Health integration (register a Fitbit app at dev.fitbit.com).
-    fitbit_client_id: str = os.environ.get("FITBIT_CLIENT_ID", "")
-    fitbit_client_secret: str = os.environ.get("FITBIT_CLIENT_SECRET", "")
-    fitbit_redirect_uri: str = os.environ.get(
-        "FITBIT_REDIRECT_URI", "http://localhost:8000/integrations/fitbit/callback")
+    # Google Health API integration (register a project in Google Cloud Console;
+    # the legacy Fitbit Web API is deprecated for new apps). The redirect URI must
+    # match one registered on the OAuth client; Google's docs use https://www.google.com
+    # for the manual code-paste flow that suits a local backend.
+    google_client_id: str = os.environ.get("GOOGLE_CLIENT_ID", "")
+    google_client_secret: str = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    google_redirect_uri: str = os.environ.get(
+        "GOOGLE_REDIRECT_URI", "https://www.google.com")
 
 
 settings = Settings()
