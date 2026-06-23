@@ -12,33 +12,40 @@ def test_authorize_url_uses_google_and_requests_offline_health_scopes():
     assert "state=user-123" in url
 
 
-_CST = {"year": 2026, "month": 6, "day": 20}
-
-
-def test_steps_mapping_uses_sumSteps():
-    pts = [{"civilStartTime": _CST, "steps": {"sumSteps": 8500}}]
-    assert mapping.to_samples("steps", pts) == [{
-        "metric_id": "steps", "ts": "2026-06-20T00:00:00", "value": 8500.0,
-        "source": "google_health", "source_id": "steps:2026-06-20",
-        "raw": {"sumSteps": 8500}}]
-
-
-def test_single_value_metrics_use_first_number_fallback():
-    # value lives under a type-named key (e.g. "heartRate") — parser is tolerant.
-    pts = [{"civilStartTime": _CST, "heartRate": {"restingHeartRateBpm": 58}}]
+def test_resting_hr_real_google_shape():
+    # Exactly the structure /debug returned from the live API.
+    pts = [{
+        "dataSource": {"platform": "FITBIT", "device": {"displayName": "Inspire 3"}},
+        "dailyRestingHeartRate": {
+            "date": {"year": 2026, "month": 6, "day": 23},
+            "beatsPerMinute": "49",  # string, nested
+            "dailyRestingHeartRateMetadata": {"calculationMethod": "WITH_SLEEP"},
+        },
+    }]
     out = mapping.to_samples("resting_hr", pts)
-    assert out[0]["value"] == 58.0 and out[0]["source_id"] == "resting_hr:2026-06-20"
+    assert out[0]["value"] == 49.0
+    assert out[0]["ts"] == "2026-06-23T00:00:00"
+    assert out[0]["source_id"] == "resting_hr:2026-06-23"
 
 
-def test_active_zone_sums_the_three_zones():
-    pts = [{"civilStartTime": _CST, "activeZoneMinutes": {
-        "sumInCardioHeartZone": 10, "sumInPeakHeartZone": 5, "sumInFatBurnHeartZone": 20}}]
+def test_active_zone_sums_zones_even_as_strings():
+    pts = [{"dataSource": {}, "activeZoneMinutes": {
+        "date": {"year": 2026, "month": 6, "day": 20},
+        "sumInCardioHeartZone": "10", "sumInPeakHeartZone": "5", "sumInFatBurnHeartZone": "20"}}]
     assert mapping.to_samples("active_zone", pts)[0]["value"] == 35.0
+
+
+def test_generic_single_value_metric():
+    pts = [{"dataSource": {}, "dailyVo2Max": {
+        "date": {"year": 2026, "month": 6, "day": 20},
+        "vo2MaxMillilitersPerMinuteKilogram": "44.0"}}]
+    assert mapping.to_samples("vo2max", pts)[0]["value"] == 44.0
 
 
 def test_empty_and_valueless_points_are_skipped():
     assert mapping.to_samples("steps", []) == []
-    assert mapping.to_samples("hrv", [{"civilStartTime": _CST, "heartRateVariability": {}}]) == []
+    assert mapping.to_samples("hrv", [{"dataSource": {}, "hrv": {
+        "date": {"year": 2026, "month": 6, "day": 20}}}]) == []  # no numeric field
 
 
 def test_sync_requires_a_connection(client):

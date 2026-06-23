@@ -1,76 +1,93 @@
 """Google Health dataPoints → canonical samples.
 
-`source_id` is stable per (metric, day) so re-syncing is idempotent. The exact
-rollup field names are only partly documented publicly, so we use specific
-extractors for the ones we know (sumSteps, the active-zone sums) and a tolerant
-"first numeric value" fallback for single-value metrics (resting HR, HRV, VO₂max,
-weight, body-fat). These are verified against the real response on first sync.
+Real dataPoint shape (confirmed live):
+    {
+      "dataSource": {...},                         # metadata
+      "dailyRestingHeartRate": {                   # type-named value container
+        "date": {"year": 2026, "month": 6, "day": 23},
+        "beatsPerMinute": "49",                    # value — note: a STRING
+        "dailyRestingHeartRateMetadata": {...}
+      }
+    }
+
+So: the value lives in a type-named container; the date is a nested {year,month,day}
+object; numeric values arrive as strings. `source_id` is stable per (metric, day)
+so re-syncing is idempotent.
 """
 SOURCE = "google_health"
 
+# Top-level keys on a dataPoint that are metadata, not the value container.
+_TOP_META = {"dataSource", "dataSourceFamily", "dataPointId", "originDataPointId",
+             "createTime", "modifyTime", "dataType", "interval",
+             "startTime", "endTime", "civilStartTime", "civilEndTime"}
 
-def _first_number(value: dict):
-    for v in (value or {}).values():
-        if isinstance(v, bool):
-            continue
-        if isinstance(v, (int, float)):
+
+def _to_float(v):
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        try:
             return float(v)
+        except ValueError:
+            return None
     return None
 
 
-def _active_zone(value: dict):
-    parts = [value.get("sumInCardioHeartZone"), value.get("sumInPeakHeartZone"),
-             value.get("sumInFatBurnHeartZone")]
-    nums = [p for p in parts if isinstance(p, (int, float))]
-    return float(sum(nums)) if nums else None
+def _container(point: dict) -> dict | None:
+    """The type-named value object (e.g. 'dailyRestingHeartRate'), skipping
+    metadata like 'dataSource'."""
+    return next((v for k, v in point.items()
+                 if k not in _TOP_META and isinstance(v, dict)), None)
 
 
-# Known field extractors; everything else falls back to _first_number.
-_EXTRACTORS = {
-    "steps": lambda v: v.get("sumSteps"),
-    "active_zone": _active_zone,
-}
-
-# Keys on a dataPoint that are metadata, not the value.
-_META_KEYS = {"civilStartTime", "civilEndTime", "startTime", "endTime", "interval",
-              "dataSource", "dataSourceFamily", "dataPointId", "originDataPointId",
-              "createTime", "modifyTime", "dataType"}
-
-
-def _day_of(point: dict) -> str | None:
-    cst = point.get("civilStartTime")
-    if cst and cst.get("year"):
-        return f"{int(cst['year']):04d}-{int(cst['month']):02d}-{int(cst['day']):02d}"
-    iso = (point.get("startTime") or point.get("date")
-           or (point.get("interval") or {}).get("startTime") or "")
+def _day_of(container: dict) -> str | None:
+    for v in container.values():  # the nested {year, month, day} date object
+        if isinstance(v, dict) and v.get("year"):
+            return f"{int(v['year']):04d}-{int(v['month']):02d}-{int(v['day']):02d}"
+    iso = (container.get("interval") or {}).get("startTime") or container.get("startTime") or ""
     return iso[:10] or None
 
 
-def _value_object(point: dict) -> dict | None:
-    # The value lives under a type-named key (steps/heartRate/weight/...). Prefer
-    # the first non-metadata object; fall back to top-level numeric fields.
-    obj = next((v for k, v in point.items()
-                if k not in _META_KEYS and isinstance(v, dict)), None)
-    if obj is not None:
-        return obj
-    nums = {k: v for k, v in point.items()
-            if k not in _META_KEYS and isinstance(v, (int, float)) and not isinstance(v, bool)}
-    return nums or None
+def _active_zone(container: dict):
+    total, found = 0.0, False
+    for k in ("sumInCardioHeartZone", "sumInPeakHeartZone", "sumInFatBurnHeartZone"):
+        f = _to_float(container.get(k))
+        if f is not None:
+            total, found = total + f, True
+    return total if found else None
+
+
+def _first_value(container: dict):
+    # First scalar (number or numeric string) that isn't the date or metadata.
+    for k, v in container.items():
+        if k == "date" or k.endswith("Metadata") or isinstance(v, dict):
+            continue
+        f = _to_float(v)
+        if f is not None:
+            return f
+    return None
+
+
+# Single-value metrics use the generic first-value extractor; active zone sums zones.
+_EXTRACTORS = {"active_zone": _active_zone}
 
 
 def to_samples(metric_id: str, datapoints: list[dict]) -> list[dict]:
     out = []
     for p in datapoints:
-        day = _day_of(p)
-        value_obj = _value_object(p)
-        if not day or value_obj is None:
+        container = _container(p)
+        if container is None:
             continue
-        extract = _EXTRACTORS.get(metric_id, _first_number)
-        val = extract(value_obj)
+        day = _day_of(container)
+        if not day:
+            continue
+        val = _EXTRACTORS.get(metric_id, _first_value)(container)
         if val is None:
             continue
         out.append({
             "metric_id": metric_id, "ts": f"{day}T00:00:00", "value": float(val),
-            "source": SOURCE, "source_id": f"{metric_id}:{day}", "raw": value_obj,
+            "source": SOURCE, "source_id": f"{metric_id}:{day}", "raw": container,
         })
     return out
