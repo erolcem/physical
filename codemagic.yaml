@@ -18,6 +18,8 @@ workflows:
     integrations:
       app_store_connect: codemagic_asc  # ← the API key name you set in Codemagic
     environment:
+      groups:
+        - ios_signing   # Codemagic env-var group holding CERTIFICATE_PRIVATE_KEY (secure)
       vars:
         BUNDLE_ID: "com.cemiloglu.physical"
         APP_STORE_APPLE_ID: 6783269531  # your app's numeric Apple ID (App Store Connect)
@@ -27,12 +29,14 @@ workflows:
     scripts:
       - name: Set up code signing (creates the cert + App Store profile if missing)
         script: |
-          # Explicit signing from scratch: works on a brand-new Apple account that
-          # has no distribution certificate or provisioning profile yet. The API
-          # key from the `codemagic_asc` integration is used automatically.
+          # Signing from scratch on a brand-new Apple account. Apple never stores
+          # the certificate's private key, so we supply our own (CERTIFICATE_PRIVATE_KEY,
+          # a secure env var) — fetch-signing-files --create then makes the iOS
+          # distribution certificate + App Store profile via the codemagic_asc API key.
           keychain initialize
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
+            --certificate-key @env:CERTIFICATE_PRIVATE_KEY \
             --create
           keychain add-certificates
           xcode-project use-profiles
