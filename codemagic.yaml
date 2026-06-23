@@ -42,9 +42,11 @@ workflows:
         ignore_failure: true
       - name: Build signed IPA
         script: |
+          # $BUILD_NUMBER is Codemagic's own auto-incrementing counter — robust
+          # from the very first build (no App Store Connect query needed).
           flutter build ipa --release \
             --build-name=0.1.0 \
-            --build-number=$(($(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID") + 1)) \
+            --build-number=$BUILD_NUMBER \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
