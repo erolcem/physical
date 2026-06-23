@@ -18,9 +18,6 @@ workflows:
     integrations:
       app_store_connect: codemagic_asc  # ← the API key name you set in Codemagic
     environment:
-      ios_signing:
-        distribution_type: app_store    # Codemagic fetches/creates the signing cert + profile
-        bundle_identifier: com.cemiloglu.physical
       vars:
         BUNDLE_ID: "com.cemiloglu.physical"
         APP_STORE_APPLE_ID: 6783269531  # your app's numeric Apple ID (App Store Connect)
@@ -28,8 +25,17 @@ workflows:
       xcode: latest
       cocoapods: default
     scripts:
-      - name: Apply fetched signing profiles to the Xcode project
-        script: xcode-project use-profiles
+      - name: Set up code signing (creates the cert + App Store profile if missing)
+        script: |
+          # Explicit signing from scratch: works on a brand-new Apple account that
+          # has no distribution certificate or provisioning profile yet. The API
+          # key from the `codemagic_asc` integration is used automatically.
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
       - name: Get Flutter packages
         script: flutter pub get
       - name: Install CocoaPods
