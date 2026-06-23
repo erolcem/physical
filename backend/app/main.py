@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from .db import init_db
+from .integrations.fitbit.router import router as fitbit_router
 from .routers import health, profile, ranks, samples
 
 
@@ -35,3 +36,4 @@ app.include_router(health.router)
 app.include_router(profile.router)
 app.include_router(samples.router)
 app.include_router(ranks.router)
+app.include_router(fitbit_router)

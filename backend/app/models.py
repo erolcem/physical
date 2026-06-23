@@ -50,3 +50,15 @@ class Sample(Base):
                          name="uq_sample_dedup"),
         Index("ix_user_metric_ts", "user_id", "metric_id", "ts"),
     )
+
+
+class FitbitToken(Base):
+    """Per-user Fitbit OAuth tokens for the cloud (Google Health) adapter."""
+    __tablename__ = "fitbit_tokens"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    access_token: Mapped[str] = mapped_column(String)
+    refresh_token: Mapped[str] = mapped_column(String)
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime)
+    scope: Mapped[str | None] = mapped_column(String, nullable=True)
+    fitbit_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
