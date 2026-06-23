@@ -39,6 +39,27 @@ def exchange(user_id: str = Query(...), code: str = Query(...),
     return {"status": "connected", "user_id": user_id}
 
 
+@router.get("/debug")
+def debug(user_id: str = Query(...), db: Session = Depends(get_db)):
+    """Diagnose an empty sync: what does Google actually have for this account?
+    Shows the profile, paired devices/data sources, and a couple of raw samples."""
+    token = db.get(GoogleHealthToken, user_id)
+    if token is None:
+        raise HTTPException(404, "Google Health not connected")
+    client = GoogleHealthClient(_valid_access_token(db, token))
+    checks = {
+        "profile": "/users/me/profile",
+        "pairedDevices": "/users/me/pairedDevices",
+        "steps": "/users/me/dataTypes/steps/dataPoints?pageSize=3",
+        "resting_hr": "/users/me/dataTypes/daily-resting-heart-rate/dataPoints?pageSize=3",
+    }
+    out = {}
+    for name, path in checks.items():
+        status, body = client.get_raw(path)
+        out[name] = {"status": status, "body": body}
+    return out
+
+
 @router.post("/sync")
 def sync(user_id: str = Query(...), days: int = Query(7, ge=1, le=30),
          db: Session = Depends(get_db)):

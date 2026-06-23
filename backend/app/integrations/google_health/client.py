@@ -43,3 +43,11 @@ class GoogleHealthClient:
             # Surface Google's actual error message instead of a bare 500.
             raise RuntimeError(f"{r.status_code} {r.text[:400]}")
         return r.json().get("dataPoints", [])
+
+    def get_raw(self, path: str):
+        """Raw GET for diagnostics — returns (status_code, parsed-json-or-text)."""
+        r = httpx.get(f"{BASE}{path}", headers=self._headers, timeout=20)
+        try:
+            return r.status_code, r.json()
+        except Exception:
+            return r.status_code, r.text[:600]
