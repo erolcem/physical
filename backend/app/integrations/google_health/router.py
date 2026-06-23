@@ -66,7 +66,13 @@ def sync(user_id: str = Query(...), days: int = Query(7, ge=1, le=30),
     token = db.get(GoogleHealthToken, user_id)
     if token is None:
         raise HTTPException(404, "Google Health not connected — run /authorize then /exchange")
-    client = GoogleHealthClient(_valid_access_token(db, token))
+    try:
+        access = _valid_access_token(db, token)
+    except Exception as e:
+        # Always return JSON (never a bare 500), so the client sees the reason.
+        return {"pulled": 0, "ingested": 0, "skipped": 0,
+                "errors": {"token": f"refresh failed: {str(e)[:300]}"}, "days": days}
+    client = GoogleHealthClient(access)
 
     samples: list[dict] = []
     errors: dict[str, str] = {}
@@ -78,7 +84,11 @@ def sync(user_id: str = Query(...), days: int = Query(7, ge=1, le=30),
         except Exception as e:  # one bad data type shouldn't sink the whole sync
             errors[data_type] = str(e)[:400]
 
-    ingested, skipped = _ingest(db, user_id, samples)
+    try:
+        ingested, skipped = _ingest(db, user_id, samples)
+    except Exception as e:
+        return {"pulled": len(samples), "ingested": 0, "skipped": 0,
+                "errors": {**errors, "ingest": str(e)[:300]}, "days": days}
     return {"pulled": len(samples), "ingested": ingested, "skipped": skipped,
             "errors": errors, "days": days}
 
