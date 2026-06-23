@@ -53,7 +53,7 @@ def sync(user_id: str = Query(...), days: int = Query(7, ge=1, le=30),
         if metric_id == "sleep":
             continue  # sleep rollup shape is verified live before mapping
         try:
-            samples += mapping.to_samples(metric_id, client.daily_rollup(data_type, days))
+            samples += mapping.to_samples(metric_id, client.query(data_type, limit=days * 4))
         except Exception as e:  # one bad data type shouldn't sink the whole sync
             errors[data_type] = str(e)[:400]
 

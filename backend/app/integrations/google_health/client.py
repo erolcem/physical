@@ -30,19 +30,16 @@ class GoogleHealthClient:
     def __init__(self, access_token: str):
         self._headers = {"Authorization": f"Bearer {access_token}"}
 
-    def daily_rollup(self, data_type: str, days: int) -> list[dict]:
-        end = dt.date.today()
-        start = end - dt.timedelta(days=days)
-        url = f"{BASE}/users/me/dataTypes/{data_type}/dataPoints:dailyRollUp"
-        # The endpoint takes a CivilTimeInterval `range`, not start/end timestamps.
-        body = {"range": {
-            "start": {"year": start.year, "month": start.month, "day": start.day},
-            "end": {"year": end.year, "month": end.month, "day": end.day},
-        }}
-        r = httpx.post(url, headers=self._headers, json=body, timeout=30)
+    def query(self, data_type: str, limit: int = 100) -> list[dict]:
+        """List recent dataPoints for a dataType (GET). Simpler and more robust
+        than the dailyRollUp custom method (whose CivilDateTime body shape isn't
+        publicly specified). Date-range filtering is a later refinement; for the
+        daily-* types each dataPoint is already one day's value."""
+        url = f"{BASE}/users/me/dataTypes/{data_type}/dataPoints"
+        r = httpx.get(url, headers=self._headers, params={"pageSize": limit}, timeout=30)
         if r.status_code == 404:
             return []
         if r.status_code >= 400:
             # Surface Google's actual error message instead of a bare 500.
             raise RuntimeError(f"{r.status_code} {r.text[:400]}")
-        return r.json().get("rollupDataPoints", [])
+        return r.json().get("dataPoints", [])

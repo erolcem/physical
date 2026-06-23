@@ -31,30 +31,39 @@ _EXTRACTORS = {
     "active_zone": _active_zone,
 }
 
-# Keys on a rollupDataPoint that are metadata, not the value union.
-_META_KEYS = {"civilStartTime", "civilEndTime", "startTime", "endTime",
-              "dataSource", "dataSourceFamily"}
+# Keys on a dataPoint that are metadata, not the value.
+_META_KEYS = {"civilStartTime", "civilEndTime", "startTime", "endTime", "interval",
+              "dataSource", "dataSourceFamily", "dataPointId", "originDataPointId",
+              "createTime", "modifyTime", "dataType"}
 
 
 def _day_of(point: dict) -> str | None:
     cst = point.get("civilStartTime")
     if cst and cst.get("year"):
         return f"{int(cst['year']):04d}-{int(cst['month']):02d}-{int(cst['day']):02d}"
-    iso = point.get("startTime") or point.get("date") or ""
+    iso = (point.get("startTime") or point.get("date")
+           or (point.get("interval") or {}).get("startTime") or "")
     return iso[:10] or None
 
 
-def to_samples(metric_id: str, rollup_points: list[dict]) -> list[dict]:
+def _value_object(point: dict) -> dict | None:
+    # The value lives under a type-named key (steps/heartRate/weight/...). Prefer
+    # the first non-metadata object; fall back to top-level numeric fields.
+    obj = next((v for k, v in point.items()
+                if k not in _META_KEYS and isinstance(v, dict)), None)
+    if obj is not None:
+        return obj
+    nums = {k: v for k, v in point.items()
+            if k not in _META_KEYS and isinstance(v, (int, float)) and not isinstance(v, bool)}
+    return nums or None
+
+
+def to_samples(metric_id: str, datapoints: list[dict]) -> list[dict]:
     out = []
-    for p in rollup_points:
+    for p in datapoints:
         day = _day_of(p)
-        if not day:
-            continue
-        # The value lives under a type-named key (steps/heartRate/weight/...);
-        # take the first non-metadata object so we don't depend on the exact name.
-        value_obj = next((v for k, v in p.items()
-                          if k not in _META_KEYS and isinstance(v, dict)), None)
-        if value_obj is None:
+        value_obj = _value_object(p)
+        if not day or value_obj is None:
             continue
         extract = _EXTRACTORS.get(metric_id, _first_number)
         val = extract(value_obj)
