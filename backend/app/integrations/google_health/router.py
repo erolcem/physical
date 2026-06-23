@@ -13,7 +13,7 @@ import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ...config import settings
@@ -47,25 +47,32 @@ def debug(user_id: str = Query(...), db: Session = Depends(get_db)):
     if token is None:
         raise HTTPException(404, "Google Health not connected")
     client = GoogleHealthClient(_valid_access_token(db, token))
-    checks = {
-        "profile": "/users/me/profile",
-        "pairedDevices": "/users/me/pairedDevices",
-        "steps": "/users/me/dataTypes/steps/dataPoints?pageSize=3",
-        "resting_hr": "/users/me/dataTypes/daily-resting-heart-rate/dataPoints?pageSize=3",
-    }
     out = {}
-    for name, path in checks.items():
-        status, body = client.get_raw(path)
-        out[name] = {"status": status, "body": body}
+    # One real sample per data type so we can write precise field extractors.
+    for metric_id, data_type in DATA_TYPES.items():
+        status, body = client.get_raw(
+            f"/users/me/dataTypes/{data_type}/dataPoints?pageSize=10")
+        if isinstance(body, dict):
+            pts = body.get("dataPoints") or []
+            sample = pts[0] if pts else {"_no_dataPoints": True, "keys": list(body.keys())}
+        else:
+            sample = body
+        out[metric_id] = {"status": status, "sample": sample}
     return out
 
 
 @router.post("/sync")
 def sync(user_id: str = Query(...), days: int = Query(7, ge=1, le=30),
+         replace: bool = Query(False, description="delete existing Google samples first"),
          db: Session = Depends(get_db)):
     token = db.get(GoogleHealthToken, user_id)
     if token is None:
         raise HTTPException(404, "Google Health not connected — run /authorize then /exchange")
+    if replace:
+        # Lets corrected mappings overwrite previously-ingested (possibly wrong) values.
+        db.execute(delete(Sample).where(
+            Sample.user_id == user_id, Sample.source == "google_health"))
+        db.commit()
     try:
         access = _valid_access_token(db, token)
     except Exception as e:
