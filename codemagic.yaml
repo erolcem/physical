@@ -23,7 +23,7 @@ workflows:
         bundle_identifier: com.cemiloglu.physical
       vars:
         BUNDLE_ID: "com.cemiloglu.physical"
-        APP_STORE_APPLE_ID: 0000000000  # ← replace with your app's numeric Apple ID
+        APP_STORE_APPLE_ID: 6783269531  # your app's numeric Apple ID (App Store Connect)
       flutter: stable
       xcode: latest
       cocoapods: default
