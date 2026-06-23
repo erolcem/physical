@@ -119,7 +119,13 @@ def _valid_access_token(db: Session, token: GoogleHealthToken) -> str:
 
 def _ingest(db: Session, user_id: str, samples: list[dict]) -> tuple[int, int]:
     ingested = skipped = 0
-    for s in samples:
+    seen: set[tuple] = set()  # de-dupe within this batch (Google returns several
+    for s in samples:         # points per metric+day; source_id collapses them)
+        key = (s["metric_id"], s["source"], s["source_id"])
+        if key in seen:
+            skipped += 1
+            continue
+        seen.add(key)
         dupe = db.scalar(select(Sample).where(
             Sample.user_id == user_id, Sample.metric_id == s["metric_id"],
             Sample.source == s["source"], Sample.source_id == s["source_id"]))
