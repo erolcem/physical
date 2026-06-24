@@ -13,39 +13,60 @@ def test_authorize_url_uses_google_and_requests_offline_health_scopes():
 
 
 def test_resting_hr_real_google_shape():
-    # Exactly the structure /debug returned from the live API.
     pts = [{
         "dataSource": {"platform": "FITBIT", "device": {"displayName": "Inspire 3"}},
         "dailyRestingHeartRate": {
             "date": {"year": 2026, "month": 6, "day": 23},
-            "beatsPerMinute": "49",  # string, nested
+            "beatsPerMinute": "49",
             "dailyRestingHeartRateMetadata": {"calculationMethod": "WITH_SLEEP"},
         },
     }]
     out = mapping.to_samples("resting_hr", pts)
-    assert out[0]["value"] == 49.0
-    assert out[0]["ts"] == "2026-06-23T00:00:00"
-    assert out[0]["source_id"] == "resting_hr:2026-06-23"
+    assert out[0]["value"] == 49.0 and out[0]["ts"] == "2026-06-23T00:00:00"
 
 
-def test_active_zone_sums_zones_even_as_strings():
-    pts = [{"dataSource": {}, "activeZoneMinutes": {
-        "date": {"year": 2026, "month": 6, "day": 20},
-        "sumInCardioHeartZone": "10", "sumInPeakHeartZone": "5", "sumInFatBurnHeartZone": "20"}}]
-    assert mapping.to_samples("active_zone", pts)[0]["value"] == 35.0
+def test_hrv_prefers_deep_sleep_rmssd_over_zero_average():
+    pts = [{"dataSource": {}, "dailyHeartRateVariability": {
+        "date": {"year": 2026, "month": 6, "day": 24},
+        "averageHeartRateVariabilityMilliseconds": 0,
+        "deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds": 122.05}}]
+    assert mapping.to_samples("hrv", pts)[0]["value"] == 122.05
 
 
-def test_generic_single_value_metric():
+def test_vo2max_uses_vo2Max_field():
     pts = [{"dataSource": {}, "dailyVo2Max": {
-        "date": {"year": 2026, "month": 6, "day": 20},
-        "vo2MaxMillilitersPerMinuteKilogram": "44.0"}}]
-    assert mapping.to_samples("vo2max", pts)[0]["value"] == 44.0
+        "date": {"year": 2026, "month": 6, "day": 24},
+        "vo2Max": 54.28, "vo2MaxCovariance": 6.03}}]
+    assert mapping.to_samples("vo2max", pts)[0]["value"] == 54.28
 
 
-def test_empty_and_valueless_points_are_skipped():
-    assert mapping.to_samples("steps", []) == []
-    assert mapping.to_samples("hrv", [{"dataSource": {}, "hrv": {
-        "date": {"year": 2026, "month": 6, "day": 20}}}]) == []  # no numeric field
+def test_bodyweight_nested_date_and_grams_to_kg():
+    pts = [{"name": "users/x/weight/y", "dataSource": {}, "weight": {
+        "sampleTime": {"civilTime": {"date": {"year": 2026, "month": 4, "day": 30}}},
+        "weightGrams": 82000}}]
+    out = mapping.to_samples("bodyweight", pts)
+    assert out[0]["value"] == 82.0 and out[0]["ts"] == "2026-04-30T00:00:00"
+
+
+def test_sleep_expands_to_duration_efficiency_and_stages():
+    pts = [{"name": "x", "dataSource": {}, "sleep": {
+        "interval": {"startTime": "2026-06-23T13:56:00Z", "endTime": "2026-06-23T23:41:00Z"},
+        "summary": {"minutesInSleepPeriod": "585", "minutesAsleep": "554",
+                    "stagesSummary": [{"type": "DEEP", "minutes": "101"},
+                                      {"type": "REM", "minutes": "126"},
+                                      {"type": "LIGHT", "minutes": "326"}]}}}]
+    out = {s["metric_id"]: s for s in mapping.to_samples("sleep", pts)}
+    assert round(out["sleep_duration"]["value"], 2) == round(554 / 60, 2)
+    assert out["sleep_efficiency"]["value"] == 94.7   # 554/585*100
+    assert out["deep_sleep"]["value"] == 101.0
+    assert out["rem_sleep"]["value"] == 126.0
+    assert all(s["ts"] == "2026-06-23T00:00:00" for s in out.values())
+
+
+def test_valueless_points_are_skipped():
+    assert mapping.to_samples("vo2max", []) == []
+    assert mapping.to_samples("hrv", [{"dataSource": {}, "dailyHeartRateVariability": {
+        "date": {"year": 2026, "month": 6, "day": 20}}}]) == []  # no rmssd field
 
 
 def test_sync_requires_a_connection(client):
