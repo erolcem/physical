@@ -7,11 +7,11 @@ import '../state/providers.dart';
 import 'api_client.dart';
 import 'repository.dart';
 
-// Dev defaults. localhost works for Linux desktop & web; an Android emulator
-// would use 10.0.2.2. No auth yet, so a fixed local user id — replaced once
-// accounts land (the moment data really leaves the device).
-const String kBackendUrl = 'http://localhost:8000';
-const String kLocalUserId = 'local-dev';
+// Backend URL. Defaults to localhost for dev; point a real build at the hosted
+// server with:  flutter build ... --dart-define=BACKEND_URL=https://your-host
+const String kBackendUrl =
+    String.fromEnvironment('BACKEND_URL', defaultValue: 'http://localhost:8000');
+const String kLocalUserId = 'local-dev'; // only used by the dev sign-in path
 
 final apiClientProvider =
     Provider<ApiClient>((ref) => ApiClient(baseUrl: kBackendUrl));

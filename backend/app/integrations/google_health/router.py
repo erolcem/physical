@@ -80,23 +80,21 @@ def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     return out
 
 
-@router.post("/sync")
-def sync(days: int = Query(7, ge=1, le=30),
-         replace: bool = Query(False, description="delete existing Google samples first"),
-         user_id: str = Depends(current_user),
-         db: Session = Depends(get_db)):
+def sync_user(db: Session, user_id: str, days: int = 7, replace: bool = False) -> dict | None:
+    """Core sync: pull the user's Google Health data and ingest it. Returns the
+    result dict, or None if the user has no Google connection. Never raises on
+    token/data issues (collected into `errors`) — safe for the scheduled job too.
+    """
     token = db.get(GoogleHealthToken, user_id)
     if token is None:
-        raise HTTPException(404, "Google Health not connected — run /authorize then /exchange")
+        return None
     if replace:
-        # Lets corrected mappings overwrite previously-ingested (possibly wrong) values.
         db.execute(delete(Sample).where(
             Sample.user_id == user_id, Sample.source == "google_health"))
         db.commit()
     try:
         access = _valid_access_token(db, token)
     except Exception as e:
-        # Always return JSON (never a bare 500), so the client sees the reason.
         return {"pulled": 0, "ingested": 0, "skipped": 0,
                 "errors": {"token": f"refresh failed: {str(e)[:300]}"}, "days": days}
     client = GoogleHealthClient(access)
@@ -116,6 +114,17 @@ def sync(days: int = Query(7, ge=1, le=30),
                 "errors": {**errors, "ingest": str(e)[:300]}, "days": days}
     return {"pulled": len(samples), "ingested": ingested, "skipped": skipped,
             "errors": errors, "days": days}
+
+
+@router.post("/sync")
+def sync(days: int = Query(7, ge=1, le=30),
+         replace: bool = Query(False, description="delete existing Google samples first"),
+         user_id: str = Depends(current_user),
+         db: Session = Depends(get_db)):
+    result = sync_user(db, user_id, days, replace)
+    if result is None:
+        raise HTTPException(404, "Google Health not connected — sign in with Google first")
+    return result
 
 
 # ── helpers ──

@@ -27,6 +27,9 @@ class Settings:
     jwt_expire_days: int = int(os.environ.get("JWT_EXPIRE_DAYS", "30"))
     # Dev-only password-less sign-in (/auth/dev). Disable in production.
     allow_dev_auth: bool = os.environ.get("ALLOW_DEV_AUTH", "true").lower() == "true"
+    # CORS allowed origins (comma-separated). "*" is fine for native clients;
+    # set to your app's web origin(s) for a web build.
+    cors_origins: list[str] = os.environ.get("CORS_ORIGINS", "*").split(",")
 
 
 settings = Settings()
