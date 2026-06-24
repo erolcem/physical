@@ -31,5 +31,10 @@ class Settings:
     # set to your app's web origin(s) for a web build.
     cors_origins: list[str] = os.environ.get("CORS_ORIGINS", "*").split(",")
 
+    # Shown on the privacy policy / terms pages and used as the data-deletion
+    # contact. Set CONTACT_EMAIL to your real address before any verification.
+    contact_email: str = os.environ.get("CONTACT_EMAIL", "your-email@example.com")
+    app_name: str = os.environ.get("APP_NAME", "Physical")
+
 
 settings = Settings()

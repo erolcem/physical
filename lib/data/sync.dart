@@ -85,7 +85,8 @@ int mergeSamples(Repository repo, List<Map<String, dynamic>> samples) {
 class CloudSyncResult {
   final int pulled;
   final String note; // short status for the Google leg
-  CloudSyncResult(this.pulled, this.note);
+  final bool needsReconnect; // the Google Health token expired (7-day testing limit)
+  CloudSyncResult(this.pulled, this.note, {this.needsReconnect = false});
 }
 
 /// Button action: ask the backend to refresh from Google (best effort), then
@@ -96,10 +97,16 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
   await api.loadPersistedToken();
 
   String note;
+  var needsReconnect = false;
   try {
     final g = await api.triggerGoogleSync();
     final errs = (g['errors'] as Map?) ?? const {};
-    note = errs.isEmpty ? 'Google +${g['ingested']}' : 'Google: reconnect needed';
+    // A 'token' error means the Google Health refresh token expired — the user
+    // just needs to sign in with Google again (refreshes it).
+    needsReconnect = errs.containsKey('token');
+    note = errs.isEmpty
+        ? 'Google +${g['ingested']}'
+        : (needsReconnect ? 'Google sign-in expired' : 'Google: partial sync');
   } catch (_) {
     note = 'Google refresh skipped';
   }
@@ -107,5 +114,5 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
   final samples = await api.fetchSamples(source: 'google_health');
   final added = mergeSamples(repo, samples);
   ref.read(logsProvider.notifier).reload();
-  return CloudSyncResult(added, note);
+  return CloudSyncResult(added, note, needsReconnect: needsReconnect);
 }

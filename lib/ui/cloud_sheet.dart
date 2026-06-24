@@ -29,7 +29,7 @@ class _CloudSheet extends ConsumerStatefulWidget {
 }
 
 class _CloudSheetState extends ConsumerState<_CloudSheet> {
-  bool _loading = true, _signedIn = false, _busy = false;
+  bool _loading = true, _signedIn = false, _busy = false, _needsReconnect = false;
   String? _email, _msg;
 
   @override
@@ -64,7 +64,10 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
       final code = await _askForCode(url);
       if (code != null && code.isNotEmpty) {
         final email = await api.googleSignInComplete(code);
-        if (mounted) setState(() { _signedIn = true; _email = email; _msg = 'Signed in ✓'; });
+        // A successful sign-in also refreshes the Google Health token.
+        if (mounted) setState(() {
+          _signedIn = true; _email = email; _needsReconnect = false; _msg = 'Signed in ✓';
+        });
       }
     } on ApiException catch (e) {
       if (mounted) setState(() => _msg = 'Sign-in failed: ${e.message}');
@@ -85,9 +88,12 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
     try {
       final r = await cloudSync(ref);
       if (mounted) {
-        setState(() => _msg = r.pulled > 0
-            ? 'Pulled ${r.pulled} new readings · ${r.note}'
-            : 'Up to date · ${r.note}');
+        setState(() {
+          _needsReconnect = r.needsReconnect;
+          _msg = r.pulled > 0
+              ? 'Pulled ${r.pulled} new readings · ${r.note}'
+              : 'Up to date · ${r.note}';
+        });
       }
     } catch (_) {
       if (mounted) setState(() => _msg = "Couldn't reach the backend.");
@@ -161,12 +167,37 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
                   style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis)),
             ]),
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _busy ? null : _sync,
-              icon: const Icon(Icons.sync),
-              label: const Text('Sync now'),
-              style: FilledButton.styleFrom(backgroundColor: _accent, minimumSize: const Size.fromHeight(46)),
-            ),
+            if (_needsReconnect) ...[
+              // Google's 7-day testing token expired — one tap refreshes it.
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                    color: const Color(0xFF3A2E12),
+                    borderRadius: BorderRadius.circular(10)),
+                child: const Row(children: [
+                  Icon(Icons.info_outline, color: Color(0xFFE0B44C), size: 18),
+                  SizedBox(width: 8),
+                  Expanded(child: Text('Google sign-in expired — tap to reconnect Health.',
+                      style: TextStyle(fontSize: 12.5, color: Color(0xFFE0B44C)))),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                onPressed: _busy ? null : _signIn,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reconnect Google Health'),
+                style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFE0B44C),
+                    foregroundColor: Colors.black,
+                    minimumSize: const Size.fromHeight(46)),
+              ),
+            ] else
+              FilledButton.icon(
+                onPressed: _busy ? null : _sync,
+                icon: const Icon(Icons.sync),
+                label: const Text('Sync now'),
+                style: FilledButton.styleFrom(backgroundColor: _accent, minimumSize: const Size.fromHeight(46)),
+              ),
             const SizedBox(height: 8),
             TextButton(onPressed: _busy ? null : _signOut, child: const Text('Sign out')),
           ],

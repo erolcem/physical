@@ -30,6 +30,7 @@ app.jobs`).
    | `GOOGLE_CLIENT_SECRET` | your Google OAuth client secret |
    | `GOOGLE_REDIRECT_URI` | `https://www.google.com` (keeps the paste flow) |
    | `ALLOW_DEV_AUTH` | `false` (disable the dev sign-in in production) |
+   | `CONTACT_EMAIL` | your real email (shown on `/privacy` + `/terms`) |
 6. **Deploy.** Railway builds the image and gives you a public URL like
    `https://physical-production.up.railway.app`. Check `…/health`.
 7. **Scheduled sync**: add a second service / **Cron** in the same project running
