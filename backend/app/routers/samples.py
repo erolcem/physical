@@ -34,9 +34,10 @@ def ingest(body: list[SampleIn], user_id: str = Depends(current_user),
 
         value = s.value
         if value is None:
-            # Strength logged as raw {weight, reps} → estimate 1RM server-side.
+            # Strength logged as raw {weight, reps} → canonical value server-side
+            # (1RM for compounds, rep-volume for isolation lifts).
             if s.raw and "weight" in s.raw and "reps" in s.raw:
-                value = E.est_1rm(float(s.raw["weight"]), int(s.raw["reps"]))
+                value = E.strength_value(s.metric_id, float(s.raw["weight"]), int(s.raw["reps"]))
             else:
                 raise HTTPException(
                     status_code=422,

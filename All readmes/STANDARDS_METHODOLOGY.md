@@ -87,8 +87,19 @@ per-lift mean. Tightening it (e.g. from any direct untrained-1RM study, or a
 grip→press regression) is the remaining refinement; the structure is now correct.
 
 ### Isolation lifts (curls, lateral raises, etc.)
-Estimated 1RM is unreliable for these and few train them to a true max. They move
-to a **rep-volume-at-load** model rather than a 1RM-derived rank (TODO).
+Estimated 1RM is unreliable for these and few train them to a true max, so they
+are ranked on **rep-volume-at-load** — the working-set volume `weight × reps`,
+allometrically scaled like any strength score — instead of a 1RM-derived rank.
+
+The population anchors reuse the same untrained/trained mixture, derived from the
+prior 1RM ratios × a representative working set (`_WORKING_SET = 8.4`, i.e. ~12
+reps at ~70 % 1RM, since `vol = 0.70·1RM × 12 ≈ 1RM × 8.4`). So a lifter doing a
+standard working set lands at the same percentile as before, while genuine rep/
+load variation (20 light reps vs 8 heavy ones) is now scored honestly rather than
+forced through a misleading 1RM estimate. Still provisional pending isolation
+volume-load population data. Applies to `lateral_raise`, `curl`, `skull_crusher`,
+`forearm_curl`; both engines (`physical_rank_engine.py`, `rank_engine.dart`) share
+the `strength_value`/`strengthValue` dispatcher and identical anchors.
 
 ---
 

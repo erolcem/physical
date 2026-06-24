@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/metrics.dart';
 import '../data/body_figure_data.dart';
 import '../engine/rank_engine.dart' as eng;
-import '../engine/rank_engine.dart' show Log, RankResult, est1rm;
+import '../engine/rank_engine.dart' show Log, RankResult, strengthValue;
 import '../state/providers.dart';
 import 'badge.dart';
 import 'body_graph.dart';
@@ -512,7 +512,7 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
       final reps = int.tryParse(_reps.text);
       final bw = double.tryParse(_bw.text);
       if (w == null || reps == null || bw == null) return;
-      log = Log(_metric.id, est1rm(w, reps), bodyweight: bw);
+      log = Log(_metric.id, strengthValue(_metric.id, w, reps), bodyweight: bw);
     } else {
       final v = double.tryParse(_value.text);
       if (v == null) return;

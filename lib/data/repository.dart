@@ -2,7 +2,7 @@
 // directly; everything goes through Repository. InMemoryRepository is the
 // fallback/default (and used in tests); PersistentRepository (shared_preferences)
 // is wired in main.dart for real on-device storage. Same interface either way.
-import '../engine/rank_engine.dart' show Log, est1rm;
+import '../engine/rank_engine.dart' show Log, strengthValue;
 
 abstract class Repository {
   Map<String, List<Log>> loadLogs();
@@ -43,7 +43,7 @@ void applyDemoSeed(Repository r) {
   void addProg(String id, List<double> vals, {double? bw, bool str = false}) {
     for (var i = 0; i < vals.length; i++) {
       final t = now.subtract(Duration(days: (vals.length - 1 - i) * 3));
-      r.saveLog(id, Log(id, str ? est1rm(vals[i], 5) : vals[i], bodyweight: bw, ts: t.toIso8601String()));
+      r.saveLog(id, Log(id, str ? strengthValue(id, vals[i], 5) : vals[i], bodyweight: bw, ts: t.toIso8601String()));
     }
   }
 

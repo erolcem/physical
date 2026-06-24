@@ -28,3 +28,4 @@ percentile = rank_engine.percentile
 overall = rank_engine.overall
 threshold = rank_engine.threshold
 est_1rm = rank_engine.est_1rm
+strength_value = rank_engine.strength_value

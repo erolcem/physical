@@ -31,15 +31,15 @@ const List<MetricDef> metrics = [
       bodyweightScaled: true, input: 'weight_reps', exercise: 'Bench Press'),
   MetricDef('ohp', 'Front Shoulder (OHP)', 'strength', MetricTier.ranked, 'kg',
       bodyweightScaled: true, input: 'weight_reps', exercise: 'Overhead Press'),
-  // Isolation lifts: 1RM estimation is unreliable here (STANDARDS_METHODOLOGY §2);
-  // ranks are provisional until the rep-volume-at-load model is built.
-  MetricDef('lateral_raise', 'Medial Shoulder', 'strength', MetricTier.ranked, 'kg',
+  // Isolation lifts: ranked on rep-volume-at-load (weight × reps), not an
+  // unreliable estimated 1RM (STANDARDS_METHODOLOGY §2). Still flagged provisional.
+  MetricDef('lateral_raise', 'Medial Shoulder', 'strength', MetricTier.ranked, 'kg·reps',
       bodyweightScaled: true, input: 'weight_reps', exercise: 'Lateral Raise', provisional: true),
-  MetricDef('curl', 'Bicep', 'strength', MetricTier.ranked, 'kg',
+  MetricDef('curl', 'Bicep', 'strength', MetricTier.ranked, 'kg·reps',
       bodyweightScaled: true, input: 'weight_reps', exercise: 'Bicep Curl', provisional: true),
-  MetricDef('skull_crusher', 'Tricep', 'strength', MetricTier.ranked, 'kg',
+  MetricDef('skull_crusher', 'Tricep', 'strength', MetricTier.ranked, 'kg·reps',
       bodyweightScaled: true, input: 'weight_reps', exercise: 'Skull Crusher', provisional: true),
-  MetricDef('forearm_curl', 'Forearm', 'strength', MetricTier.ranked, 'kg',
+  MetricDef('forearm_curl', 'Forearm', 'strength', MetricTier.ranked, 'kg·reps',
       bodyweightScaled: true, input: 'weight_reps', exercise: 'Forearm Curl', provisional: true),
   MetricDef('pullup', 'Lats (Pullup)', 'strength', MetricTier.ranked, 'kg',
       bodyweightScaled: true, input: 'weight_reps', exercise: 'Weighted Pullup'),

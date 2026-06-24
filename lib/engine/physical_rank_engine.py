@@ -110,6 +110,14 @@ _GRIP_CV = 0.18
 _P_TRAIN = 0.22
 _TR_CV = 0.30
 
+# Isolation lifts are ranked on REP-VOLUME-AT-LOAD (weight × reps), not an
+# estimated 1RM (unreliable for the high-rep work they get — STANDARDS_METHODOLOGY
+# §2). Their standard anchors are the prior 1RM ratios × _WORKING_SET, a
+# representative ~12-rep @ ~70% 1RM set (vload = 1RM × ~8.4), so a standard working
+# set lands at the same percentile while real rep/load variation scores honestly.
+_ISOLATION = {"lateral_raise", "curl", "skull_crusher", "forearm_curl"}
+_WORKING_SET = 8.4
+
 def _S(mid, un_r, tr_r, note):
     return Standard(mid, +1, True,
                     _strength_mix(_P_TRAIN, un_r, _GRIP_CV, tr_r, _TR_CV), note)
@@ -125,12 +133,12 @@ STANDARDS = {
     "rdl":      _S("rdl",      0.80, 1.80, "provisional"),
     "calf_raise": _S("calf_raise", 0.80, 1.80, "provisional"),
     "crunch":   _S("crunch",   0.50, 1.00, "provisional"),
-    # Isolation lifts — 1RM estimate unreliable (rep-volume model is a TODO);
-    # flagged provisional in the client UI.
-    "lateral_raise": _S("lateral_raise", 0.10, 0.30, "provisional — isolation"),
-    "curl":          _S("curl",          0.20, 0.50, "provisional — isolation"),
-    "skull_crusher": _S("skull_crusher", 0.20, 0.50, "provisional — isolation"),
-    "forearm_curl":  _S("forearm_curl",  0.20, 0.40, "provisional — isolation"),
+    # Isolation lifts — REP-VOLUME-AT-LOAD (weight × reps). Anchors = prior 1RM
+    # ratios × _WORKING_SET (see above); still provisional.
+    "lateral_raise": _S("lateral_raise", 0.10 * _WORKING_SET, 0.30 * _WORKING_SET, "rep-volume — isolation, provisional"),
+    "curl":          _S("curl",          0.20 * _WORKING_SET, 0.50 * _WORKING_SET, "rep-volume — isolation, provisional"),
+    "skull_crusher": _S("skull_crusher", 0.20 * _WORKING_SET, 0.50 * _WORKING_SET, "rep-volume — isolation, provisional"),
+    "forearm_curl":  _S("forearm_curl",  0.20 * _WORKING_SET, 0.40 * _WORKING_SET, "rep-volume — isolation, provisional"),
 
     # ── Performance ──
     "vo2max":     Standard("vo2max", +1, False, Dist("normal", 48.0, 9.0),
@@ -247,6 +255,14 @@ def est_1rm(weight, reps):
     return round(((weight * (1 + r / 30)) +
                   (weight / (1.0278 - 0.0278 * r)) +
                   ((100 * weight) / (101.3 - 2.67123 * r))) / 3, 2)
+
+
+def strength_value(metric_id, weight, reps):
+    """Canonical strength quantity for ranking: rep-volume (weight × reps) for
+    isolation lifts, estimated 1RM for everything else."""
+    if metric_id in _ISOLATION:
+        return round(weight * reps, 2) if weight > 0 and reps > 0 else 0.0
+    return est_1rm(weight, reps)
 
 
 # ═══ SELF-TEST + BELIEVABILITY ═════════════════════════════════════════════

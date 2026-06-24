@@ -117,6 +117,11 @@ void main() {
       expect(eng.est1rm(0, 5), 0);
       expect(eng.est1rm(100, 0), 0);
     });
+    test('isolation lifts use rep-volume (weight×reps), compounds use est1rm', () {
+      expect(eng.strengthValue('curl', 15, 12), 180); // rep-volume, not 1RM
+      expect(eng.strengthValue('lateral_raise', 10, 15), 150);
+      expect(eng.strengthValue('bench', 100, 5), eng.est1rm(100, 5)); // compound unchanged
+    });
   });
 
   group('Direction handling (lower-is-better metrics)', () {

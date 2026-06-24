@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/metrics.dart';
 import '../engine/rank_engine.dart' as eng;
-import '../engine/rank_engine.dart' show Log, est1rm;
+import '../engine/rank_engine.dart' show Log, strengthValue;
 import '../state/providers.dart';
 import 'badge.dart';
 
@@ -52,7 +52,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
       final reps = int.tryParse(_reps.text);
       final bw = double.tryParse(_bw.text);
       if (w == null || reps == null || bw == null) return;
-      log = Log(m.id, est1rm(w, reps),
+      log = Log(m.id, strengthValue(m.id, w, reps),
           bodyweight: bw, ts: DateTime.now().toIso8601String());
     } else {
       final v = double.tryParse(_value.text);
