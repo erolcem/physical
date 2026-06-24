@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'cloud_sheet.dart';
+import 'habits_screen.dart';
 import 'home_screen.dart';
 import 'progress_screen.dart';
 
@@ -18,7 +19,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -49,6 +50,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
           tabs: const [
             Tab(icon: Icon(Icons.dashboard), text: 'Dashboard'),
             Tab(icon: Icon(Icons.show_chart), text: 'Progress'),
+            Tab(icon: Icon(Icons.checklist), text: 'Habits'),
           ],
         ),
       ),
@@ -57,6 +59,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
         children: const [
           HomeTab(),
           ProgressTab(),
+          HabitsTab(),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(

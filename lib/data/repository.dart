@@ -3,16 +3,26 @@
 // fallback/default (and used in tests); PersistentRepository (shared_preferences)
 // is wired in main.dart for real on-device storage. Same interface either way.
 import '../engine/rank_engine.dart' show Log, strengthValue;
+import 'habits.dart';
 
 abstract class Repository {
   Map<String, List<Log>> loadLogs();
   void saveLog(String metricId, Log log);
   void deleteLog(String metricId, int index);
   void clear();
+
+  // Habits (Phase 2) — accountability layer, stored separately from logs.
+  List<Habit> loadHabits();
+  void saveHabit(Habit habit);
+  void deleteHabit(String id);
+  Map<String, Set<String>> loadCompletions(); // habitId → set of done date-keys
+  void setCompletion(String habitId, String day, bool done);
 }
 
 class InMemoryRepository implements Repository {
   final Map<String, List<Log>> _logs = {};
+  final List<Habit> _habits = [];
+  final Map<String, Set<String>> _completions = {};
 
   @override
   Map<String, List<Log>> loadLogs() =>
@@ -28,7 +38,40 @@ class InMemoryRepository implements Repository {
   }
 
   @override
-  void clear() => _logs.clear();
+  List<Habit> loadHabits() => List.of(_habits);
+
+  @override
+  void saveHabit(Habit habit) {
+    final i = _habits.indexWhere((h) => h.id == habit.id);
+    if (i >= 0) {
+      _habits[i] = habit;
+    } else {
+      _habits.add(habit);
+    }
+  }
+
+  @override
+  void deleteHabit(String id) {
+    _habits.removeWhere((h) => h.id == id);
+    _completions.remove(id);
+  }
+
+  @override
+  Map<String, Set<String>> loadCompletions() =>
+      {for (final e in _completions.entries) e.key: Set.of(e.value)};
+
+  @override
+  void setCompletion(String habitId, String day, bool done) {
+    final set = _completions[habitId] ??= <String>{};
+    done ? set.add(day) : set.remove(day);
+  }
+
+  @override
+  void clear() {
+    _logs.clear();
+    _habits.clear();
+    _completions.clear();
+  }
 
   InMemoryRepository seedDemo() {
     applyDemoSeed(this);
