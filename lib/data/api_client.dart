@@ -95,6 +95,40 @@ class ApiClient {
     return (jsonDecode(r.body) as List).cast<Map<String, dynamic>>();
   }
 
+  /// Whether the signed-in user has a Google Health connection.
+  Future<bool> googleConnected() async {
+    try {
+      final r = await _client
+          .get(Uri.parse('$baseUrl/integrations/google/status'), headers: _headers())
+          .timeout(const Duration(seconds: 8));
+      return r.statusCode == 200 &&
+          (jsonDecode(r.body) as Map)['connected'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The Google consent URL for the signed-in user to open in a browser.
+  Future<String> googleAuthorizeUrl() async {
+    final r = await _client
+        .get(Uri.parse('$baseUrl/integrations/google/authorize'), headers: _headers())
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) {
+      throw ApiException('authorize failed: ${r.body}', r.statusCode);
+    }
+    return (jsonDecode(r.body) as Map<String, dynamic>)['authorize_url'] as String;
+  }
+
+  /// Exchange the OAuth code (from the consent redirect) for stored tokens.
+  Future<void> googleExchange(String code) async {
+    final uri = Uri.parse('$baseUrl/integrations/google/exchange')
+        .replace(queryParameters: {'code': code});
+    final r = await _client.post(uri, headers: _headers()).timeout(const Duration(seconds: 20));
+    if (r.statusCode != 200) {
+      throw ApiException('exchange failed: ${r.body}', r.statusCode);
+    }
+  }
+
   /// Ask the backend to pull fresh data from the user's Google Health.
   Future<Map<String, dynamic>> triggerGoogleSync({int days = 7}) async {
     final r = await _client

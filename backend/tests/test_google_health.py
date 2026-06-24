@@ -85,3 +85,8 @@ def test_endpoints_require_auth():
     with TestClient(app) as c:  # no Authorization header
         assert c.get("/me/ranks").status_code == 401
         assert c.post("/integrations/google/sync").status_code == 401
+
+
+def test_status_reports_not_connected(client):
+    r = client.get("/integrations/google/status")
+    assert r.status_code == 200 and r.json()["connected"] is False

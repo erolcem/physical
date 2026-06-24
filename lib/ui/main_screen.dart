@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/api_client.dart';
-import '../data/sync.dart';
+import 'cloud_sheet.dart';
 import 'home_screen.dart';
 import 'progress_screen.dart';
 
@@ -15,7 +14,6 @@ class MainScreen extends ConsumerStatefulWidget {
 class _MainScreenState extends ConsumerState<MainScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  bool _syncing = false;
 
   @override
   void initState() {
@@ -29,28 +27,6 @@ class _MainScreenState extends ConsumerState<MainScreen>
     super.dispose();
   }
 
-  Future<void> _sync() async {
-    if (_syncing) return;
-    setState(() => _syncing = true);
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final r = await cloudSync(ref);
-      messenger.showSnackBar(SnackBar(
-        content: Text(r.pulled > 0
-            ? 'Pulled ${r.pulled} new readings · ${r.note}'
-            : 'Up to date · ${r.note}'),
-      ));
-    } on ApiException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Sync failed: ${e.message}')));
-    } catch (_) {
-      messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't reach the backend at $kBackendUrl — is it running?"),
-      ));
-    } finally {
-      if (mounted) setState(() => _syncing = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -62,13 +38,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
             style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3)),
         actions: [
           IconButton(
-            tooltip: 'Sync health data',
-            onPressed: _syncing ? null : _sync,
-            icon: _syncing
-                ? const SizedBox(
-                    width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.cloud_upload_outlined),
+            tooltip: 'Cloud sync',
+            onPressed: () => openCloudSheet(context),
+            icon: const Icon(Icons.cloud_sync_outlined),
           ),
         ],
         bottom: TabBar(

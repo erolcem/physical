@@ -43,6 +43,13 @@ def exchange(code: str = Query(...), user_id: str = Depends(current_user),
     return {"status": "connected", "user_id": user_id}
 
 
+@router.get("/status")
+def status(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
+    """Whether the signed-in user has a Google Health connection (for the app's
+    Connect/Connected UI)."""
+    return {"connected": db.get(GoogleHealthToken, user_id) is not None}
+
+
 @router.get("/debug")
 def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     """Diagnose an empty sync: what does Google actually have for this account?
