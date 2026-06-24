@@ -6,7 +6,7 @@
 // area (`CategoryGraphPage` → `_GraphArea`) with its metrics as selectable
 // chips, a chart with rank/native/% y-axis labels, timeframe control, and a
 // Pearson correlation readout when two are compared. Every metric is loggable
-// from its page (manual now; auto-synced in Phase 3).
+// from its page (manual entry, plus auto-sync from Google Health where available).
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -413,7 +413,7 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
         children: [
           Text(m.label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
-          Text(m.autoSync ? 'Auto-syncs in Phase 3' : 'No data logged yet',
+          Text(m.autoSync ? 'Syncs from Google Health' : 'No data logged yet',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 24),
@@ -427,7 +427,7 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
                   const SizedBox(height: 12),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Text('${m.label} will sync from Google Health / Fitbit. For now you can log it manually.',
+                    child: Text('${m.label} syncs from Google Health / Fitbit. You can also log it manually.',
                         textAlign: TextAlign.center, style: const TextStyle(color: _muted)),
                   ),
                   const SizedBox(height: 16),
