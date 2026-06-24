@@ -1,5 +1,6 @@
-// ui/cloud_sheet.dart — in-app cloud controls so connecting Google Health and
-// syncing are buttons, not terminal curls. Opened from the app-bar ☁ icon.
+// ui/cloud_sheet.dart — in-app cloud controls. Sign in with Google (which also
+// links your Google Health), then sync — all buttons, no terminal. Opened from
+// the app-bar ☁ icon.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -28,8 +29,8 @@ class _CloudSheet extends ConsumerStatefulWidget {
 }
 
 class _CloudSheetState extends ConsumerState<_CloudSheet> {
-  bool _loading = true, _connected = false, _busy = false;
-  String? _msg;
+  bool _loading = true, _signedIn = false, _busy = false;
+  String? _email, _msg;
 
   @override
   void initState() {
@@ -41,34 +42,53 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
     setState(() => _loading = true);
     final api = ref.read(apiClientProvider);
     try {
-      if (!api.isSignedIn) await api.devSignIn();
-      final c = await api.googleConnected();
-      if (mounted) setState(() { _connected = c; _loading = false; });
+      await api.loadPersistedToken();
+      final email = api.isSignedIn ? await api.whoAmI() : null;
+      if (mounted) setState(() { _signedIn = api.isSignedIn; _email = email; _loading = false; });
     } catch (_) {
       if (mounted) setState(() { _loading = false; _msg = "Couldn't reach the backend."; });
     }
   }
 
-  Future<void> _connect() async {
+  Future<void> _signIn() async {
     final api = ref.read(apiClientProvider);
     setState(() { _busy = true; _msg = null; });
     try {
-      if (!api.isSignedIn) await api.devSignIn();
-      final url = await api.googleAuthorizeUrl();
+      final url = await api.googleSignInUrl();
       try {
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       } catch (_) {/* fall back to the copyable link in the dialog */}
       if (!mounted) return;
       final code = await _askForCode(url);
       if (code != null && code.isNotEmpty) {
-        await api.googleExchange(code);
-        await _refresh();
-        if (mounted) setState(() => _msg = 'Connected to Google Health ✓');
+        final email = await api.googleSignInComplete(code);
+        if (mounted) setState(() { _signedIn = true; _email = email; _msg = 'Signed in ✓'; });
       }
     } on ApiException catch (e) {
-      if (mounted) setState(() => _msg = 'Connect failed: ${e.message}');
+      if (mounted) setState(() => _msg = 'Sign-in failed: ${e.message}');
     } catch (_) {
-      if (mounted) setState(() => _msg = "Couldn't start the connection.");
+      if (mounted) setState(() => _msg = "Couldn't start sign-in.");
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _signOut() async {
+    await ref.read(apiClientProvider).signOut();
+    if (mounted) setState(() { _signedIn = false; _email = null; _msg = 'Signed out'; });
+  }
+
+  Future<void> _sync() async {
+    setState(() { _busy = true; _msg = null; });
+    try {
+      final r = await cloudSync(ref);
+      if (mounted) {
+        setState(() => _msg = r.pulled > 0
+            ? 'Pulled ${r.pulled} new readings · ${r.note}'
+            : 'Up to date · ${r.note}');
+      }
+    } catch (_) {
+      if (mounted) setState(() => _msg = "Couldn't reach the backend.");
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -80,7 +100,7 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _bg,
-        title: const Text('Connect Google Health'),
+        title: const Text('Sign in with Google'),
         content: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('1. Approve in the page that just opened (if it didn’t, copy this link):',
@@ -97,7 +117,7 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, _extractCode(ctrl.text)), child: const Text('Connect')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, _extractCode(ctrl.text)), child: const Text('Sign in')),
         ],
       ),
     );
@@ -106,25 +126,7 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
   // Accept either a pasted code or the full redirect URL (?code=...).
   String _extractCode(String input) {
     final t = input.trim();
-    final code = Uri.tryParse(t)?.queryParameters['code'];
-    return code ?? t;
-  }
-
-  Future<void> _sync() async {
-    setState(() { _busy = true; _msg = null; });
-    try {
-      final r = await cloudSync(ref);
-      if (mounted) {
-        setState(() => _msg = r.pulled > 0
-            ? 'Pulled ${r.pulled} new readings · ${r.note}'
-            : 'Up to date · ${r.note}');
-      }
-    } catch (_) {
-      if (mounted) setState(() => _msg = "Couldn't reach the backend.");
-    } finally {
-      if (mounted) setState(() => _busy = false);
-      await _refresh();
-    }
+    return Uri.tryParse(t)?.queryParameters['code'] ?? t;
   }
 
   @override
@@ -136,35 +138,40 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           const Text('Cloud Sync', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
-          const Text('Connect Google Health (Fitbit) to pull your wearable data into your ranks.',
+          const Text('Sign in with Google to pull your Fitbit / Google Health data into your ranks. '
+              'Your Google account is your account and your data source.',
               style: TextStyle(color: Colors.grey, fontSize: 13)),
           const SizedBox(height: 18),
           if (_loading)
             const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()))
-          else ...[
+          else if (!_signedIn) ...[
+            FilledButton.icon(
+              onPressed: _busy ? null : _signIn,
+              icon: const Icon(Icons.login),
+              label: const Text('Sign in with Google'),
+              style: FilledButton.styleFrom(backgroundColor: _accent, minimumSize: const Size.fromHeight(46)),
+            ),
+          ] else ...[
             Row(children: [
-              Icon(_connected ? Icons.check_circle : Icons.cloud_off,
-                  color: _connected ? _teal : Colors.grey, size: 20),
+              const Icon(Icons.check_circle, color: _teal, size: 20),
               const SizedBox(width: 8),
-              Text(_connected ? 'Google Health connected' : 'Not connected',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              Expanded(child: Text(_email == null ? 'Signed in' : 'Signed in as $_email',
+                  style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis)),
             ]),
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: _busy ? null : (_connected ? _sync : _connect),
-              icon: Icon(_connected ? Icons.sync : Icons.link),
-              label: Text(_connected ? 'Sync now' : 'Connect Google Health'),
+              onPressed: _busy ? null : _sync,
+              icon: const Icon(Icons.sync),
+              label: const Text('Sync now'),
               style: FilledButton.styleFrom(backgroundColor: _accent, minimumSize: const Size.fromHeight(46)),
             ),
-            if (_connected) ...[
-              const SizedBox(height: 8),
-              TextButton(onPressed: _busy ? null : _connect, child: const Text('Reconnect')),
-            ],
-            if (_busy) const Padding(padding: EdgeInsets.only(top: 16), child: Center(child: CircularProgressIndicator())),
-            if (_msg != null)
-              Padding(padding: const EdgeInsets.only(top: 16),
-                  child: Text(_msg!, style: const TextStyle(color: _teal, fontWeight: FontWeight.w600))),
+            const SizedBox(height: 8),
+            TextButton(onPressed: _busy ? null : _signOut, child: const Text('Sign out')),
           ],
+          if (_busy) const Padding(padding: EdgeInsets.only(top: 16), child: Center(child: CircularProgressIndicator())),
+          if (_msg != null)
+            Padding(padding: const EdgeInsets.only(top: 16),
+                child: Text(_msg!, style: const TextStyle(color: _teal, fontWeight: FontWeight.w600))),
         ]),
       ),
     );

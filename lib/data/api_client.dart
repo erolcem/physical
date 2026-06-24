@@ -6,6 +6,7 @@
 // sign-in; the backend scopes all data to that user.
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiException implements Exception {
   final String message;
@@ -23,12 +24,73 @@ class ApiClient {
   ApiClient({required this.baseUrl, http.Client? client})
       : _client = client ?? http.Client();
 
+  static const _tokenKey = 'physical_jwt';
+  String? userEmail;
+
   bool get isSignedIn => _token != null;
 
   Map<String, String> _headers([Map<String, String>? extra]) => {
         if (_token != null) 'Authorization': 'Bearer $_token',
         ...?extra,
       };
+
+  /// Load a previously-saved JWT (so sign-in is remembered across launches).
+  Future<void> loadPersistedToken() async {
+    _token ??= (await SharedPreferences.getInstance()).getString(_tokenKey);
+  }
+
+  Future<void> _persist(String token) async {
+    _token = token;
+    await (await SharedPreferences.getInstance()).setString(_tokenKey, token);
+  }
+
+  Future<void> signOut() async {
+    _token = null;
+    userEmail = null;
+    await (await SharedPreferences.getInstance()).remove(_tokenKey);
+  }
+
+  /// Current account email (from a persisted token), or null if not signed in.
+  Future<String?> whoAmI() async {
+    try {
+      final r = await _client
+          .get(Uri.parse('$baseUrl/auth/me'), headers: _headers())
+          .timeout(const Duration(seconds: 8));
+      if (r.statusCode != 200) return null;
+      userEmail = (jsonDecode(r.body) as Map<String, dynamic>)['email'] as String?;
+      return userEmail;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The Google consent URL for browser sign-in (identity + health in one).
+  Future<String> googleSignInUrl() async {
+    final r = await _client
+        .get(Uri.parse('$baseUrl/auth/google/url'))
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) {
+      throw ApiException('sign-in url failed: ${r.body}', r.statusCode);
+    }
+    return (jsonDecode(r.body) as Map<String, dynamic>)['authorize_url'] as String;
+  }
+
+  /// Complete sign-in with the OAuth code: stores the JWT (persisted) and returns
+  /// the account email.
+  Future<String?> googleSignInComplete(String code) async {
+    final r = await _client
+        .post(Uri.parse('$baseUrl/auth/google/complete'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'code': code}))
+        .timeout(const Duration(seconds: 25));
+    if (r.statusCode != 200) {
+      throw ApiException('sign-in failed: ${r.body}', r.statusCode);
+    }
+    final j = jsonDecode(r.body) as Map<String, dynamic>;
+    await _persist(j['access_token'] as String);
+    userEmail = j['email'] as String?;
+    return userEmail;
+  }
 
   Future<bool> health() async {
     try {
@@ -52,7 +114,7 @@ class ApiClient {
     if (r.statusCode != 200) {
       throw ApiException('sign-in failed: ${r.body}', r.statusCode);
     }
-    _token = (jsonDecode(r.body) as Map<String, dynamic>)['access_token'] as String;
+    await _persist((jsonDecode(r.body) as Map<String, dynamic>)['access_token'] as String);
   }
 
   /// Bulk-ingest canonical samples for the signed-in user.

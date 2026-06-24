@@ -26,3 +26,8 @@ def test_two_users_get_distinct_identities(client):
     ra = client.get("/auth/me", headers={"Authorization": f"Bearer {a}"}).json()
     rb = client.get("/auth/me", headers={"Authorization": f"Bearer {b}"}).json()
     assert ra["user_id"] == "alice" and rb["user_id"] == "bob"
+
+
+def test_google_signin_url_needs_client_id(client):
+    # No GOOGLE_CLIENT_ID configured in tests → clear 500 (not a crash).
+    assert client.get("/auth/google/url").status_code == 500

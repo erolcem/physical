@@ -14,8 +14,10 @@ from ...config import settings
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 
-# Read-only Google Health API scopes covering the full data range we want.
+# Identity (so one Google authorization both signs the user in AND links health)
+# + read-only Google Health scopes covering the full data range we want.
 SCOPES = [
+    "openid", "email", "profile",
     "https://www.googleapis.com/auth/googlehealth.profile.readonly",
     "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
     "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",

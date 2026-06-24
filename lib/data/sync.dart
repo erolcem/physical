@@ -54,15 +54,10 @@ Future<SyncResult> performSync(ApiClient api, Map<String, List<Log>> logs) async
       (res['skipped'] ?? 0) as int, overall);
 }
 
-/// Ensure we hold a JWT. Dev sign-in for now; Google Sign-In replaces this.
-Future<void> _ensureSignedIn(ApiClient api) async {
-  if (!api.isSignedIn) await api.devSignIn(userId: kLocalUserId);
-}
-
-/// UI entry point: sync the current local logs.
+/// UI entry point: sync the current local logs (caller must be signed in).
 Future<SyncResult> syncNow(WidgetRef ref) async {
   final api = ref.read(apiClientProvider);
-  await _ensureSignedIn(api);
+  await api.loadPersistedToken();
   return performSync(api, ref.read(logsProvider));
 }
 
@@ -98,7 +93,7 @@ class CloudSyncResult {
 Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
   final api = ref.read(apiClientProvider);
   final repo = ref.read(repositoryProvider);
-  await _ensureSignedIn(api);
+  await api.loadPersistedToken();
 
   String note;
   try {
