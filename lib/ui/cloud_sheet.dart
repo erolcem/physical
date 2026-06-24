@@ -43,8 +43,10 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
     final api = ref.read(apiClientProvider);
     try {
       await api.loadPersistedToken();
+      // Signed-in == the backend confirms our identity. If a stored token can't be
+      // confirmed (e.g. we switched to the hosted server), just prompt sign-in.
       final email = api.isSignedIn ? await api.whoAmI() : null;
-      if (mounted) setState(() { _signedIn = api.isSignedIn; _email = email; _loading = false; });
+      if (mounted) setState(() { _signedIn = email != null; _email = email; _loading = false; });
     } catch (_) {
       if (mounted) setState(() { _loading = false; _msg = "Couldn't reach the backend."; });
     }
