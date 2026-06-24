@@ -56,11 +56,14 @@ def ingest(user_id: str, body: list[SampleIn], db: Session = Depends(get_db)):
 def list_samples(
     user_id: str,
     metric_id: str | None = Query(default=None),
+    source: str | None = Query(default=None),
     limit: int = Query(default=500, le=5000),
     db: Session = Depends(get_db),
 ):
     stmt = select(Sample).where(Sample.user_id == user_id)
     if metric_id:
         stmt = stmt.where(Sample.metric_id == metric_id)
+    if source:
+        stmt = stmt.where(Sample.source == source)
     stmt = stmt.order_by(Sample.ts.desc()).limit(limit)
     return list(db.scalars(stmt))

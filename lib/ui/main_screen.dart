@@ -34,13 +34,11 @@ class _MainScreenState extends ConsumerState<MainScreen>
     setState(() => _syncing = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final r = await syncNow(ref);
-      final parity = r.backendOverall != null
-          ? ' · backend overall ${r.backendOverall}'
-          : '';
+      final r = await cloudSync(ref);
       messenger.showSnackBar(SnackBar(
-        content: Text('Synced ${r.total} samples '
-            '(${r.ingested} new, ${r.skipped} already there)$parity'),
+        content: Text(r.pulled > 0
+            ? 'Pulled ${r.pulled} new readings · ${r.note}'
+            : 'Up to date · ${r.note}'),
       ));
     } on ApiException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Sync failed: ${e.message}')));
@@ -64,7 +62,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
             style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3)),
         actions: [
           IconButton(
-            tooltip: 'Sync to backend',
+            tooltip: 'Sync health data',
             onPressed: _syncing ? null : _sync,
             icon: _syncing
                 ? const SizedBox(

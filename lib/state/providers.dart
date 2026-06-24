@@ -29,6 +29,9 @@ class LogsNotifier extends StateNotifier<Map<String, List<Log>>> {
     repo.deleteLog(metricId, index);
     state = repo.loadLogs();
   }
+
+  /// Re-read from the repository (e.g. after a cloud pull wrote new samples).
+  void reload() => state = repo.loadLogs();
 }
 
 /// Latest logged bodyweight, used to PRE-FILL new strength logs. The value

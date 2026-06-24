@@ -55,4 +55,34 @@ class ApiClient {
     }
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
+
+  /// Canonical samples for a user, optionally filtered by source/metric.
+  Future<List<Map<String, dynamic>>> fetchSamples(String userId,
+      {String? source, String? metricId, int limit = 2000}) async {
+    final uri = Uri.parse('$baseUrl/users/$userId/samples').replace(
+      queryParameters: {
+        'limit': '$limit',
+        if (source != null) 'source': source,
+        if (metricId != null) 'metric_id': metricId,
+      },
+    );
+    final r = await _client.get(uri).timeout(const Duration(seconds: 15));
+    if (r.statusCode != 200) {
+      throw ApiException('fetch samples failed: ${r.body}', r.statusCode);
+    }
+    return (jsonDecode(r.body) as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Ask the backend to pull fresh data from Google Health. Best-effort: returns
+  /// the result map (may contain an `errors` map if tokens expired).
+  Future<Map<String, dynamic>> triggerGoogleSync(String userId,
+      {int days = 7}) async {
+    final r = await _client
+        .post(Uri.parse('$baseUrl/integrations/google/sync?user_id=$userId&days=$days'))
+        .timeout(const Duration(seconds: 60));
+    if (r.statusCode != 200) {
+      throw ApiException('google sync failed: ${r.body}', r.statusCode);
+    }
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
 }

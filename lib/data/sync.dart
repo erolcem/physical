@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../engine/rank_engine.dart' show Log;
 import '../state/providers.dart';
 import 'api_client.dart';
+import 'repository.dart';
 
 // Dev defaults. localhost works for Linux desktop & web; an Android emulator
 // would use 10.0.2.2. No auth yet, so a fixed local user id — replaced once
@@ -59,4 +60,52 @@ Future<SyncResult> syncNow(WidgetRef ref) {
   final api = ref.read(apiClientProvider);
   final logs = ref.read(logsProvider);
   return performSync(api, kLocalUserId, logs);
+}
+
+// ── Pull (backend → app) ────────────────────────────────────────────────────
+
+/// Merge backend samples into [repo], skipping any already present (dedupe by
+/// metric + timestamp). Returns how many were newly added. Pure & testable.
+int mergeSamples(Repository repo, List<Map<String, dynamic>> samples) {
+  final existing = repo.loadLogs();
+  var added = 0;
+  for (final s in samples) {
+    final mid = s['metric_id'] as String;
+    final ts = s['ts'] as String;
+    final list = existing[mid] ??= <Log>[];
+    if (list.any((l) => l.ts == ts)) continue; // already have this day's value
+    final log = Log(mid, (s['value'] as num).toDouble(),
+        bodyweight: (s['bodyweight_at_ts'] as num?)?.toDouble(), ts: ts);
+    repo.saveLog(mid, log);
+    list.add(log); // keep the snapshot current for in-batch dedupe
+    added++;
+  }
+  return added;
+}
+
+class CloudSyncResult {
+  final int pulled;
+  final String note; // short status for the Google leg
+  CloudSyncResult(this.pulled, this.note);
+}
+
+/// Button action: ask the backend to refresh from Google (best effort), then
+/// pull the Google samples down into the local store and refresh the UI.
+Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
+  final api = ref.read(apiClientProvider);
+  final repo = ref.read(repositoryProvider);
+
+  String note;
+  try {
+    final g = await api.triggerGoogleSync(kLocalUserId);
+    final errs = (g['errors'] as Map?) ?? const {};
+    note = errs.isEmpty ? 'Google +${g['ingested']}' : 'Google: reconnect needed';
+  } catch (_) {
+    note = 'Google refresh skipped';
+  }
+
+  final samples = await api.fetchSamples(kLocalUserId, source: 'google_health');
+  final added = mergeSamples(repo, samples);
+  ref.read(logsProvider.notifier).reload();
+  return CloudSyncResult(added, note);
 }
