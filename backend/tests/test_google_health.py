@@ -63,6 +63,27 @@ def test_sleep_expands_to_duration_efficiency_and_stages():
     assert all(s["ts"] == "2026-06-23T00:00:00" for s in out.values())
 
 
+def test_sleep_score_derived_lands_near_population_mean():
+    # 7h asleep, 87.5% efficiency, ~29% deep+REM → a middling night ≈ engine mean (77).
+    pts = [{"dataSource": {}, "sleep": {
+        "interval": {"startTime": "2026-06-25T13:00:00Z"},
+        "summary": {"minutesInSleepPeriod": "480", "minutesAsleep": "420",
+                    "stagesSummary": [{"type": "DEEP", "minutes": "60"},
+                                      {"type": "REM", "minutes": "60"}]}}}]
+    out = {s["metric_id"]: s for s in mapping.to_samples("sleep", pts)}
+    assert out["sleep_score"]["value"] == 77.2
+    assert out["sleep_score"]["ts"] == "2026-06-25T00:00:00"
+
+
+def test_sleep_score_prefers_vendor_score_when_present():
+    pts = [{"dataSource": {}, "sleep": {
+        "interval": {"startTime": "2026-06-25T13:00:00Z"},
+        "summary": {"minutesAsleep": "420", "minutesInSleepPeriod": "480",
+                    "overallScore": 88}}}]  # vendor's own 0–100 score wins over the derived one
+    out = {s["metric_id"]: s for s in mapping.to_samples("sleep", pts)}
+    assert out["sleep_score"]["value"] == 88.0
+
+
 def test_valueless_points_are_skipped():
     assert mapping.to_samples("vo2max", []) == []
     assert mapping.to_samples("hrv", [{"dataSource": {}, "dailyHeartRateVariability": {

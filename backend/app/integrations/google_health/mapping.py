@@ -76,8 +76,35 @@ _EXTRACTORS = {
 }
 
 
+def _sleep_score(container: dict, summary: dict, asleep_min, efficiency_pct,
+                 deep_min, rem_min):
+    """A 0–100 nightly sleep score, ranked as a recovery metric.
+
+    Prefers the vendor's own score (Fitbit/Google expose a 0–100 sleep score) if
+    it's anywhere in the payload; otherwise derives a transparent composite from
+    the night's readings — duration vs an 8h target (50%), efficiency (25%), and
+    restorative deep+REM share (25%). Lands typical nights near the engine's
+    population mean (~77)."""
+    # 1) Real vendor score if present (any 0–100 field whose key mentions "score").
+    for src in (summary, container):
+        for k, v in (src or {}).items():
+            if "score" in k.lower():
+                f = _to_float(v)
+                if f is not None and 0 < f <= 100:
+                    return round(f, 1)
+    # 2) Derived estimate.
+    if not asleep_min:
+        return None
+    dur = min(asleep_min / 480.0, 1.0)                                  # vs 8h
+    eff = min(max(((efficiency_pct or 0) / 100 - 0.75) / 0.20, 0.0), 1.0)  # 75%→0, 95%→1
+    restorative = ((deep_min or 0) + (rem_min or 0)) / asleep_min
+    comp = min(restorative / 0.40, 1.0)                                 # ~40% deep+REM ideal
+    return round(100 * (0.5 * dur + 0.25 * eff + 0.25 * comp), 1)
+
+
 def _sleep_samples(datapoints: list[dict]) -> list[dict]:
-    """One night → sleep_duration (hrs), sleep_efficiency (%), deep/rem minutes."""
+    """One night → sleep_score (0–100, ranked) + sleep_duration (hrs),
+    sleep_efficiency (%), deep/rem minutes (background)."""
     out = []
     for p in datapoints:
         c = _container(p)
@@ -89,18 +116,25 @@ def _sleep_samples(datapoints: list[dict]) -> list[dict]:
             continue
         asleep = _to_float(summary.get("minutesAsleep"))
         period = _to_float(summary.get("minutesInSleepPeriod"))
+        deep = rem = eff = None
         if asleep is not None:
             out.append(_sample("sleep_duration", day, asleep / 60.0, summary))
         if asleep and period:
-            out.append(_sample("sleep_efficiency", day, round(asleep / period * 100, 1), summary))
+            eff = round(asleep / period * 100, 1)
+            out.append(_sample("sleep_efficiency", day, eff, summary))
         for st in (summary.get("stagesSummary") or []):
             mins = _to_float(st.get("minutes"))
             if mins is None:
                 continue
             if st.get("type") == "DEEP":
+                deep = mins
                 out.append(_sample("deep_sleep", day, mins, st))
             elif st.get("type") == "REM":
+                rem = mins
                 out.append(_sample("rem_sleep", day, mins, st))
+        score = _sleep_score(c, summary, asleep, eff, deep, rem)
+        if score is not None:
+            out.append(_sample("sleep_score", day, score, summary))
     return out
 
 

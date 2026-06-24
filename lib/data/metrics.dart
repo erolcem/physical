@@ -77,10 +77,11 @@ const List<MetricDef> metrics = [
       exercise: 'Morning resting heart rate'),
   MetricDef('hrv', 'HRV', 'recovery', MetricTier.ranked, 'ms',
       exercise: 'Heart rate variability'),
-  // Sleep score: standardised from Fitbit/Google Health sleep-score readings
-  // (vendor 0–100). Auto-synced in Phase 3; manually loggable for now.
+  // Sleep score: auto-derived on sync — the Fitbit/Google vendor score when the
+  // payload carries one, else a transparent composite of the night's readings
+  // (duration / efficiency / deep+REM). Ranked as recovery; also loggable by hand.
   MetricDef('sleep_score', 'Sleep Score', 'recovery', MetricTier.ranked, '/100',
-      exercise: 'Nightly sleep score (Google Health / Fitbit)'),
+      autoSync: true, exercise: 'Nightly sleep score (Google Health / Fitbit)'),
 
   // ── TRACKED · Aesthetics (unranked by design — no defensible population
   //    distribution; ranking appearance is a wellbeing risk. Graphs only.) ──
