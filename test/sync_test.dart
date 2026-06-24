@@ -12,13 +12,13 @@ class _FakeApi extends ApiClient {
 
   @override
   Future<Map<String, dynamic>> ingestSamples(
-      String userId, List<Map<String, dynamic>> samples) async {
+      List<Map<String, dynamic>> samples) async {
     sent = samples;
     return {'ingested': samples.length, 'skipped': 0, 'ids': []};
   }
 
   @override
-  Future<Map<String, dynamic>> fetchRanks(String userId) async => {
+  Future<Map<String, dynamic>> fetchRanks() async => {
         'overall': {'tier': 'Gold', 'sub': 'II', 'top_pct': 30.0, 'rank_value': 3.5},
         'categories': {},
         'metrics': {},
@@ -63,7 +63,7 @@ void main() {
       ],
       'vo2max': [Log('vo2max', 50, ts: 't3')],
     };
-    final r = await performSync(api, 'u1', logs);
+    final r = await performSync(api, logs);
     expect(r.total, 3);
     expect(r.ingested, 3);
     expect(api.sent!.length, 3);

@@ -30,5 +30,14 @@ def client():
 
     app.dependency_overrides[get_db] = _override
     with TestClient(app) as c:
+        # Sign in as a dev user so the per-user (/me/*) routes are authenticated.
+        tok = c.post("/auth/dev", json={"user_id": "local-dev"}).json()["access_token"]
+        c.headers["Authorization"] = f"Bearer {tok}"
         yield c
     app.dependency_overrides.clear()
+
+
+def auth_header(client, user_id: str) -> dict:
+    """Bearer header for a specific dev user (for isolation tests)."""
+    tok = client.post("/auth/dev", json={"user_id": user_id}).json()["access_token"]
+    return {"Authorization": f"Bearer {tok}"}

@@ -2,16 +2,17 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..auth import current_user
 from ..db import get_db
 from ..models import Sample
 from ..ranking import compute_ranks
 from ..schemas import RanksOut
 
-router = APIRouter(prefix="/users/{user_id}/ranks", tags=["ranks"])
+router = APIRouter(prefix="/me/ranks", tags=["ranks"])
 
 
 @router.get("", response_model=RanksOut)
-def get_ranks(user_id: str, db: Session = Depends(get_db)):
+def get_ranks(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     """Overall + per-category + per-metric ranks, computed from the user's
     stored samples by the canonical engine (latest value per metric, strength
     scored at its bodyweight-at-time)."""

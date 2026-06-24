@@ -35,17 +35,16 @@ class SyncResult {
 }
 
 /// Pure: push all logs, then read back the server's overall rank. No Riverpod,
-/// so it's unit-testable with a fake [ApiClient].
-Future<SyncResult> performSync(
-    ApiClient api, String userId, Map<String, List<Log>> logs) async {
+/// so it's unit-testable with a fake [ApiClient]. (Caller signs in first.)
+Future<SyncResult> performSync(ApiClient api, Map<String, List<Log>> logs) async {
   final samples = [
     for (final list in logs.values)
       for (final log in list) canonicalSample(log)
   ];
-  final res = await api.ingestSamples(userId, samples);
+  final res = await api.ingestSamples(samples);
   String? overall;
   try {
-    final ranks = await api.fetchRanks(userId);
+    final ranks = await api.fetchRanks();
     final o = ranks['overall'] as Map<String, dynamic>?;
     if (o != null) overall = '${o['tier']} ${o['sub']}';
   } catch (_) {
@@ -55,11 +54,16 @@ Future<SyncResult> performSync(
       (res['skipped'] ?? 0) as int, overall);
 }
 
+/// Ensure we hold a JWT. Dev sign-in for now; Google Sign-In replaces this.
+Future<void> _ensureSignedIn(ApiClient api) async {
+  if (!api.isSignedIn) await api.devSignIn(userId: kLocalUserId);
+}
+
 /// UI entry point: sync the current local logs.
-Future<SyncResult> syncNow(WidgetRef ref) {
+Future<SyncResult> syncNow(WidgetRef ref) async {
   final api = ref.read(apiClientProvider);
-  final logs = ref.read(logsProvider);
-  return performSync(api, kLocalUserId, logs);
+  await _ensureSignedIn(api);
+  return performSync(api, ref.read(logsProvider));
 }
 
 // ── Pull (backend → app) ────────────────────────────────────────────────────
@@ -94,17 +98,18 @@ class CloudSyncResult {
 Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
   final api = ref.read(apiClientProvider);
   final repo = ref.read(repositoryProvider);
+  await _ensureSignedIn(api);
 
   String note;
   try {
-    final g = await api.triggerGoogleSync(kLocalUserId);
+    final g = await api.triggerGoogleSync();
     final errs = (g['errors'] as Map?) ?? const {};
     note = errs.isEmpty ? 'Google +${g['ingested']}' : 'Google: reconnect needed';
   } catch (_) {
     note = 'Google refresh skipped';
   }
 
-  final samples = await api.fetchSamples(kLocalUserId, source: 'google_health');
+  final samples = await api.fetchSamples(source: 'google_health');
   final added = mergeSamples(repo, samples);
   ref.read(logsProvider.notifier).reload();
   return CloudSyncResult(added, note);

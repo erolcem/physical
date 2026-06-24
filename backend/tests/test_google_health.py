@@ -70,11 +70,18 @@ def test_valueless_points_are_skipped():
 
 
 def test_sync_requires_a_connection(client):
-    r = client.post("/integrations/google/sync", params={"user_id": "u1"})
+    r = client.post("/integrations/google/sync")  # signed-in user, no Google link
     assert r.status_code == 404
 
 
 def test_authorize_needs_client_id(client):
-    r = client.get("/integrations/google/authorize",
-                   params={"user_id": "u1"}, follow_redirects=False)
+    r = client.get("/integrations/google/authorize")  # signed in, but no client id
     assert r.status_code == 500
+
+
+def test_endpoints_require_auth():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    with TestClient(app) as c:  # no Authorization header
+        assert c.get("/me/ranks").status_code == 401
+        assert c.post("/integrations/google/sync").status_code == 401

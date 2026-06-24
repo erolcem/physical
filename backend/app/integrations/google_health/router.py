@@ -12,35 +12,39 @@ source_id), so re-syncing never double-counts.
 import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import RedirectResponse
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from ...auth import current_user
 from ...config import settings
 from ...db import get_db
 from ...models import GoogleHealthToken, Sample
 from . import mapping, oauth
 from .client import DATA_TYPES, GoogleHealthClient
 
+# Every endpoint binds to the signed-in user, so each person connects and syncs
+# their own Google account into their own isolated data.
 router = APIRouter(prefix="/integrations/google", tags=["google-health"])
 
 
 @router.get("/authorize")
-def authorize(user_id: str = Query(...)):
+def authorize(user_id: str = Depends(current_user)):
+    """Return the Google consent URL for the signed-in user to open. (The app
+    calls this with its token, then opens the URL in a browser/webview.)"""
     if not settings.google_client_id:
         raise HTTPException(500, "GOOGLE_CLIENT_ID not configured (see backend/README.md)")
-    return RedirectResponse(oauth.authorize_url(state=user_id))
+    return {"authorize_url": oauth.authorize_url(state=user_id)}
 
 
 @router.post("/exchange")
-def exchange(user_id: str = Query(...), code: str = Query(...),
+def exchange(code: str = Query(...), user_id: str = Depends(current_user),
              db: Session = Depends(get_db)):
     _store_token(db, user_id, oauth.exchange_code(code))
     return {"status": "connected", "user_id": user_id}
 
 
 @router.get("/debug")
-def debug(user_id: str = Query(...), db: Session = Depends(get_db)):
+def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     """Diagnose an empty sync: what does Google actually have for this account?
     Shows the profile, paired devices/data sources, and a couple of raw samples."""
     token = db.get(GoogleHealthToken, user_id)
@@ -70,8 +74,9 @@ def debug(user_id: str = Query(...), db: Session = Depends(get_db)):
 
 
 @router.post("/sync")
-def sync(user_id: str = Query(...), days: int = Query(7, ge=1, le=30),
+def sync(days: int = Query(7, ge=1, le=30),
          replace: bool = Query(False, description="delete existing Google samples first"),
+         user_id: str = Depends(current_user),
          db: Session = Depends(get_db)):
     token = db.get(GoogleHealthToken, user_id)
     if token is None:

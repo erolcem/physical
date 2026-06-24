@@ -5,15 +5,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import engine as E
+from ..auth import current_user
 from ..db import get_db
 from ..models import Sample
 from ..schemas import IngestResult, SampleIn, SampleOut
 
-router = APIRouter(prefix="/users/{user_id}/samples", tags=["samples"])
+# All routes operate on the authenticated user (from the JWT) — never a path id —
+# so a caller can only ever read/write their own data.
+router = APIRouter(prefix="/me/samples", tags=["samples"])
 
 
 @router.post("", response_model=IngestResult)
-def ingest(user_id: str, body: list[SampleIn], db: Session = Depends(get_db)):
+def ingest(body: list[SampleIn], user_id: str = Depends(current_user),
+           db: Session = Depends(get_db)):
     """Bulk-ingest canonical samples. Idempotent: a sample with a `source_id`
     already seen for (user, metric, source) is skipped, so re-syncing the same
     Fitbit day never double-counts. Manual logs without a source_id get one
@@ -54,10 +58,10 @@ def ingest(user_id: str, body: list[SampleIn], db: Session = Depends(get_db)):
 
 @router.get("", response_model=list[SampleOut])
 def list_samples(
-    user_id: str,
     metric_id: str | None = Query(default=None),
     source: str | None = Query(default=None),
     limit: int = Query(default=500, le=5000),
+    user_id: str = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     stmt = select(Sample).where(Sample.user_id == user_id)

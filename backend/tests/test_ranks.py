@@ -2,7 +2,7 @@ from app import engine as E
 
 
 def _seed(client):
-    client.post("/users/u1/samples", json=[
+    client.post("/me/samples", json=[
         {"metric_id": "bench", "ts": "2026-06-01T08:00:00", "value": 100, "bodyweight_at_ts": 80},
         {"metric_id": "squat", "ts": "2026-06-01T08:00:00", "value": 140, "bodyweight_at_ts": 80},
         {"metric_id": "vo2max", "ts": "2026-06-01T08:00:00", "value": 52},
@@ -14,7 +14,7 @@ def _seed(client):
 
 def test_ranks_overall_categories_metrics(client):
     _seed(client)
-    r = client.get("/users/u1/ranks").json()
+    r = client.get("/me/ranks").json()
 
     assert r["overall"]["tier"] in E.TIERS
     for cat in ("strength", "performance", "recovery"):
@@ -27,15 +27,17 @@ def test_ranks_overall_categories_metrics(client):
 
 
 def test_latest_value_is_used(client):
-    client.post("/users/u1/samples", json=[
+    client.post("/me/samples", json=[
         {"metric_id": "bench", "ts": "2026-05-01T08:00:00", "value": 60, "bodyweight_at_ts": 80},
         {"metric_id": "bench", "ts": "2026-06-01T08:00:00", "value": 120, "bodyweight_at_ts": 80},
     ])
-    r = client.get("/users/u1/ranks").json()
+    r = client.get("/me/ranks").json()
     assert r["metrics"]["bench"]["value"] == 120
 
 
 def test_empty_user_is_wood(client):
-    r = client.get("/users/nobody/ranks").json()
+    # A different signed-in user with no data of their own → empty ranks.
+    nobody = client.post("/auth/dev", json={"user_id": "nobody"}).json()["access_token"]
+    r = client.get("/me/ranks", headers={"Authorization": f"Bearer {nobody}"}).json()
     assert r["overall"]["tier"] == "Wood"
     assert r["metrics"] == {}
