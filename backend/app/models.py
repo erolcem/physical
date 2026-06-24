@@ -52,6 +52,18 @@ class Sample(Base):
     )
 
 
+class User(Base):
+    """An account. `id` is the stable user id used everywhere as `user_id`
+    (Google 'sub' for real sign-ins, or a chosen id for dev). All samples,
+    profile, and Google tokens are keyed by this id → per-user isolation."""
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    email: Mapped[str | None] = mapped_column(String, nullable=True)
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class GoogleHealthToken(Base):
     """Per-user Google OAuth tokens for the Google Health API cloud adapter.
     Note: in OAuth 'testing' mode Google refresh tokens expire after 7 days."""

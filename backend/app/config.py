@@ -22,5 +22,11 @@ class Settings:
     google_redirect_uri: str = os.environ.get(
         "GOOGLE_REDIRECT_URI", "https://www.google.com")
 
+    # Auth. JWT_SECRET MUST be set to a strong random value in production.
+    jwt_secret: str = os.environ.get("JWT_SECRET", "dev-insecure-secret-change-me-in-production-0123456789")
+    jwt_expire_days: int = int(os.environ.get("JWT_EXPIRE_DAYS", "30"))
+    # Dev-only password-less sign-in (/auth/dev). Disable in production.
+    allow_dev_auth: bool = os.environ.get("ALLOW_DEV_AUTH", "true").lower() == "true"
+
 
 settings = Settings()
