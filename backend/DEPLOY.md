@@ -15,8 +15,10 @@ app.jobs`).
 
 1. **Push the repo to GitHub** (you're many commits ahead): `git push`.
 2. **railway.app** → New Project → **Deploy from GitHub repo** → pick `physical`.
-3. In the service **Settings → Build**: set **Dockerfile Path** = `backend/Dockerfile`
-   (root build context — needed so the shared rank engine is included).
+3. The committed **`railway.json`** at the repo root already tells Railway to build
+   with `backend/Dockerfile` (root context, so the shared engine is included) — no
+   UI build settings needed. *(Without it, Railway's auto-detector tries to build
+   the Flutter app at the root and fails with "could not determine how to build".)*
 4. **Add Postgres**: in the project, **New → Database → PostgreSQL**. Railway
    exposes its connection string as `DATABASE_URL` — reference it on the service.
 5. **Set environment variables** on the service:
