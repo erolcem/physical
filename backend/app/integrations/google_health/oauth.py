@@ -43,7 +43,9 @@ def _token_request(data: dict) -> dict:
         "client_id": settings.google_client_id,
         "client_secret": settings.google_client_secret,
     }, timeout=20)
-    r.raise_for_status()
+    if r.status_code >= 400:
+        # Surface Google's reason (invalid_grant / invalid_client / ...).
+        raise RuntimeError(f"{r.status_code} {r.text[:300]}")
     return r.json()
 
 
