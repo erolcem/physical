@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/metrics.dart';
 import '../engine/rank_engine.dart' as eng;
-import '../engine/rank_engine.dart' show Log, strengthValue;
+import '../engine/rank_engine.dart' show Log, strengthValue, isolationLifts;
 import '../state/providers.dart';
 import 'badge.dart';
 
@@ -113,7 +113,10 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
                   style: TextStyle(color: c, fontWeight: FontWeight.w600)),
               if (m.provisional) ...[
                 const SizedBox(height: 4),
-                Text('⚠ Provisional standard — 1RM estimate is unreliable for isolation lifts, so this rank is an estimate.',
+                Text(
+                    isolationLifts.contains(m.id)
+                        ? '⚠ Ranked by working-set volume (weight × reps), not a 1RM — a provisional standard for isolation lifts.'
+                        : '⚠ Provisional standard — this rank is an estimate.',
                     style: TextStyle(color: Colors.amber.withValues(alpha: 0.8), fontSize: 11, fontWeight: FontWeight.w500)),
               ],
               const SizedBox(height: 8),

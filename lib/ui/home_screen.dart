@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/metrics.dart';
 import '../data/body_figure_data.dart';
 import '../engine/rank_engine.dart' as eng;
-import '../engine/rank_engine.dart' show Log, RankResult, strengthValue;
+import '../engine/rank_engine.dart' show Log, RankResult, strengthValue, isolationLifts;
 import '../state/providers.dart';
 import 'badge.dart';
 import 'body_graph.dart';
@@ -544,6 +544,12 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
             const SizedBox(width: 8),
             Expanded(child: _field(_reps, 'Reps')),
           ]),
+          if (isolationLifts.contains(_metric.id))
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text('Scored by working-set volume: weight × reps',
+                  style: TextStyle(fontSize: 11, color: Colors.grey)),
+            ),
           const SizedBox(height: 8),
           _field(_bw, 'Bodyweight now (kg) — snapshotted to this lift'),
         ] else
