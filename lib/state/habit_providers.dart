@@ -28,12 +28,21 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
   HabitsNotifier(this.repo)
       : super(HabitsState(repo.loadHabits(), repo.loadCompletions()));
 
-  void addHabit(String title, {String? linkedMetricId}) {
+  void addHabit(String title,
+      {String category = 'other',
+      String? time,
+      int durationMins = 0,
+      double costPerMonth = 0,
+      String? linkedMetricId}) {
     final t = title.trim();
     if (t.isEmpty) return;
     repo.saveHabit(Habit(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       title: t,
+      category: category,
+      time: time,
+      durationMins: durationMins,
+      costPerMonth: costPerMonth,
       linkedMetricId: linkedMetricId,
       createdAt: DateTime.now().toIso8601String(),
     ));

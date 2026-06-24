@@ -52,13 +52,63 @@ void main() {
   });
 
   group('Habit json round-trip', () {
-    test('survives encode/decode', () {
-      const h = Habit(id: 'a', title: 'Train', linkedMetricId: 'bench', createdAt: '2026-06-24T00:00:00');
+    test('survives encode/decode with planner fields', () {
+      const h = Habit(
+          id: 'a',
+          title: 'Train',
+          category: 'fitness',
+          time: '07:30',
+          durationMins: 60,
+          costPerMonth: 40,
+          linkedMetricId: 'bench',
+          createdAt: '2026-06-24T00:00:00');
       final back = Habit.fromJson(h.toJson());
-      expect(back.id, 'a');
-      expect(back.title, 'Train');
+      expect(back.category, 'fitness');
+      expect(back.time, '07:30');
+      expect(back.durationMins, 60);
+      expect(back.costPerMonth, 40);
       expect(back.linkedMetricId, 'bench');
-      expect(back.createdAt, '2026-06-24T00:00:00');
+    });
+
+    test('tolerates legacy json without planner fields (defaults)', () {
+      final back = Habit.fromJson(
+          {'id': 'x', 'title': 'Old', 'metric': null, 'created': 't'});
+      expect(back.category, 'other');
+      expect(back.time, isNull);
+      expect(back.durationMins, 0);
+      expect(back.costPerMonth, 0);
+    });
+  });
+
+  group('planner rollup + density', () {
+    test('planFor sums per-day, per-month, and cost', () {
+      const habits = [
+        Habit(id: '1', title: 'Lift', durationMins: 60, costPerMonth: 30, createdAt: 'x'),
+        Habit(id: '2', title: 'Walk', durationMins: 30, createdAt: 'x'),
+      ];
+      final p = planFor(habits);
+      expect(p.minutesPerDay, 90);
+      expect(p.minutesPerMonth, 2700); // 90 × 30
+      expect(p.costPerMonth, 30);
+      expect(p.pctOfMonth, closeTo(2700 / 43200 * 100, 1e-9));
+    });
+
+    test('densitySlots fills the right half-hour slots by category', () {
+      const habits = [
+        Habit(id: '1', title: 'AM lift', category: 'fitness', time: '07:00', durationMins: 60, createdAt: 'x'),
+      ];
+      final slots = densitySlots(habits);
+      expect(slots.length, 48);
+      // 07:00 = slot 14; 60 min spans slots 14 and 15.
+      expect(slots[14].categoryId, 'fitness');
+      expect(slots[15].categoryId, 'fitness');
+      expect(slots[13].categoryId, isNull);
+      expect(slots[16].categoryId, isNull);
+    });
+
+    test('untimed or zero-duration habits do not occupy the day', () {
+      const habits = [Habit(id: '1', title: 'x', durationMins: 0, createdAt: 'x')];
+      expect(densitySlots(habits).every((s) => s.categoryId == null), true);
     });
   });
 
