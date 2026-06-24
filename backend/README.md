@@ -34,14 +34,28 @@ app) so `samples` can become a hypertable on `ts`.
 
 ## API
 
+**Auth:** every `/me/*` and `/integrations/*` route requires
+`Authorization: Bearer <jwt>`; the user is read from the token (no path ids), so
+a caller only ever touches their own data. Get a token via `/auth/google`
+(production) or `/auth/dev` (local).
+
 | Method | Path | Purpose |
 |---|---|---|
-| GET  | `/health` | Liveness + engine metric count |
-| PUT  | `/users/{uid}/profile` | Upsert profile (sex, age, height, units) |
-| GET  | `/users/{uid}/profile` | Fetch profile |
-| POST | `/users/{uid}/samples` | Bulk-ingest canonical samples (idempotent) |
-| GET  | `/users/{uid}/samples?metric_id=` | List samples |
-| GET  | `/users/{uid}/ranks` | Overall + per-category + per-metric ranks |
+| GET  | `/health` | Liveness + engine metric count (no auth) |
+| POST | `/auth/dev` `{user_id}` | Local dev sign-in → `{access_token}` |
+| POST | `/auth/google` `{id_token}` | Google Sign-In → `{access_token}` |
+| GET  | `/auth/me` | Current user (auth) |
+| PUT/GET | `/me/profile` | Upsert / fetch the signed-in user's profile |
+| POST | `/me/samples` | Bulk-ingest canonical samples (idempotent) |
+| GET  | `/me/samples?metric_id=&source=` | List samples |
+| GET  | `/me/ranks` | Overall + per-category + per-metric ranks |
+
+```bash
+# Local: sign in, then call /me/* with the token.
+TOKEN=$(curl -s -X POST localhost:8000/auth/dev -H 'Content-Type: application/json' \
+        -d '{"user_id":"local-dev"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+curl -s localhost:8000/me/ranks -H "Authorization: Bearer $TOKEN"
+```
 
 ### Canonical sample
 ```jsonc
@@ -84,19 +98,22 @@ export GOOGLE_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxx
 uvicorn app.main:app --reload
 ```
 
-**Connect & sync:**
-1. Open `http://localhost:8000/integrations/google/authorize?user_id=local-dev` →
-   approve. Google redirects to `https://www.google.com/?...&code=XXXX` — copy the
-   `code` value from that URL.
-2. `curl -X POST "http://localhost:8000/integrations/google/exchange?user_id=local-dev&code=XXXX"`
+**Connect & sync** (all calls carry your `$TOKEN` from the auth section above):
+1. Get the consent URL and open it in a browser:
+   `curl -s localhost:8000/integrations/google/authorize -H "Authorization: Bearer $TOKEN"`
+   → `{"authorize_url": "..."}`. Approve; Google redirects to
+   `https://www.google.com/?...&code=XXXX` — copy the `code`.
+2. `curl -X POST "localhost:8000/integrations/google/exchange?code=XXXX" -H "Authorization: Bearer $TOKEN"`
    → stores your tokens.
-3. `curl -X POST "http://localhost:8000/integrations/google/sync?user_id=local-dev&days=7"`
-   → pulls and ingests. Then `GET /users/local-dev/ranks` reflects the real data.
+3. `curl -X POST "localhost:8000/integrations/google/sync?days=7" -H "Authorization: Bearer $TOKEN"`
+   → pulls and ingests. Then `GET /me/ranks` reflects the real data.
+   (Add `&replace=true` to overwrite previously-ingested Google values.)
 
-Mapped: resting HR, HRV, VO₂max, steps, active-zone minutes, energy burned,
-weight, body-fat (sleep pending live-schema verification). Re-syncing a day is
-idempotent (dedup on `source_id`). **Note:** in OAuth testing mode Google refresh
-tokens expire after 7 days, so you re-authorize weekly until the security review.
+Mapped: resting HR, HRV (deep-sleep RMSSD), VO₂max, weight/body-fat, and sleep
+(duration/efficiency/deep/REM). steps/active-zone/energy are deferred (per-minute
+intraday). Re-syncing a day is idempotent (dedup on `source_id`). **Note:** in
+OAuth testing mode Google refresh tokens expire after 7 days, so you re-authorize
+weekly until the security review.
 
 ## Note on the shared engine
 The backend and the Flutter client must agree, so `physical_rank_engine.py` is
