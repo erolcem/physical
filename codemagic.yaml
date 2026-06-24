@@ -54,9 +54,11 @@ workflows:
         script: |
           # $BUILD_NUMBER is Codemagic's own auto-incrementing counter — robust
           # from the very first build (no App Store Connect query needed).
+          # BACKEND_URL points the iPhone build at the hosted backend (not localhost).
           flutter build ipa --release \
             --build-name=0.1.0 \
             --build-number=$BUILD_NUMBER \
+            --dart-define=BACKEND_URL=https://physical-production-883c.up.railway.app \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
