@@ -46,18 +46,26 @@ def debug(user_id: str = Query(...), db: Session = Depends(get_db)):
     token = db.get(GoogleHealthToken, user_id)
     if token is None:
         raise HTTPException(404, "Google Health not connected")
-    client = GoogleHealthClient(_valid_access_token(db, token))
+    try:
+        access = _valid_access_token(db, token)
+    except Exception as e:
+        # If the refresh failed, re-run /authorize then /exchange to reconnect.
+        return {"token_error": str(e)[:500]}
+    client = GoogleHealthClient(access)
     out = {}
     # One real sample per data type so we can write precise field extractors.
     for metric_id, data_type in DATA_TYPES.items():
-        status, body = client.get_raw(
-            f"/users/me/dataTypes/{data_type}/dataPoints?pageSize=10")
-        if isinstance(body, dict):
-            pts = body.get("dataPoints") or []
-            sample = pts[0] if pts else {"_no_dataPoints": True, "keys": list(body.keys())}
-        else:
-            sample = body
-        out[metric_id] = {"status": status, "sample": sample}
+        try:
+            status, body = client.get_raw(
+                f"/users/me/dataTypes/{data_type}/dataPoints?pageSize=10")
+            if isinstance(body, dict):
+                pts = body.get("dataPoints") or []
+                sample = pts[0] if pts else {"_no_dataPoints": True, "keys": list(body.keys())}
+            else:
+                sample = str(body)[:300]
+            out[metric_id] = {"status": status, "sample": sample}
+        except Exception as e:
+            out[metric_id] = {"error": str(e)[:300]}
     return out
 
 
