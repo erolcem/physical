@@ -2,6 +2,7 @@
 // then overrides the provider so all state reads from on-device storage.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'data/notifications.dart';
 import 'data/persistent_repository.dart';
 import 'state/providers.dart';
 import 'ui/main_screen.dart';
@@ -9,6 +10,9 @@ import 'ui/main_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final repo = await PersistentRepository.create();
+  // Proactive habit reminders (no-op on desktop/web; iOS/Android only).
+  await NotificationService.instance.init();
+  await NotificationService.instance.syncHabitReminders(repo.loadHabits());
   runApp(ProviderScope(
     overrides: [repositoryProvider.overrideWithValue(repo)],
     child: const PhysicalApp(),

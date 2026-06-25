@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/notifications.dart';
+import '../state/habit_providers.dart';
 import 'cloud_sheet.dart';
 import 'coach_screen.dart';
 import 'habits_screen.dart';
@@ -32,6 +34,10 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Keep daily habit reminders in sync as habits change (no-op off-device).
+    ref.listen<HabitsState>(habitsProvider, (_, next) {
+      NotificationService.instance.syncHabitReminders(next.habits);
+    });
     return Scaffold(
       backgroundColor: const Color(0xFF08091A),
       appBar: AppBar(
