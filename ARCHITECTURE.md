@@ -307,13 +307,18 @@ Never raises into the app — errors become a clean message.
 
 ## 10. Layers F & F2 — habits, exercise, diet, friends
 
-### 10.1 Habits (`data/habits.dart`)
-Daily check-off; streaks (today-or-yesterday aware); **two-step verification**
-(`statusFor` — a tick + a same-day log of a linked metric → "verified"); today's
-X/Y summary; **weekly history** (7-day bar chart + per-habit dot strip).
-**Planner/budgeter:** category (Strength/Performance/Sleep/Diet/Aesthetics/Other),
-time, duration, monthly cost → a **time/$ rollup** + a **24h density bar**.
-**Calendar push** (daily Google Calendar event) and **daily reminders**.
+### 10.1 Habits (`data/habits.dart`) — scaffolded
+A habit is **scaffolded**, not free-text: it lives in a **section**
+(sleep / exercise / diet / aesthetics / recovery / misc) and is a **preset** from
+that section's in-realm menu (`habitPresets`) or a **bounded custom** title — so
+data checks stay valid and the AI can reason. Each habit has a **verify mode**:
+`metric` (a same-day log of a linked metric), `workout` (a session that day),
+`diet` (a food log that day), or `manual`; `statusFor` → verified / manual / not-
+done. **Cadence** is daily or **weekly with chosen days** (`isDueOn`), with an
+**ideal time + duration** that drive the **Google Calendar recurrence** (daily or
+weekly `BYDAY`) and the **reminder**. The Habits tab shows today's actionable
+roster, a **weekly schedule** bar, per-habit **streaks** + a 7-day dot strip, and
+dims habits not scheduled today. (Monthly-cost was dropped per review.)
 
 ### 10.2 Workout logging (`data/workout.dart`, `ui/workout_screen.dart`)
 A session is a dated list of **sets** → **total volume** (Σ weight×reps) + the
@@ -493,17 +498,12 @@ daily totals. *Target:* fuller macro breakdown **+ micronutrients** (needs a foo
 database), on a dedicated diet-style page; and give each graph subpage (diet /
 exercise / sleep) its **own tailored layout** instead of one generic chart.
 
-**P1 · Habits = structured & data-aligned, not free-text.** *Current:* free-text
-title + optional linked metric + planner (time/duration/cost). *Target:*
-- A **fixed menu of habit types** bound to data domains — e.g. a *Sleep* goal that
-  watches all sleep+recovery data; an *Exercise* goal that watches workout sets +
-  strength/performance; *Diet*; *Aesthetics*; *Misc*. **Verification = the user's
-  logs meeting the habit's target, automatically.**
-- Time model: an **ideal time + duration** (the ideal time drives the calendar event
-  + notification; doing it at another time still checks off).
-- Cadence: **daily, or weekly with chosen days**; show a friendly **weekly roster +
-  daily roster**.
-- **Deprecate the monthly-cost field.**
+**✅ DONE · Habits = structured & data-aligned, not free-text.** Shipped: sections +
+in-realm presets + bounded custom; verify modes (metric/workout/diet/manual)
+auto-corroborated by the day's logs; ideal time + duration; daily/weekly-by-day
+cadence; today's roster + weekly schedule; monthly-cost dropped. *Next refinements:*
+per-habit explicit numeric targets (e.g. "protein ≥ 150 g") checked against the day's
+totals, and goal-emphasis the coach remembers.
 
 **P2 · Graphs & ranks — accessibility + "epic" polish.** Fixed the **"All" timeframe**
 label crowding (this round). Further: make the ranks/graph layouts more credible and
@@ -516,8 +516,7 @@ discussion; Notifications; Habit-update-aware; deletable structured context;
 autonomous strategic-correlation pinning; dynamic volume auto-regulation on a
 daily-readiness drop). Voice = out of scope.
 
-**Suggested build order:** (1) Habits redesign (structured types + cadence + roster,
-drop cost) → (2) Workout tracker (grouped sets + Google-session dual-auth) → (3) Diet
-macros/micros + per-domain graph layouts → (4) Profile auto-port from Google Health →
-(5) Rank-badge/graph visual polish → (6) Coach fixed-response selection. Each shipped
-behind its own tests, as usual.
+**Build order:** (1) ✅ **Habits redesign** (done) → (2) Workout tracker (grouped sets
++ Google-session dual-auth) → (3) Diet macros/micros + per-domain graph layouts →
+(4) Profile auto-port from Google Health → (5) Rank-badge/graph visual polish (Liftoff-
+style badges) → (6) Coach fixed-response selection. Each shipped behind its own tests.
