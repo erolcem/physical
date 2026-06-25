@@ -72,3 +72,20 @@ class RanksOut(BaseModel):
     overall: GroupRank
     categories: dict[str, GroupRank]
     metrics: dict[str, MetricRank]
+
+
+# ── Friends (PDF Part 6) ──
+class FriendRequestIn(BaseModel):
+    email: str
+
+
+class FriendOut(BaseModel):
+    user_id: str
+    email: str | None = None
+    name: str | None = None
+    rank: GroupRank | None = None  # overall rank only; None if they have no data yet
+
+
+class PendingFriendOut(BaseModel):
+    requester_id: str
+    email: str | None = None

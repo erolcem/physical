@@ -64,6 +64,23 @@ class User(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
 
+class Friendship(Base):
+    """A social link between two accounts (PDF Part 6). `pending` until the
+    addressee accepts; only `accepted` friends can see each other's overall rank
+    (never raw samples) — privacy by mutual consent."""
+    __tablename__ = "friendships"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    requester_id: Mapped[str] = mapped_column(String, index=True)
+    addressee_id: Mapped[str] = mapped_column(String, index=True)
+    status: Mapped[str] = mapped_column(String, default="pending")  # pending | accepted
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("requester_id", "addressee_id", name="uq_friendship"),
+    )
+
+
 class GoogleHealthToken(Base):
     """Per-user Google OAuth tokens for the Google Health API cloud adapter.
     Note: in OAuth 'testing' mode Google refresh tokens expire after 7 days."""
