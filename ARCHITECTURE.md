@@ -5,7 +5,7 @@ from the plan lives. Companion to `GUIDE.md` (usage), `backend/DEPLOY.md` (hosti
 `backend/VERIFICATION.md` (Google review), and `All readmes/` (the design docs + PDF).
 
 **Status:** the **entire plan (Parts 1–7, AI coach included)** is implemented.
-100 Flutter tests + 42 backend tests green, 0 analyzer issues, Python⇄Dart engine
+100 Flutter tests + 44 backend tests green, 0 analyzer issues, Python⇄Dart engine
 parity to ~1e-5. Hosted on Railway; iPhone via TestFlight. The coach runs on
 **Gemini** to stay in the user's Google ecosystem.
 
@@ -24,7 +24,7 @@ accountable with a habits layer, and (future) coach them with AI over all of it 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │  CLIENT — Flutter app (local-first; iOS + Linux/Android/web dev)       │
-│  Dashboard · Progress · Habits · Profile  (Riverpod state)             │
+│  Home · Progress · Habits · Coach · Profile  (Riverpod state)          │
 │       │ ranks computed on-device by the Dart engine                    │
 │       │ opt-in cloud sync (Bearer JWT)                                 │
 └───────┼────────────────────────────────────────────────────────────────┘
@@ -69,16 +69,17 @@ What it does:
 - **State:** Riverpod. Storage seam: the `Repository` interface (in-memory for
   tests/default, `PersistentRepository` via `shared_preferences` on device).
 - **Local-first:** ranks compute on-device from logs; the cloud is opt-in mirror.
-- **Screens (4 tabs):**
-  - **Dashboard** (`home_screen.dart`) — overall rank card (tap → category
+- **Screens (5 tabs):**
+  - **Home** (`home_screen.dart`) — overall rank card (tap → category
     breakdown sheet), front/inner/back **body graph** (`body_graph.dart` +
     `body_figure_data.dart`, tap a muscle → detail), and per-category metric grids.
   - **Progress** (`progress_screen.dart`) — Google-Health-style category cards →
     per-category graph page (timeframe control, rank/native/% y-axis) + a
     multi-metric **comparison with Pearson correlation**.
   - **Habits** (`habits_screen.dart`) — see Layer F.
+  - **Coach** (`coach_screen.dart`) — AI chat, see Layer H.
   - **Profile** (`profile_screen.dart`) — age/gender/height/weight/body-fat + BMI,
-    and **Share my rank** (clipboard).
+    **Share my rank**, and **Friends** (Layer G).
   - **Metric detail sheet** (`metric_detail_sheet.dart`) — rank, derived **tier
     ladder**, log history, inline log form; provisional metrics flagged.
   - **Rank badges** (`badge.dart`) — metallic SVG medallions.
