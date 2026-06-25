@@ -358,7 +358,7 @@ class HabitsTab extends ConsumerWidget {
     final nameCtrl = TextEditingController();
     final durCtrl = TextEditingController();
     final costCtrl = TextEditingController();
-    String cat = 'fitness';
+    String cat = 'strength';
     String? time; // 'HH:MM'
     String? linked;
     final linkable = metrics

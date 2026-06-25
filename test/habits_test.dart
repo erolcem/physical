@@ -56,14 +56,14 @@ void main() {
       const h = Habit(
           id: 'a',
           title: 'Train',
-          category: 'fitness',
+          category: 'strength',
           time: '07:30',
           durationMins: 60,
           costPerMonth: 40,
           linkedMetricId: 'bench',
           createdAt: '2026-06-24T00:00:00');
       final back = Habit.fromJson(h.toJson());
-      expect(back.category, 'fitness');
+      expect(back.category, 'strength');
       expect(back.time, '07:30');
       expect(back.durationMins, 60);
       expect(back.costPerMonth, 40);
@@ -95,13 +95,13 @@ void main() {
 
     test('densitySlots fills the right half-hour slots by category', () {
       const habits = [
-        Habit(id: '1', title: 'AM lift', category: 'fitness', time: '07:00', durationMins: 60, createdAt: 'x'),
+        Habit(id: '1', title: 'AM lift', category: 'strength', time: '07:00', durationMins: 60, createdAt: 'x'),
       ];
       final slots = densitySlots(habits);
       expect(slots.length, 48);
       // 07:00 = slot 14; 60 min spans slots 14 and 15.
-      expect(slots[14].categoryId, 'fitness');
-      expect(slots[15].categoryId, 'fitness');
+      expect(slots[14].categoryId, 'strength');
+      expect(slots[15].categoryId, 'strength');
       expect(slots[13].categoryId, isNull);
       expect(slots[16].categoryId, isNull);
     });

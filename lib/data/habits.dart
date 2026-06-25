@@ -61,10 +61,13 @@ class HabitCategory {
   const HabitCategory(this.id, this.label, this.emoji, this.color);
 }
 
+// Mirrors the PDF Table 2 habit categories.
 const Map<String, HabitCategory> habitCategories = {
-  'fitness': HabitCategory('fitness', 'Fitness', '💪', 0xFF4CE0C3),
+  'strength': HabitCategory('strength', 'Strength', '💪', 0xFF4CE0C3),
+  'performance': HabitCategory('performance', 'Performance', '⚡', 0xFF5B6AF8),
   'sleep': HabitCategory('sleep', 'Sleep', '😴', 0xFF8E8EFF),
   'diet': HabitCategory('diet', 'Diet', '🥗', 0xFFF6CF3E),
+  'aesthetics': HabitCategory('aesthetics', 'Aesthetics', '✨', 0xFFE67BE6),
   'other': HabitCategory('other', 'Other', '⚙️', 0xFFC28A67),
 };
 
