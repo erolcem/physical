@@ -6,6 +6,8 @@ Shapes vary: the date may be `container.date` (resting HR) or buried (weight:
 per night that expands into several background metrics. `source_id` is stable
 per (metric, day) so re-syncing is idempotent.
 """
+from datetime import datetime, timedelta
+
 SOURCE = "google_health"
 
 _TOP_META = {"dataSource", "dataSourceFamily", "dataPointId", "originDataPointId",
@@ -116,16 +118,33 @@ def _sleep_score(container: dict, summary: dict, asleep_min, efficiency_pct,
     return round(100 * (0.5 * dur + 0.25 * eff + 0.25 * comp), 1)
 
 
+def _sleep_day(c: dict) -> str | None:
+    """The night's LOCAL calendar day — startTime adjusted by its UTC offset — so a
+    night beginning late local-evening is attributed to the right day (the raw
+    startTime is UTC, e.g. 2026-06-24T15:54Z + 10h = the 25th locally)."""
+    interval = c.get("interval") or {}
+    start = interval.get("startTime")
+    if not isinstance(start, str):
+        return _find_date(c)
+    try:
+        dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        off = str(interval.get("startUtcOffset", "0s")).rstrip("s")
+        local = dt + timedelta(seconds=int(off or 0))
+        return f"{local.year:04d}-{local.month:02d}-{local.day:02d}"
+    except Exception:
+        return start[:10]
+
+
 def _sleep_samples(datapoints: list[dict]) -> list[dict]:
     """One night → sleep_score (0–100, ranked) + sleep_duration (hrs),
-    sleep_efficiency (%), deep/rem minutes (background)."""
+    sleep_efficiency (%), deep/rem minutes, time-to-sleep, and full awakenings."""
     out = []
     for p in datapoints:
         c = _container(p)
         if not c:
             continue
         summary = c.get("summary") or {}
-        day = (((c.get("interval") or {}).get("startTime")) or "")[:10] or _find_date(c)
+        day = _sleep_day(c)
         if not day:
             continue
         asleep = _to_float(summary.get("minutesAsleep"))
@@ -136,16 +155,22 @@ def _sleep_samples(datapoints: list[dict]) -> list[dict]:
         if asleep and period:
             eff = round(asleep / period * 100, 1)
             out.append(_sample("sleep_efficiency", day, eff, summary))
+        ttfa = _to_float(summary.get("minutesToFallAsleep"))
+        if ttfa is not None:
+            out.append(_sample("time_to_sleep", day, ttfa, summary))
         for st in (summary.get("stagesSummary") or []):
+            t = st.get("type")
             mins = _to_float(st.get("minutes"))
-            if mins is None:
-                continue
-            if st.get("type") == "DEEP":
+            if t == "DEEP" and mins is not None:
                 deep = mins
                 out.append(_sample("deep_sleep", day, mins, st))
-            elif st.get("type") == "REM":
+            elif t == "REM" and mins is not None:
                 rem = mins
                 out.append(_sample("rem_sleep", day, mins, st))
+            elif t == "AWAKE":
+                cnt = _to_float(st.get("count"))
+                if cnt is not None:
+                    out.append(_sample("full_awakenings", day, cnt, st))
         score = _sleep_score(c, summary, asleep, eff, deep, rem)
         if score is not None:
             out.append(_sample("sleep_score", day, score, summary))

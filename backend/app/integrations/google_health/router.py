@@ -69,12 +69,15 @@ def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
         try:
             status, body = client.get_raw(
                 f"/users/me/dataTypes/{data_type}/dataPoints?pageSize=10")
-            if isinstance(body, dict):
+            if status >= 400:
+                # Surface Google's actual error (it usually names the valid type).
+                out[metric_id] = {"status": status, "error": body}
+            elif isinstance(body, dict):
                 pts = body.get("dataPoints") or []
-                sample = pts[0] if pts else {"_no_dataPoints": True, "keys": list(body.keys())}
+                out[metric_id] = {"status": status,
+                                  "sample": pts[0] if pts else {"_no_dataPoints": True, "keys": list(body.keys())}}
             else:
-                sample = str(body)[:300]
-            out[metric_id] = {"status": status, "sample": sample}
+                out[metric_id] = {"status": status, "sample": str(body)[:300]}
         except Exception as e:
             out[metric_id] = {"error": str(e)[:300]}
     # Extra probes for the features still pending — profile (height/DOB→age) and

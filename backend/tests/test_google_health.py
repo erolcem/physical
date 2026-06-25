@@ -63,6 +63,26 @@ def test_sleep_expands_to_duration_efficiency_and_stages():
     assert all(s["ts"] == "2026-06-23T00:00:00" for s in out.values())
 
 
+def test_sleep_real_shape_local_day_and_subfields():
+    # The exact /debug shape: +10h offset, time-to-sleep, AWAKE count.
+    pts = [{"name": "x", "dataSource": {}, "sleep": {
+        "interval": {"startTime": "2026-06-24T15:54:00Z", "startUtcOffset": "36000s",
+                     "endTime": "2026-06-24T21:58:00Z", "endUtcOffset": "36000s"},
+        "summary": {"minutesInSleepPeriod": "364", "minutesAsleep": "349",
+                    "minutesToFallAsleep": "0", "minutesAwake": "15",
+                    "stagesSummary": [{"type": "AWAKE", "minutes": "14", "count": "1"},
+                                      {"type": "LIGHT", "minutes": "195", "count": "11"},
+                                      {"type": "DEEP", "minutes": "73", "count": "5"},
+                                      {"type": "REM", "minutes": "80", "count": "5"}]}}}]
+    out = {s["metric_id"]: s for s in mapping.to_samples("sleep", pts)}
+    # +10h offset moves the UTC start (24th) to the LOCAL 25th.
+    assert all(s["ts"] == "2026-06-25T00:00:00" for s in out.values())
+    assert out["time_to_sleep"]["value"] == 0.0
+    assert out["full_awakenings"]["value"] == 1.0
+    assert out["deep_sleep"]["value"] == 73.0 and out["rem_sleep"]["value"] == 80.0
+    assert out["sleep_efficiency"]["value"] == 95.9  # 349/364×100
+
+
 def test_sleep_score_derived_lands_near_population_mean():
     # 7h asleep, 87.5% efficiency, ~29% deep+REM → a middling night ≈ engine mean (77).
     pts = [{"dataSource": {}, "sleep": {
