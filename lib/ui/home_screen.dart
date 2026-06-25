@@ -275,6 +275,10 @@ const List<(String, String, IconData)> _rankedCategories = [
   ('recovery', 'Recovery', Icons.favorite),
 ];
 
+const List<String> _tierOrder = [
+  'Wood', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Champion', 'Titan', 'Glory'
+];
+
 void openOverallBreakdown(BuildContext context) {
   showModalBottomSheet(
     context: context,
@@ -299,6 +303,15 @@ class _OverallBreakdownSheet extends ConsumerWidget {
         ref.watch(logsProvider).values.fold<int>(0, (a, b) => a + b.length);
     final metricsActive =
         latest.keys.where((id) => eng.standards.containsKey(id)).length;
+    // Figure 3 "RANK BADGES" — how many ranked metrics sit at each tier.
+    final dist = <String, int>{};
+    for (final e in latest.entries) {
+      if (!eng.standards.containsKey(e.key)) continue;
+      try {
+        final t = eng.scoreLog(e.value).tier;
+        dist[t] = (dist[t] ?? 0) + 1;
+      } catch (_) {/* strength log missing its bodyweight snapshot — skip */}
+    }
 
     return SafeArea(
       child: ConstrainedBox(
@@ -327,6 +340,15 @@ class _OverallBreakdownSheet extends ConsumerWidget {
             const SizedBox(height: 10),
             for (final (id, name, icon) in _rankedCategories)
               _categoryRow(name, icon, cats[id]),
+            const SizedBox(height: 12),
+            Text('RANK DISTRIBUTION', style: _secTitle()),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [for (final t in _tierOrder) _distChip(t, dist[t] ?? 0)],
+            ),
           ]),
         ),
       ),
@@ -337,6 +359,28 @@ class _OverallBreakdownSheet extends ConsumerWidget {
         Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
         Text(label, style: const TextStyle(fontSize: 9, letterSpacing: 1.2, color: _muted, fontWeight: FontWeight.w700)),
       ]);
+
+  // One tier's badge + count (figure 3). Dimmed when no metric sits there.
+  Widget _distChip(String tier, int count) {
+    final col = tierColor(tier);
+    final on = count > 0;
+    return Container(
+      width: 64,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: on ? col.withValues(alpha: 0.12) : _surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: on ? col.withValues(alpha: 0.4) : _border),
+      ),
+      child: Column(children: [
+        Text('$count',
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w900, color: on ? col : _muted)),
+        Text(tier,
+            style: TextStyle(fontSize: 9, color: on ? col : _muted, fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
 
   Widget _categoryRow(String name, IconData icon, RankResult? r) {
     final ranked = r != null;
