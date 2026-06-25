@@ -4,8 +4,10 @@ A complete map of the system: every layer, how data flows, and where each featur
 from the plan lives. Companion to `GUIDE.md` (usage), `backend/DEPLOY.md` (hosting),
 `backend/VERIFICATION.md` (Google review), and `All readmes/` (the design docs + PDF).
 
-**Status:** the **entire plan (Parts 1–7, AI coach included)** is implemented.
-103 Flutter tests + 45 backend tests green, 0 analyzer issues, Python⇄Dart engine
+**Status:** the **entire plan (Parts 1–7, AI coach included)** is implemented,
+including the complex exercise + diet logging and the coach's agentic actions,
+dynamic volume auto-regulation, context transparency, and correlation pinning.
+120 Flutter tests + 47 backend tests green, 0 analyzer issues, Python⇄Dart engine
 parity to ~1e-5. Hosted on Railway; iPhone via TestFlight. The coach runs on
 **Gemini** to stay in the user's Google ecosystem.
 
@@ -117,6 +119,15 @@ What it does:
   efficiency / deep / REM / **derived sleep_score**), plus background steps /
   active-zone / energy.
 
+### Layer F2 — Exercise + diet logging (PDF Part 1, the "big" data types)
+- **Workout** (`data/workout.dart` + `ui/workout_screen.dart`): a session is a dated
+  list of sets → total **volume** + the **best set per exercise**, which updates that
+  lift's rank (1RM/rep-volume). Rollups (volume/sessions/muscles over 7d) feed the AI.
+- **Diet** (`data/diet.dart` + `ui/diet_screen.dart`): food entries with macros →
+  **daily totals** (energy/protein/…), fed to the AI.
+- Both local-first (own storage keys) via `state/log_providers.dart`; reached from
+  the **Log** FAB (Metric / Workout / Food).
+
 ### Layer F — Habits (accountability + planner, Phase 2)
 `lib/data/habits.dart` (pure logic) + `state/habit_providers.dart` + the Habits tab:
 - **Accountability:** daily check-off, streaks (today-or-yesterday aware),
@@ -160,6 +171,9 @@ the **Coach tab** (`coach_screen.dart`):
   per timed habit (flutter_local_notifications + timezone), pure reminder logic
   unit-tested, scheduler guarded to iOS/Android (no-op elsewhere), re-synced on any
   habit change.
+- **Strategic correlations** (`data/correlation.dart`): the coach can `pin_correlation`
+  a metric pair; the dashboard's *Coach insights* computes Pearson r from local logs.
+- The coach context also includes today's **diet**, last-7d **training**, and **aesthetics**.
 
 ---
 
@@ -223,12 +237,12 @@ test/ (Flutter) + backend/tests/ (pytest) + test/golden_vectors.json
 
 ---
 
-## 7. Tests (148 total)
-- **Flutter (103):** engine parity vs golden vectors, system-verification
+## 7. Tests (167 total)
+- **Flutter (120):** engine parity vs golden vectors, system-verification
   (registry↔engine, PDF categories, every lift ranks, directions, overall/category),
   habits (streaks/verification/planner/weekly/calendar), profile, sync, and an
   **all-tabs runtime smoke test** (now 5 tabs incl. Coach).
-- **Backend (45):** engine load + coverage, auth, samples (incl. isolation
+- **Backend (47):** engine load + coverage, auth, samples (incl. isolation
   rep-volume + raw 1RM), ranks, Google Health mapping (every dataType shape +
   derived sleep score + background metrics), friends (request/accept/rank/privacy),
   coach (PII-free context + chat with Gemini mocked + guards), legal pages.
