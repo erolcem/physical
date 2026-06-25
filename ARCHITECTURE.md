@@ -260,3 +260,50 @@ test/ (Flutter) + backend/tests/ (pytest) + test/golden_vectors.json
 | 6 — Friends / sharing / QoL | ✅ add-by-email → accept → compare overall ranks + share |
 | 7 — Underlying mathematics | ✅ (exceeds the doc) |
 ```
+
+---
+
+## 9. File map (every file: what it does · what to improve)
+
+**Engine — the honest-ranking core (must stay in parity)**
+- `lib/engine/physical_rank_engine.py` (canonical) — distributions, CDF→percentile, tiers, mixture strength standards, `strength_value`, `est_1rm`. *Improve: ground the untrained/trained medians + isolation anchors with real data (the one soft spot).*
+- `lib/engine/rank_engine.dart` — faithful Dart port. *Improve: edit only in lockstep with the .py; golden vectors guard drift.*
+
+**App · data (`lib/data/`)**
+- `metrics.dart` — THE metric registry (id/label/category/tier/unit). *Improve: add/edit metrics here; everything is generated from it.*
+- `repository.dart` — storage seam (interface + InMemory + demo seed). *Improve: the one place to add a new stored type.*
+- `persistent_repository.dart` — shared_preferences impl (per-type keys). *Improve: add a `v2` migration if a model's JSON changes.*
+- `sync.dart` — cloud sync + `kBackendUrl` + `apiClientProvider`.
+- `api_client.dart` — all backend HTTP calls (auth, samples, ranks, google, friends, coach). *Improve: centralise error→message mapping.*
+- `habits.dart` — Habit model + streaks + verification + planner (category/time/duration/cost) + density + weekly + calendar URL.
+- `profile.dart` — ProfileData (age/gender/height/weight/bodyfat + BMI).
+- `diet.dart` — FoodEntry + daily totals. *Improve: micronutrient/gut-health score (needs a food DB).*
+- `workout.dart` — WorkoutSession/Set → volume + best-set. *Improve: two-step verification vs a Google Health workout session.*
+- `correlation.dart` — Pearson + day-alignment + pin model.
+- `notifications.dart` — daily habit reminders (guarded iOS/Android). *Improve: verify on-device; foreground-present delegate on iOS.*
+- `body_figure_data.dart` — front/back/inner SVG muscle polygons (ported).
+
+**App · state (`lib/state/`)** — Riverpod notifiers
+- `providers.dart` (logs, ranks, overall/category), `habit_providers.dart`, `profile_providers.dart`, `log_providers.dart` (diet, workout, pins).
+
+**App · UI (`lib/ui/`)**
+- `main_screen.dart` — 5 tabs + Log FAB (Metric/Workout/Food) + reminder re-sync.
+- `home_screen.dart` — overall card, **coach-pinned insights**, body graph, metric grids. *Largest file (734 lines) — candidate to split.*
+- `progress_screen.dart` — category cards → graph page + correlation. *Largest UI; could extract the chart widget.*
+- `habits_screen.dart` — accountability + planner + weekly + calendar.
+- `coach_screen.dart` — AI chat, suggested prompts, agentic Apply cards, "What I see" context sheet.
+- `profile_screen.dart` — profile form + share-rank + Friends section.
+- `metric_detail_sheet.dart` — rank, tier ladder, history, log form.
+- `diet_screen.dart` / `workout_screen.dart` — the two logging flows.
+- `body_graph.dart` (CustomPainter + hit-test) · `badge.dart` (SVG medallions) · `cloud_sheet.dart` (sign-in + sync).
+- `main.dart` — entry; loads repo, fires notification setup, runs app.
+
+**Backend (`backend/app/`)**
+- `main.py` (app + routers + CORS), `config.py` (env settings), `db.py` (engine/session), `models.py` (User/Profile/Sample/Friendship/GoogleHealthToken), `schemas.py` (Pydantic), `engine.py` (imports the canonical engine), `ranking.py` (samples→ranks), `registry.py` (ranked categories), `jobs.py` (scheduled sync), `auth.py` (JWT + current_user), `coach.py` (context + system prompt + action parser).
+- `routers/` — `auth, health, legal, profile, ranks, samples, friends, coach`.
+- `integrations/google_health/` — `oauth, client, mapping, router`. *Improve: confirm steps/active-zone/energy type names + deeper sleep fields via `/debug`; auto "exercises"/energy pull.*
+- `integrations/gemini/client.py` — Gemini call. *Improve: streaming; true function-calling; model fallback.*
+
+**Tests** — `test/` (9 Dart: engine parity, system-verification, habits, profile, diet/workout, correlation, notifications, sync, all-tabs smoke) + `backend/tests/` (8: engine, auth, samples, ranks, google_health, friends, coach, + conftest).
+
+**Config / docs** — `pubspec.yaml`, `analysis_options.yaml`, `codemagic.yaml` (TestFlight), `railway.json` (deploy), `backend/Dockerfile`, `backend/DEPLOY.md`, `backend/VERIFICATION.md`, `GUIDE.md`, `ARCHITECTURE.md`, `All readmes/` (design docs + the PDF + STATUS/STANDARDS).
