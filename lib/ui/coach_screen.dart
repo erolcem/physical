@@ -104,7 +104,7 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     final t = todayDiet(ref.read(dietProvider));
     return {
       'calories': t.calories, 'protein': t.protein,
-      'carbs': t.carbs, 'fat': t.fat, 'items': t.items,
+      'carbs': t.carbs, 'fat': t.fat, 'fibre': t.fibre, 'items': t.items,
     };
   }
 

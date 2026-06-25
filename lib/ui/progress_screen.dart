@@ -8,6 +8,7 @@
 // Pearson correlation readout when two are compared. Every metric is loggable
 // from its page (manual entry, plus auto-sync from Google Health where available).
 import 'package:flutter/material.dart';
+import 'diet_screen.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math' as math;
@@ -114,8 +115,12 @@ class _CategoryCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => CategoryGraphPage(categoryId: id, title: title))),
+          // Diet gets its own holistic layout (macros + trend); others use the
+          // generic per-category graph page.
+          onTap: () => id == 'diet'
+              ? openDietScreen(context)
+              : Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => CategoryGraphPage(categoryId: id, title: title))),
           child: Ink(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(

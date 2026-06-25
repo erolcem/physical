@@ -25,11 +25,33 @@ void main() {
       expect(entriesFor(entries, '2026-06-23').single.name, 'Old');
     });
 
-    test('FoodEntry json round-trip', () {
-      final back = FoodEntry.fromJson(entries[0].toJson());
-      expect(back.name, 'Eggs');
-      expect(back.calories, 200);
-      expect(back.protein, 18);
+    test('FoodEntry json round-trip incl. fibre', () {
+      const e = FoodEntry(id: '1', dateKey: '2026-06-24', name: 'Oats', calories: 300, fibre: 8);
+      final back = FoodEntry.fromJson(e.toJson());
+      expect(back.name, 'Oats');
+      expect(back.fibre, 8);
+    });
+
+    test('totals sum fibre; macro kcal split', () {
+      const day = [
+        FoodEntry(id: '1', dateKey: 'd', name: 'a', protein: 30, carbs: 40, fat: 10, fibre: 5),
+        FoodEntry(id: '2', dateKey: 'd', name: 'b', fibre: 3),
+      ];
+      final t = dietTotals(day, 'd');
+      expect(t.fibre, 8);
+      expect(t.proteinKcal, 120); // 30g × 4
+      expect(t.fatKcal, 90); // 10g × 9
+    });
+
+    test('caloriesLastNDays returns the day-by-day trend ending today', () {
+      const day = [
+        FoodEntry(id: '1', dateKey: '2026-06-24', name: 'a', calories: 500),
+        FoodEntry(id: '2', dateKey: '2026-06-24', name: 'b', calories: 200),
+      ];
+      final trend = caloriesLastNDays(day, n: 3, today: DateTime(2026, 6, 24));
+      expect(trend.length, 3);
+      expect(trend.last, 700); // today
+      expect(trend.first, 0); // two days ago, nothing
     });
   });
 

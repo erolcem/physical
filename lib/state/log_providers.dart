@@ -25,6 +25,7 @@ class DietNotifier extends StateNotifier<List<FoodEntry>> {
     double protein = 0,
     double carbs = 0,
     double fat = 0,
+    double fibre = 0,
   }) {
     if (name.trim().isEmpty) return;
     repo.saveFood(FoodEntry(
@@ -35,6 +36,7 @@ class DietNotifier extends StateNotifier<List<FoodEntry>> {
       protein: protein,
       carbs: carbs,
       fat: fat,
+      fibre: fibre,
     ));
     state = repo.loadFood();
   }
