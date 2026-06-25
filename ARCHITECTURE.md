@@ -4,9 +4,10 @@ A complete map of the system: every layer, how data flows, and where each featur
 from the plan lives. Companion to `GUIDE.md` (usage), `backend/DEPLOY.md` (hosting),
 `backend/VERIFICATION.md` (Google review), and `All readmes/` (the design docs + PDF).
 
-**Status:** all non-AI features of the plan (Parts 1–4, **6**, 7) implemented.
-100 Flutter tests + 36 backend tests green, 0 analyzer issues, Python⇄Dart engine
-parity to ~1e-5. Hosted on Railway; iPhone via TestFlight.
+**Status:** the **entire plan (Parts 1–7, AI coach included)** is implemented.
+100 Flutter tests + 42 backend tests green, 0 analyzer issues, Python⇄Dart engine
+parity to ~1e-5. Hosted on Railway; iPhone via TestFlight. The coach runs on
+**Gemini** to stay in the user's Google ecosystem.
 
 ---
 
@@ -89,7 +90,7 @@ What it does:
 - **Imports `physical_rank_engine.py` directly** (`app/engine.py`) — single source
   of truth, no drift.
 - **Routers:** `health`, `legal` (`/privacy`,`/terms`), `auth`, `profile`,
-  `samples`, `ranks`, `friends`, and the Google Health integration.
+  `samples`, `ranks`, `friends`, `coach`, and the Google Health integration.
 - **Canonical `sample`** keyed by user, idempotent dedup on
   `(user, metric, source, source_id)`; server-side `strength_value` from raw
   `{weight, reps}`.
@@ -133,6 +134,19 @@ What it does:
   other's **overall rank only** (tier/sub/top% — never raw samples), a mini
   leaderboard sorted by rank. Privacy is by mutual consent (`pending|accepted`).
 - Plus the **Share my rank** clipboard slice. Friends require sign-in.
+
+### Layer H — AI coach (PDF Part 5)
+`backend/app/coach.py` + `routers/coach.py` + `integrations/gemini/client.py` +
+the **Coach tab** (`coach_screen.dart`):
+- On **Gemini** (Flash) to stay in the user's Google ecosystem; key from Google AI
+  Studio via `GEMINI_API_KEY` (the app owner's). Cheap + fast.
+- `/me/coach/chat` builds a **PII-scrubbed** context from the user's real data —
+  overall/category ranks, weakest/strongest metric, recent recovery readings (its
+  canonical store) plus the app-supplied **habits + profile** — and a system prompt
+  that enforces *coach-not-clinician* framing and "ground every claim in the data".
+- The Coach tab is a chat (bubbles, suggested prompts, typing indicator) that sends
+  the live habits/profile each message; `/me/coach/status` gates a clean
+  "not configured" notice. Requires sign-in.
 
 ---
 
@@ -196,15 +210,15 @@ test/ (Flutter) + backend/tests/ (pytest) + test/golden_vectors.json
 
 ---
 
-## 7. Tests (136 total)
+## 7. Tests (142 total)
 - **Flutter (100):** engine parity vs golden vectors, system-verification
   (registry↔engine, PDF categories, every lift ranks, directions, overall/category),
   habits (streaks/verification/planner/weekly/calendar), profile, sync, and an
-  **all-tabs runtime smoke test**.
-- **Backend (36):** engine load + coverage, auth, samples (incl. isolation
+  **all-tabs runtime smoke test** (now 5 tabs incl. Coach).
+- **Backend (42):** engine load + coverage, auth, samples (incl. isolation
   rep-volume + raw 1RM), ranks, Google Health mapping (every dataType shape +
   derived sleep score + background metrics), friends (request/accept/rank/privacy),
-  legal pages.
+  coach (PII-free context + chat with Gemini mocked + guards), legal pages.
 
 ---
 
@@ -215,7 +229,7 @@ test/ (Flutter) + backend/tests/ (pytest) + test/golden_vectors.json
 | 2 — Graphs (category cards + comparison/correlation) | ✅ |
 | 3 — Body graph & Ranks (tiers, sub-ranks, Glory, overall/category, correlation) | ✅ |
 | 4 — Habits (check-off, verification, planner, density, weekly, calendar) | ✅ (calendar via Google Calendar link) |
-| 5 — AI coach | ⏭️ excluded / future (Phase 3) |
+| 5 — AI coach | ✅ Gemini coach over the user's real (PII-scrubbed) data |
 | 6 — Friends / sharing / QoL | ✅ add-by-email → accept → compare overall ranks + share |
 | 7 — Underlying mathematics | ✅ (exceeds the doc) |
 ```
