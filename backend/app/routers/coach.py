@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth import current_user
-from ..coach import compose_system
+from ..coach import compose_system, parse_actions
 from ..config import settings
 from ..db import get_db
 from ..integrations.gemini import client as gemini
@@ -37,4 +37,5 @@ def chat(body: CoachChatIn,
         reply = gemini.generate(system, turns)
     except gemini.GeminiError as e:
         raise HTTPException(502, f"Coach unavailable: {e}")
-    return CoachChatOut(reply=reply)
+    clean, actions = parse_actions(reply)
+    return CoachChatOut(reply=clean, actions=actions)

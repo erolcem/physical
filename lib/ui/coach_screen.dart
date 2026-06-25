@@ -12,6 +12,7 @@ import '../state/profile_providers.dart';
 const _bg = Color(0xFF08091A);
 const _card = Color(0xFF12152E);
 const _accent = Color(0xFF5B6AF8);
+const _teal = Color(0xFF4CE0C3);
 const _muted = Color(0xFF7880A8);
 
 const _suggestions = [
@@ -24,7 +25,8 @@ const _suggestions = [
 class _Msg {
   final String role; // 'user' | 'model'
   final String text;
-  const _Msg(this.role, this.text);
+  final List<Map<String, dynamic>> actions; // confirmable habit changes
+  _Msg(this.role, this.text, {this.actions = const []});
 }
 
 class CoachTab extends ConsumerStatefulWidget {
@@ -105,9 +107,12 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     });
     _scrollToBottom();
     try {
-      final reply = await api.coachChat(
+      final res = await api.coachChat(
           message: text, history: history, habits: _habitsCtx(), profile: _profileCtx());
-      if (mounted) setState(() => _messages.add(_Msg('model', reply)));
+      final reply = (res['reply'] as String?) ?? '';
+      final actions =
+          ((res['actions'] as List?) ?? const []).cast<Map<String, dynamic>>();
+      if (mounted) setState(() => _messages.add(_Msg('model', reply, actions: actions)));
     } on ApiException catch (e) {
       if (mounted) {
         setState(() => _messages.add(_Msg('model',
@@ -116,7 +121,7 @@ class _CoachTabState extends ConsumerState<CoachTab> {
                 : "Sorry, I couldn't respond just now. Try again in a moment.")));
       }
     } catch (_) {
-      if (mounted) setState(() => _messages.add(const _Msg('model', "Couldn't reach the coach.")));
+      if (mounted) setState(() => _messages.add(_Msg('model', "Couldn't reach the coach.")));
     } finally {
       if (mounted) setState(() => _sending = false);
       _scrollToBottom();
@@ -172,8 +177,8 @@ class _CoachTabState extends ConsumerState<CoachTab> {
                 padding: const EdgeInsets.all(14),
                 itemCount: _messages.length + (_sending ? 1 : 0),
                 itemBuilder: (_, i) {
-                  if (i >= _messages.length) return _bubble(const _Msg('model', '…'));
-                  return _bubble(_messages[i]);
+                  if (i >= _messages.length) return _bubble(_Msg('model', '…'));
+                  return _messageWidget(_messages[i]);
                 },
               ),
       ),
@@ -212,6 +217,69 @@ class _CoachTabState extends ConsumerState<CoachTab> {
           ),
         ],
       );
+
+  Widget _messageWidget(_Msg m) {
+    if (m.actions.isEmpty) return _bubble(m);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _bubble(m),
+      for (final a in m.actions) _actionCard(a),
+    ]);
+  }
+
+  Widget _actionCard(Map<String, dynamic> a) {
+    final applied = a['_applied'] == true;
+    final isAdd = a['type'] == 'add_habit';
+    final title = a['title'] as String? ?? '';
+    final desc = isAdd
+        ? 'Add habit: $title'
+            '${a['category'] != null ? ' · ${a['category']}' : ''}'
+            '${a['durationMins'] != null ? ' · ${a['durationMins']}min' : ''}'
+            '${a['time'] != null ? ' · ${a['time']}' : ''}'
+        : 'Remove habit: $title';
+    return Container(
+      margin: const EdgeInsets.only(top: 6, right: 40, bottom: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _accent.withValues(alpha: 0.4)),
+      ),
+      child: Row(children: [
+        Icon(isAdd ? Icons.add_circle_outline : Icons.remove_circle_outline,
+            color: _accent, size: 18),
+        const SizedBox(width: 8),
+        Expanded(child: Text(desc, style: const TextStyle(fontSize: 12.5))),
+        if (applied)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: Text('Applied ✓',
+                style: TextStyle(color: _teal, fontWeight: FontWeight.w700, fontSize: 12)),
+          )
+        else
+          TextButton(
+            onPressed: () => _applyAction(a),
+            style: TextButton.styleFrom(foregroundColor: _accent),
+            child: const Text('Apply'),
+          ),
+      ]),
+    );
+  }
+
+  void _applyAction(Map<String, dynamic> a) {
+    final notifier = ref.read(habitsProvider.notifier);
+    if (a['type'] == 'add_habit') {
+      notifier.addHabit(a['title'] as String,
+          category: (a['category'] as String?) ?? 'other',
+          time: a['time'] as String?,
+          durationMins: (a['durationMins'] as num?)?.toInt() ?? 0);
+    } else if (a['type'] == 'remove_habit') {
+      final title = (a['title'] as String? ?? '').toLowerCase();
+      final hs = ref.read(habitsProvider);
+      final match = hs.habits.where((h) => h.title.toLowerCase() == title);
+      if (match.isNotEmpty) notifier.removeHabit(match.first.id);
+    }
+    setState(() => a['_applied'] = true);
+  }
 
   Widget _bubble(_Msg m) {
     final isUser = m.role == 'user';

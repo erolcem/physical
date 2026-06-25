@@ -253,7 +253,9 @@ class ApiClient {
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
-  Future<String> coachChat({
+  /// Returns {reply: String, actions: List} — actions are confirmable habit
+  /// changes the coach proposed.
+  Future<Map<String, dynamic>> coachChat({
     required String message,
     List<Map<String, String>> history = const [],
     List<Map<String, dynamic>> habits = const [],
@@ -270,6 +272,6 @@ class ApiClient {
             }))
         .timeout(const Duration(seconds: 60));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
-    return (jsonDecode(r.body) as Map<String, dynamic>)['reply'] as String;
+    return jsonDecode(r.body) as Map<String, dynamic>;
   }
 }

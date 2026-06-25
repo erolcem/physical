@@ -106,3 +106,4 @@ class CoachChatIn(BaseModel):
 
 class CoachChatOut(BaseModel):
     reply: str
+    actions: list[dict] = []  # confirmable habit changes the coach proposed

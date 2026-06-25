@@ -1,6 +1,29 @@
 """AI coach: PII-free context assembly, status, the chat endpoint (Gemini mocked),
 and the unconfigured/auth guards."""
-from app.coach import build_context, compose_system
+from app.coach import build_context, compose_system, parse_actions
+
+
+def test_parse_actions_extracts_and_strips_valid_blocks():
+    text = ('Add some mobility work.\n'
+            '```action\n{"type": "add_habit", "title": "Mobility flow", '
+            '"category": "performance", "durationMins": 10, "time": "07:00"}\n```\n'
+            'Keep it up!')
+    clean, actions = parse_actions(text)
+    assert "```" not in clean and "Add some mobility work." in clean and "Keep it up!" in clean
+    assert actions == [{"type": "add_habit", "title": "Mobility flow",
+                        "category": "performance", "durationMins": 10, "time": "07:00"}]
+
+
+def test_parse_actions_sanitises_and_ignores_bad_blocks():
+    # bad category → 'other', bad json → ignored, unknown type → ignored, no title → ignored.
+    text = ('```action\n{"type":"add_habit","title":"X","category":"bogus"}\n```'
+            '```action\n{not json}\n```'
+            '```action\n{"type":"launch_rocket","title":"boom"}\n```'
+            '```action\n{"type":"remove_habit","title":"Old"}\n```')
+    _, actions = parse_actions(text)
+    assert {"type": "add_habit", "title": "X", "category": "other"} in actions
+    assert {"type": "remove_habit", "title": "Old"} in actions
+    assert len(actions) == 2  # the bad/unknown ones dropped
 
 
 def test_build_context_structured_and_pii_free():

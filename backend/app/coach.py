@@ -1,7 +1,11 @@
-"""AI coach (PDF Part 5) — context assembly + system prompt. Pure helpers so the
-prompt is unit-tested; the Gemini network call lives in the router. Only metrics,
-ranks, and habits go to the model — never identifiers (PII-scrubbed).
+"""AI coach (PDF Part 5) — context assembly, system prompt, and agentic-action
+parsing. Pure helpers so they're unit-tested; the Gemini network call lives in the
+router. Only metrics, ranks, and habits go to the model — never identifiers
+(PII-scrubbed).
 """
+import json
+import re
+
 from .ranking import compute_ranks
 
 SYSTEM_PROMPT = (
@@ -14,8 +18,53 @@ SYSTEM_PROMPT = (
     "weakest areas.\n"
     "You are a coach, not a clinician: do not diagnose or give medical advice; for "
     "anything medical, add a brief note to consult a professional. If data is "
-    "missing, say so and suggest logging or syncing it rather than guessing."
+    "missing, say so and suggest logging or syncing it rather than guessing.\n\n"
+    "When you recommend the user ADD or REMOVE a specific habit, append a fenced "
+    "block so they can apply it in one tap (they always confirm). Use exactly:\n"
+    "```action\n"
+    '{"type": "add_habit", "title": "Mobility flow", "category": "performance", '
+    '"durationMins": 10, "time": "07:00"}\n'
+    "```\n"
+    'or {"type": "remove_habit", "title": "<existing habit title>"}. category is one '
+    "of strength|performance|sleep|diet|aesthetics|other; include only the fields you "
+    "mean; keep titles short. Propose at most one or two actions per reply, and only "
+    "when clearly useful."
 )
+
+_ACTION_RE = re.compile(r"```action\s*(\{.*?\})\s*```", re.DOTALL)
+_ACTION_TYPES = {"add_habit", "remove_habit"}
+_CATEGORIES = {"strength", "performance", "sleep", "diet", "aesthetics", "other"}
+_TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
+
+
+def parse_actions(text: str):
+    """Extract validated agentic actions from ```action blocks, returning
+    (clean_text_without_blocks, actions). Malformed blocks are ignored — never
+    raises. The app shows each action as a one-tap, user-confirmed Apply button."""
+    actions = []
+    for m in _ACTION_RE.finditer(text):
+        try:
+            obj = json.loads(m.group(1))
+        except Exception:
+            continue
+        t = obj.get("type")
+        title = str(obj.get("title", "")).strip()[:60]
+        if t not in _ACTION_TYPES or not title:
+            continue
+        if t == "add_habit":
+            a = {"type": t, "title": title,
+                 "category": obj.get("category") if obj.get("category") in _CATEGORIES else "other"}
+            dur = obj.get("durationMins")
+            if isinstance(dur, (int, float)) and not isinstance(dur, bool):
+                a["durationMins"] = int(dur)
+            tm = obj.get("time")
+            if isinstance(tm, str) and _TIME_RE.match(tm):
+                a["time"] = tm
+            actions.append(a)
+        else:
+            actions.append({"type": t, "title": title})
+    clean = _ACTION_RE.sub("", text).strip()
+    return clean, actions
 
 # Metrics most useful to surface a recent value for, in context.
 _RECENT = ["sleep_score", "hrv", "resting_hr", "vo2max", "body_fat_pct"]
