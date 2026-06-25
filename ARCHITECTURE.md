@@ -147,6 +147,10 @@ the **Coach tab** (`coach_screen.dart`):
 - The Coach tab is a chat (bubbles, suggested prompts, typing indicator) that sends
   the live habits/profile each message; `/me/coach/status` gates a clean
   "not configured" notice. Requires sign-in.
+- **Agentic actions** (with confirmation): the coach emits fenced ```action JSON
+  blocks; `parse_actions()` safely extracts/sanitises them; the app renders each as
+  an **Apply** card (add/remove habit) that runs through the habits notifier —
+  nothing changes without the user's tap.
 
 ---
 
@@ -210,12 +214,12 @@ test/ (Flutter) + backend/tests/ (pytest) + test/golden_vectors.json
 
 ---
 
-## 7. Tests (142 total)
+## 7. Tests (144 total)
 - **Flutter (100):** engine parity vs golden vectors, system-verification
   (registry↔engine, PDF categories, every lift ranks, directions, overall/category),
   habits (streaks/verification/planner/weekly/calendar), profile, sync, and an
   **all-tabs runtime smoke test** (now 5 tabs incl. Coach).
-- **Backend (42):** engine load + coverage, auth, samples (incl. isolation
+- **Backend (44):** engine load + coverage, auth, samples (incl. isolation
   rep-volume + raw 1RM), ranks, Google Health mapping (every dataType shape +
   derived sleep score + background metrics), friends (request/accept/rank/privacy),
   coach (PII-free context + chat with Gemini mocked + guards), legal pages.
