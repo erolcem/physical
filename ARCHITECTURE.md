@@ -321,10 +321,12 @@ roster, a **weekly schedule** bar, per-habit **streaks** + a 7-day dot strip, an
 dims habits not scheduled today. (Monthly-cost was dropped per review.)
 
 ### 10.2 Workout logging (`data/workout.dart`, `ui/workout_screen.dart`)
-A session is a dated list of **sets** → **total volume** (Σ weight×reps) + the
-**best set per exercise**, which updates that lift's rank (1RM/rep-volume). 7-day
-rollups (volume/sessions/muscles) feed the coach — the PDF's "lifting exercise sets
-→ strength progress, volume, hit muscle groups."
+A real **tracker**: add an exercise → log its sets (weight × reps), repeat
+(`groupByExercise` renders sets grouped under each exercise). A session yields
+**total volume** (Σ weight×reps) + the **best set per exercise**, which updates that
+lift's rank (1RM/rep-volume). 7-day rollups (volume/sessions/muscles) feed the coach.
+*Remaining:* time-window dual-authorisation against the Google Health exercise
+session (needs the auto-exercises sync).
 
 ### 10.3 Diet logging (`data/diet.dart`, `ui/diet_screen.dart`)
 Food entries with macros (kcal + P/C/F) → **daily totals**, shown and fed to the
@@ -486,12 +488,11 @@ Google Health profile (height, date-of-birth→age, weight, body-fat) on sign-in
 manual only as fallback. *Needs:* the Google Health profile read scope/endpoint —
 confirm shape via `/debug`.
 
-**P1 · Workout logging = a real tracker.** *Current:* a session is a flat list of
-sets (exercise+weight+reps), best-set updates the rank, total volume tracked.
-*Target:* group sets **under each exercise** like a standard workout-tracker app;
-surface per-exercise + total **load/volume**; and **two-step verify against the
-Google Health exercise *session* in the same time window** — time-based dual
-authorisation is what makes the checklist trustworthy.
+**🟡 MOSTLY DONE · Workout logging = a real tracker.** Shipped: sets grouped under
+each exercise (add exercise → log its sets), per-exercise + total load/volume,
+best-set updates the rank. *Remaining:* the **time-window dual-authorisation against
+the Google Health exercise session** (needs the auto-exercises sync + a live `/debug`
+look at the Google session shape).
 
 **P1 · Diet = holistic, not just calories.** *Current:* kcal + macros (P/C/F) +
 daily totals. *Target:* fuller macro breakdown **+ micronutrients** (needs a food
@@ -516,7 +517,8 @@ discussion; Notifications; Habit-update-aware; deletable structured context;
 autonomous strategic-correlation pinning; dynamic volume auto-regulation on a
 daily-readiness drop). Voice = out of scope.
 
-**Build order:** (1) ✅ **Habits redesign** (done) → (2) Workout tracker (grouped sets
-+ Google-session dual-auth) → (3) Diet macros/micros + per-domain graph layouts →
-(4) Profile auto-port from Google Health → (5) Rank-badge/graph visual polish (Liftoff-
-style badges) → (6) Coach fixed-response selection. Each shipped behind its own tests.
+**Build order:** (1) ✅ **Habits redesign** → (2) 🟡 **Workout tracker** (grouped sets
+done; Google-session dual-auth pending live data) → (3) Diet macros/micros +
+per-domain graph layouts → (4) Profile auto-port from Google Health → (5) Rank-badge/
+graph visual polish (Liftoff-style) → (6) Coach fixed-response selection. Each shipped
+behind its own tests.
