@@ -1,5 +1,7 @@
 // main.dart — app entry. Loads the persistent repository before the app starts,
 // then overrides the provider so all state reads from on-device storage.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'data/notifications.dart';
@@ -11,8 +13,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final repo = await PersistentRepository.create();
   // Proactive habit reminders (no-op on desktop/web; iOS/Android only).
-  await NotificationService.instance.init();
-  await NotificationService.instance.syncHabitReminders(repo.loadHabits());
+  // Fire-and-forget so the iOS permission prompt never blocks first render.
+  unawaited(NotificationService.instance.init().then(
+      (_) => NotificationService.instance.syncHabitReminders(repo.loadHabits())));
   runApp(ProviderScope(
     overrides: [repositoryProvider.overrideWithValue(repo)],
     child: const PhysicalApp(),
