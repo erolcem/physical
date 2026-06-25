@@ -485,11 +485,10 @@ current state → target → priority. (Setup for any user is in `AI_SETUP.md`.)
 **Guiding correction — auto over manual (seamlessness).** If a metric *can* be
 auto-logged, it should be, not typed.
 
-**P1 · Profile ported from Google Health.** *Current:* weight + body-fat already
-sync as metrics; age/height/DOB are manual on the Profile tab. *Target:* pull the
-Google Health profile (height, date-of-birth→age, weight, body-fat) on sign-in/sync,
-manual only as fallback. *Needs:* the Google Health profile read scope/endpoint —
-confirm shape via `/debug`.
+**🟡 PARTLY DONE · Profile ported from Google Health.** Shipped: the Profile tab
+**auto-fills weight + body-fat from logs** (which include Google-synced samples), so
+they're not manual. *Remaining:* height + DOB/age from the Google Health **profile
+endpoint** (scope already requested; needs a live `/debug` to confirm the shape).
 
 **🟡 MOSTLY DONE · Workout logging = a real tracker.** Shipped: sets grouped under
 each exercise (add exercise → log its sets), per-exercise + total load/volume,
@@ -523,6 +522,7 @@ daily-readiness drop). Voice = out of scope.
 
 **Build order:** (1) ✅ **Habits redesign** → (2) 🟡 **Workout tracker** (grouped sets
 done; Google-session dual-auth pending live data) → (3) 🟡 **Diet** (holistic page +
-fibre + trend done; micros + exercise/sleep tailored layouts pending) → (4) Profile
-auto-port from Google Health → (5) Rank-badge/graph visual polish (Liftoff-style) →
-(6) Coach fixed-response selection. Each shipped behind its own tests.
+fibre + trend done; micros + exercise/sleep tailored layouts pending) → (4) 🟡
+**Profile auto-port** (weight/body-fat auto-filled; height/DOB pending live data) →
+(5) Rank-badge/graph visual polish (Liftoff-style) → (6) Coach fixed-response
+selection. Each shipped behind its own tests.
