@@ -2,6 +2,7 @@
 // (workout) logging. Saving a workout also updates each exercise's rank from its
 // best set, so the "big" data types feed straight into the ranks and the AI.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/correlation.dart';
 import '../data/diet.dart';
 import '../data/habits.dart' show todayKey;
 import '../data/repository.dart';
@@ -82,5 +83,26 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
   void remove(String id) {
     repo.deleteWorkout(id);
     state = repo.loadWorkouts();
+  }
+}
+
+final pinsProvider =
+    StateNotifierProvider<PinsNotifier, List<PinnedCorrelation>>((ref) {
+  return PinsNotifier(ref.watch(repositoryProvider));
+});
+
+class PinsNotifier extends StateNotifier<List<PinnedCorrelation>> {
+  final Repository repo;
+  PinsNotifier(this.repo) : super(repo.loadPins());
+
+  void add(String a, String b) {
+    if (a == b) return;
+    repo.addPin(PinnedCorrelation(a, b));
+    state = repo.loadPins();
+  }
+
+  void remove(String key) {
+    repo.removePin(key);
+    state = repo.loadPins();
   }
 }

@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../engine/rank_engine.dart' show Log;
+import 'correlation.dart';
 import 'diet.dart';
 import 'habits.dart';
 import 'profile.dart';
@@ -19,6 +20,7 @@ class PersistentRepository implements Repository {
   static const _profileKey = 'physical_profile_v1';
   static const _foodKey = 'physical_food_v1';
   static const _workoutKey = 'physical_workouts_v1';
+  static const _pinsKey = 'physical_pins_v1';
   final SharedPreferences _prefs;
   final Map<String, List<Log>> _cache;
   final List<Habit> _habits;
@@ -26,8 +28,9 @@ class PersistentRepository implements Repository {
   ProfileData _profile;
   final List<FoodEntry> _food;
   final List<WorkoutSession> _workouts;
+  final List<PinnedCorrelation> _pins;
   PersistentRepository._(this._prefs, this._cache, this._habits,
-      this._completions, this._profile, this._food, this._workouts);
+      this._completions, this._profile, this._food, this._workouts, this._pins);
 
   /// Load once at startup. First run seeds demo data, then persists it.
   static Future<PersistentRepository> create() async {
@@ -41,6 +44,7 @@ class PersistentRepository implements Repository {
       _decodeProfile(prefs.getString(_profileKey)),
       _decodeFood(prefs.getString(_foodKey)),
       _decodeWorkouts(prefs.getString(_workoutKey)),
+      _decodePins(prefs.getString(_pinsKey)),
     );
     if (raw == null) applyDemoSeed(repo); // first run only
     return repo;
@@ -136,6 +140,23 @@ class PersistentRepository implements Repository {
   }
 
   @override
+  List<PinnedCorrelation> loadPins() => List.of(_pins);
+
+  @override
+  void addPin(PinnedCorrelation pin) {
+    if (!_pins.any((p) => p.key == pin.key)) {
+      _pins.add(pin);
+      _persistPins();
+    }
+  }
+
+  @override
+  void removePin(String key) {
+    _pins.removeWhere((p) => p.key == key);
+    _persistPins();
+  }
+
+  @override
   void clear() {
     _cache.clear();
     _habits.clear();
@@ -143,13 +164,22 @@ class PersistentRepository implements Repository {
     _profile = ProfileData.empty;
     _food.clear();
     _workouts.clear();
+    _pins.clear();
     _persist();
     _persistHabits();
     _persistDone();
     _persistFood();
     _persistWorkouts();
+    _persistPins();
     unawaited(_prefs.remove(_profileKey));
   }
+
+  void _persistPins() => unawaited(_prefs.setString(
+      _pinsKey, jsonEncode([for (final p in _pins) p.toJson()])));
+
+  static List<PinnedCorrelation> _decodePins(String? s) => s == null
+      ? []
+      : [for (final p in (jsonDecode(s) as List)) PinnedCorrelation.fromJson(p as Map<String, dynamic>)];
 
   void _persistFood() => unawaited(_prefs.setString(
       _foodKey, jsonEncode([for (final e in _food) e.toJson()])));

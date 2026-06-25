@@ -3,6 +3,7 @@
 // fallback/default (and used in tests); PersistentRepository (shared_preferences)
 // is wired in main.dart for real on-device storage. Same interface either way.
 import '../engine/rank_engine.dart' show Log, strengthValue;
+import 'correlation.dart';
 import 'diet.dart';
 import 'habits.dart';
 import 'profile.dart';
@@ -34,6 +35,11 @@ abstract class Repository {
   List<WorkoutSession> loadWorkouts();
   void saveWorkout(WorkoutSession session);
   void deleteWorkout(String id);
+
+  // Strategic correlations (PDF Part 5) — pairs pinned to the dashboard.
+  List<PinnedCorrelation> loadPins();
+  void addPin(PinnedCorrelation pin);
+  void removePin(String key);
 }
 
 class InMemoryRepository implements Repository {
@@ -43,6 +49,7 @@ class InMemoryRepository implements Repository {
   ProfileData _profile = ProfileData.empty;
   final List<FoodEntry> _food = [];
   final List<WorkoutSession> _workouts = [];
+  final List<PinnedCorrelation> _pins = [];
 
   @override
   Map<String, List<Log>> loadLogs() =>
@@ -111,6 +118,17 @@ class InMemoryRepository implements Repository {
   void deleteWorkout(String id) => _workouts.removeWhere((w) => w.id == id);
 
   @override
+  List<PinnedCorrelation> loadPins() => List.of(_pins);
+
+  @override
+  void addPin(PinnedCorrelation pin) {
+    if (!_pins.any((p) => p.key == pin.key)) _pins.add(pin);
+  }
+
+  @override
+  void removePin(String key) => _pins.removeWhere((p) => p.key == key);
+
+  @override
   void clear() {
     _logs.clear();
     _habits.clear();
@@ -118,6 +136,7 @@ class InMemoryRepository implements Repository {
     _profile = ProfileData.empty;
     _food.clear();
     _workouts.clear();
+    _pins.clear();
   }
 
   InMemoryRepository seedDemo() {

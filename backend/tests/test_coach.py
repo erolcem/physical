@@ -14,6 +14,15 @@ def test_parse_actions_extracts_and_strips_valid_blocks():
                         "category": "performance", "durationMins": 10, "time": "07:00"}]
 
 
+def test_parse_actions_pin_correlation():
+    _, actions = parse_actions(
+        '```action\n{"type":"pin_correlation","a":"sleep_score","b":"bench"}\n```')
+    assert actions == [{"type": "pin_correlation", "a": "sleep_score", "b": "bench"}]
+    # a == b is dropped
+    _, none = parse_actions('```action\n{"type":"pin_correlation","a":"x","b":"x"}\n```')
+    assert none == []
+
+
 def test_parse_actions_sanitises_and_ignores_bad_blocks():
     # bad category → 'other', bad json → ignored, unknown type → ignored, no title → ignored.
     text = ('```action\n{"type":"add_habit","title":"X","category":"bogus"}\n```'

@@ -354,16 +354,33 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     ]);
   }
 
+  String _exLabel(String id) {
+    try {
+      return metricById(id).label;
+    } catch (_) {
+      return id;
+    }
+  }
+
   Widget _actionCard(Map<String, dynamic> a) {
     final applied = a['_applied'] == true;
-    final isAdd = a['type'] == 'add_habit';
+    final type = a['type'];
     final title = a['title'] as String? ?? '';
-    final desc = isAdd
-        ? 'Add habit: $title'
-            '${a['category'] != null ? ' · ${a['category']}' : ''}'
-            '${a['durationMins'] != null ? ' · ${a['durationMins']}min' : ''}'
-            '${a['time'] != null ? ' · ${a['time']}' : ''}'
-        : 'Remove habit: $title';
+    final String desc;
+    final IconData icon;
+    if (type == 'add_habit') {
+      icon = Icons.add_circle_outline;
+      desc = 'Add habit: $title'
+          '${a['category'] != null ? ' · ${a['category']}' : ''}'
+          '${a['durationMins'] != null ? ' · ${a['durationMins']}min' : ''}'
+          '${a['time'] != null ? ' · ${a['time']}' : ''}';
+    } else if (type == 'pin_correlation') {
+      icon = Icons.push_pin_outlined;
+      desc = 'Pin insight: ${_exLabel(a['a'] as String? ?? '')} ↔ ${_exLabel(a['b'] as String? ?? '')}';
+    } else {
+      icon = Icons.remove_circle_outline;
+      desc = 'Remove habit: $title';
+    }
     return Container(
       margin: const EdgeInsets.only(top: 6, right: 40, bottom: 2),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -373,8 +390,7 @@ class _CoachTabState extends ConsumerState<CoachTab> {
         border: Border.all(color: _accent.withValues(alpha: 0.4)),
       ),
       child: Row(children: [
-        Icon(isAdd ? Icons.add_circle_outline : Icons.remove_circle_outline,
-            color: _accent, size: 18),
+        Icon(icon, color: _accent, size: 18),
         const SizedBox(width: 8),
         Expanded(child: Text(desc, style: const TextStyle(fontSize: 12.5))),
         if (applied)
@@ -405,6 +421,12 @@ class _CoachTabState extends ConsumerState<CoachTab> {
       final hs = ref.read(habitsProvider);
       final match = hs.habits.where((h) => h.title.toLowerCase() == title);
       if (match.isNotEmpty) notifier.removeHabit(match.first.id);
+    } else if (a['type'] == 'pin_correlation') {
+      final am = a['a'] as String?, bm = a['b'] as String?;
+      if (am != null && bm != null &&
+          metrics.any((m) => m.id == am) && metrics.any((m) => m.id == bm)) {
+        ref.read(pinsProvider.notifier).add(am, bm);
+      }
     }
     setState(() => a['_applied'] = true);
   }

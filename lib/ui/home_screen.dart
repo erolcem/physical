@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/metrics.dart';
 import '../data/body_figure_data.dart';
+import '../data/correlation.dart';
 import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log, RankResult, strengthValue, isolationLifts;
+import '../state/log_providers.dart';
 import '../state/providers.dart';
 import 'badge.dart';
 import 'body_graph.dart';
@@ -42,6 +44,9 @@ class HomeTab extends ConsumerWidget {
             // 1. Overall rank card
             _OverallCard(overall, latest),
             const SizedBox(height: 14),
+
+            // 2. Coach-pinned correlations (PDF Part 5 "strategic correlations")
+            const _PinnedInsights(),
 
             // 3. Body graph section (gradient container)
             _BodyGraphSection(context),
@@ -82,6 +87,68 @@ class HomeTab extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PINNED INSIGHTS — correlations the coach pinned to the dashboard (PDF Part 5)
+// ═══════════════════════════════════════════════════════════════════════════
+class _PinnedInsights extends ConsumerWidget {
+  const _PinnedInsights();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pins = ref.watch(pinsProvider);
+    if (pins.isEmpty) return const SizedBox.shrink();
+    final logs = ref.watch(logsProvider);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const _SectionTitle('COACH INSIGHTS'),
+      const SizedBox(height: 8),
+      for (final p in pins) _pinCard(ref, p, logs),
+      const SizedBox(height: 16),
+    ]);
+  }
+
+  String _label(String id) {
+    try {
+      return metricById(id).label;
+    } catch (_) {
+      return id;
+    }
+  }
+
+  Widget _pinCard(WidgetRef ref, PinnedCorrelation p, Map<String, List<Log>> logs) {
+    final r = correlationOf(logs[p.a] ?? const [], logs[p.b] ?? const []);
+    final c = r == null
+        ? _muted
+        : (r >= 0 ? const Color(0xFF4CE0C3) : const Color(0xFFFA3737));
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: _bg3,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${_label(p.a)}  ↔  ${_label(p.b)}',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            const SizedBox(height: 2),
+            Text(
+                r == null
+                    ? 'Not enough overlapping data yet'
+                    : 'r = ${r.toStringAsFixed(2)} · ${correlationLabel(r)}',
+                style: TextStyle(fontSize: 12, color: c, fontWeight: FontWeight.w600)),
+          ]),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close, size: 16, color: _muted),
+          onPressed: () => ref.read(pinsProvider.notifier).remove(p.key),
+        ),
+      ]),
     );
   }
 }

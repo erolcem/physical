@@ -31,11 +31,15 @@ SYSTEM_PROMPT = (
     "when clearly useful.\n"
     "Dynamic volume auto-regulation: if recovery markers (sleep score, HRV, resting "
     "heart rate) look poor, proactively propose easing the plan — remove or lighten a "
-    "heavy training habit and/or add a short mobility/recovery one — via those actions."
+    "heavy training habit and/or add a short mobility/recovery one — via those actions.\n"
+    "Strategic correlations: if you suspect two metrics move together (e.g. deep sleep "
+    "and bench), pin it to their dashboard to watch with "
+    '{"type": "pin_correlation", "a": "<metric_id>", "b": "<metric_id>"} — metric ids '
+    "like sleep_score, hrv, resting_hr, vo2max, bench, squat, ohp, pullup, body_fat_pct."
 )
 
 _ACTION_RE = re.compile(r"```action\s*(\{.*?\})\s*```", re.DOTALL)
-_ACTION_TYPES = {"add_habit", "remove_habit"}
+_ACTION_TYPES = {"add_habit", "remove_habit", "pin_correlation"}
 _CATEGORIES = {"strength", "performance", "sleep", "diet", "aesthetics", "other"}
 _TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
 
@@ -51,20 +55,27 @@ def parse_actions(text: str):
         except Exception:
             continue
         t = obj.get("type")
+        if t not in _ACTION_TYPES:
+            continue
+        if t == "pin_correlation":
+            a, b = str(obj.get("a", "")).strip(), str(obj.get("b", "")).strip()
+            if a and b and a != b:
+                actions.append({"type": t, "a": a, "b": b})
+            continue
         title = str(obj.get("title", "")).strip()[:60]
-        if t not in _ACTION_TYPES or not title:
+        if not title:
             continue
         if t == "add_habit":
-            a = {"type": t, "title": title,
-                 "category": obj.get("category") if obj.get("category") in _CATEGORIES else "other"}
+            act = {"type": t, "title": title,
+                   "category": obj.get("category") if obj.get("category") in _CATEGORIES else "other"}
             dur = obj.get("durationMins")
             if isinstance(dur, (int, float)) and not isinstance(dur, bool):
-                a["durationMins"] = int(dur)
+                act["durationMins"] = int(dur)
             tm = obj.get("time")
             if isinstance(tm, str) and _TIME_RE.match(tm):
-                a["time"] = tm
-            actions.append(a)
-        else:
+                act["time"] = tm
+            actions.append(act)
+        else:  # remove_habit
             actions.append({"type": t, "title": title})
     clean = _ACTION_RE.sub("", text).strip()
     return clean, actions
