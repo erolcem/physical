@@ -35,10 +35,15 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
   void initState() {
     super.initState();
     final p = ref.read(profileProvider);
+    // Auto-fill weight + body-fat from logs (which include Google-synced data) so
+    // they aren't manual — "auto over manual". The user can still override + save.
+    final latest = ref.read(latestLogsProvider);
+    final autoWeight = p.weightKg ?? ref.read(currentBodyweightProvider);
+    final autoBodyFat = p.bodyFatPct ?? latest['body_fat_pct']?.value;
     _age = TextEditingController(text: p.age?.toString() ?? '');
     _height = TextEditingController(text: p.heightCm?.toString() ?? '');
-    _weight = TextEditingController(text: p.weightKg?.toString() ?? '');
-    _bodyFat = TextEditingController(text: p.bodyFatPct?.toString() ?? '');
+    _weight = TextEditingController(text: autoWeight?.toStringAsFixed(1) ?? '');
+    _bodyFat = TextEditingController(text: autoBodyFat?.toStringAsFixed(1) ?? '');
     _gender = p.gender;
   }
 
