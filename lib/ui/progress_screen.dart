@@ -61,8 +61,8 @@ class ProgressTab extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
             children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 12),
+              const Padding(
+                padding: EdgeInsets.only(left: 4, bottom: 12),
                 child: Text('GRAPHS',
                     style: TextStyle(fontSize: 11, letterSpacing: 2.5, color: _muted, fontWeight: FontWeight.w800)),
               ),

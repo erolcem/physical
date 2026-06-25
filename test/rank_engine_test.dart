@@ -11,7 +11,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
-import '../lib/engine/rank_engine.dart';
+import 'package:physical/engine/rank_engine.dart';
 
 double? _d(dynamic v) => v == null ? null : (v as num).toDouble();
 

@@ -121,7 +121,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
               ],
               const SizedBox(height: 8),
               LinearProgressIndicator(
-                  value: r.rankValue - curIdx, color: c, backgroundColor: c.withOpacity(0.15)),
+                  value: r.rankValue - curIdx, color: c, backgroundColor: c.withValues(alpha: 0.15)),
             ] else if (latest != null)
               // Tracked (unranked) metric with data — show the value, no tier.
               Text('Latest: ${latest.value.toStringAsFixed(1)} ${m.unit}  ·  tracked, not ranked',
@@ -183,7 +183,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
       margin: const EdgeInsets.only(bottom: 5),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: achieved ? col.withOpacity(0.12) : const Color(0xFF0E1124),
+        color: achieved ? col.withValues(alpha: 0.12) : const Color(0xFF0E1124),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: isNext ? col : Colors.transparent, width: 1),
       ),

@@ -65,9 +65,11 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
       if (code != null && code.isNotEmpty) {
         final email = await api.googleSignInComplete(code);
         // A successful sign-in also refreshes the Google Health token.
-        if (mounted) setState(() {
+        if (mounted) {
+          setState(() {
           _signedIn = true; _email = email; _needsReconnect = false; _msg = 'Signed in ✓';
         });
+        }
       }
     } on ApiException catch (e) {
       if (mounted) setState(() => _msg = 'Sign-in failed: ${e.message}');

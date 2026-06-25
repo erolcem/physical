@@ -186,7 +186,7 @@ final Map<String, Standard> standards = {
   'sleep_score': const Standard('sleep_score', 1, false, Dist('normal', 77.0, 8.0),
       'Fitbit/Google Health sleep score — most users 72–83 (IQR), provisional'),
   'deadhang': Standard('deadhang', 1, false, Dist('lognormal', math.log(60), 0.5), 'provisional'),
-  'hamstring_mobility': Standard('hamstring_mobility', 1, false, Dist('normal', 15.0, 5.0), 'provisional'),
+  'hamstring_mobility': const Standard('hamstring_mobility', 1, false, Dist('normal', 15.0, 5.0), 'provisional'),
   'body_fat_pct': const Standard('body_fat_pct', -1, false, Dist('normal', 20.0, 6.0),
       'young male genpop ~20±6%, lower better, provisional'),
   // NOTE: aesthetics (skin/oral/eye/hair/grooming/voice) are intentionally absent.

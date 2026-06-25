@@ -159,7 +159,7 @@ class HabitsTab extends ConsumerWidget {
         ),
       ),
       const SizedBox(height: 4),
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: const [
+      const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text('12am', style: TextStyle(fontSize: 8, color: _muted)),
         Text('6am', style: TextStyle(fontSize: 8, color: _muted)),
         Text('12pm', style: TextStyle(fontSize: 8, color: _muted)),
@@ -226,9 +226,9 @@ class HabitsTab extends ConsumerWidget {
         ),
       );
 
-  Widget _empty() => Padding(
-        padding: const EdgeInsets.only(top: 40),
-        child: Column(children: const [
+  Widget _empty() => const Padding(
+        padding: EdgeInsets.only(top: 40),
+        child: Column(children: [
           Icon(Icons.checklist_rtl, size: 48, color: _muted),
           SizedBox(height: 12),
           Text('Build your accountability layer',

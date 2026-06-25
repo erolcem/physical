@@ -67,7 +67,7 @@ class HomeTab extends ConsumerWidget {
             ],
 
             // Aesthetics (tracked, not ranked).
-            _SectionTitle('AESTHETICS'),
+            const _SectionTitle('AESTHETICS'),
             const SizedBox(height: 8),
             _MetricGrid(
               metricIds: [
@@ -138,7 +138,7 @@ class _OverallCard extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
         RankBadge(tier: r.tier, sub: r.sub, size: 100),
         const SizedBox(height: 16),
-        Text('OVERALL RANK',
+        const Text('OVERALL RANK',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 10, letterSpacing: 2.5, color: _muted, fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
