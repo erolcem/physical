@@ -485,16 +485,18 @@ current state → target → priority. (Setup for any user is in `AI_SETUP.md`.)
 **Guiding correction — auto over manual (seamlessness).** If a metric *can* be
 auto-logged, it should be, not typed.
 
-**🟡 PARTLY DONE · Profile ported from Google Health.** Shipped: the Profile tab
-**auto-fills weight + body-fat from logs** (which include Google-synced samples), so
-they're not manual. *Remaining:* height + DOB/age from the Google Health **profile
-endpoint** (scope already requested; needs a live `/debug` to confirm the shape).
+**✅ DONE (as far as Google allows) · Profile ported from Google Health.** Shipped:
+the Profile tab auto-fills **weight + body-fat from logs** and **age from the Google
+Health profile** (`/users/me/profile` → `age`, via `/integrations/google/profile`).
+Live `/debug` confirmed Google **does not expose** height / DOB / gender, so those
+stay manual. Auto-over-manual achieved for everything Google provides.
 
 **🟡 MOSTLY DONE · Workout logging = a real tracker.** Shipped: sets grouped under
 each exercise (add exercise → log its sets), per-exercise + total load/volume,
-best-set updates the rank. *Remaining:* the **time-window dual-authorisation against
-the Google Health exercise session** (needs the auto-exercises sync + a live `/debug`
-look at the Google session shape).
+best-set updates the rank; an exercise habit verifies off a same-day manual session.
+*Blocked:* the full **time-window dual-auth against a Google exercise session** —
+live `/debug` showed `/users/me/sessions` returns **404** (this API doesn't expose
+exercise sessions at that path), so the Google half isn't available yet.
 
 **🟡 MOSTLY DONE · Diet = holistic.** Shipped: kcal + P/C/F + **fibre**, a macro-kcal
 breakdown bar, a 7-day calorie trend, and the Diet graph subpage routing to this
@@ -524,8 +526,7 @@ daily-readiness drop). Voice = out of scope.
 
 **Build order:** (1) ✅ **Habits redesign** → (2) 🟡 **Workout tracker** (grouped sets
 done; Google-session dual-auth pending live data) → (3) 🟡 **Diet** (holistic page +
-fibre + trend done; micros + exercise/sleep tailored layouts pending) → (4) 🟡
-**Profile auto-port** (weight/body-fat auto-filled; height/DOB pending live data) →
+fibre + trend done; micros + exercise/sleep tailored layouts pending) → (4) ✅ **Profile auto-port** (weight/body-fat + age auto; height/gender manual — Google doesn't expose them) →
 (5) Rank-badge/graph visual polish (Liftoff-style) → (6) ✅ **Coach fixed-response selection** (done). Each shipped behind its own tests.
 
 **Next unblock:** an in-app **Cloud → Inspect Google data** button now copies the raw
