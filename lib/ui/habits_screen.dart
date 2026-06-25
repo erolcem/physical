@@ -28,20 +28,11 @@ class HabitsTab extends ConsumerWidget {
     final food = ref.watch(dietProvider);
     final habits = st.habits;
 
-    // Verify rule → corroborated by the day's logs?
-    bool corroboratedOn(Habit h, String day) {
-      switch (h.verify) {
-        case 'metric':
-          return h.linkedMetricId != null &&
-              (logs[h.linkedMetricId]?.any((l) => l.ts.startsWith(day)) ?? false);
-        case 'workout':
-          return workouts.any((w) => w.dateKey == day);
-        case 'diet':
-          return food.any((e) => e.dateKey == day);
-        default:
-          return false;
-      }
-    }
+    // Verify rule → corroborated by the day's data (manual or auto-synced logs).
+    final workoutDays = {for (final w in workouts) w.dateKey};
+    final foodDays = {for (final e in food) e.dateKey};
+    bool corroborated(Habit h, String day) => corroboratedOn(h, day,
+        logs: logs, workoutDays: workoutDays, foodDays: foodDays);
 
     final dueToday = habits.where((h) => isDueToday(h)).toList();
     final doneCount = dueToday.where((h) => st.doneToday(h.id)).length;
@@ -84,7 +75,7 @@ class HabitsTab extends ConsumerWidget {
                     streak: currentStreak(st.doneFor(h.id)),
                     status: statusFor(h,
                         doneToday: st.doneToday(h.id),
-                        corroborated: corroboratedOn(h, todayKey())),
+                        corroborated: corroborated(h, todayKey())),
                     last7: lastNDays(7),
                     doneDays: st.doneFor(h.id)),
             // Habits scheduled on other days only (not today) — for awareness.

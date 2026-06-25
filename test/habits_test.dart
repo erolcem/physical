@@ -3,6 +3,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:physical/data/habits.dart';
 import 'package:physical/data/repository.dart';
+import 'package:physical/engine/rank_engine.dart' show Log;
 
 void main() {
   group('sections & presets', () {
@@ -41,6 +42,28 @@ void main() {
     test('ticked, not corroborated → manual', () => expect(statusFor(linked, doneToday: true, corroborated: false), HabitStatus.manual));
     test('ticked + corroborated → verified', () => expect(statusFor(linked, doneToday: true, corroborated: true), HabitStatus.verified));
     test('manual habit is never auto-verified', () => expect(statusFor(manual, doneToday: true, corroborated: true), HabitStatus.manual));
+  });
+
+  group('corroboration from real/auto-collected data', () {
+    test('metric verify is satisfied by a same-day log (e.g. an auto-synced sleep_score)', () {
+      const h = Habit(id: '1', title: 'Sleep 8h', section: 'sleep', verify: 'metric', linkedMetricId: 'sleep_score', createdAt: 'x');
+      final logs = {'sleep_score': [Log('sleep_score', 82, ts: '2026-06-25T00:00:00')]}; // shape of a Google-synced sample
+      expect(corroboratedOn(h, '2026-06-25', logs: logs, workoutDays: const {}, foodDays: const {}), true);
+      expect(corroboratedOn(h, '2026-06-24', logs: logs, workoutDays: const {}, foodDays: const {}), false);
+    });
+    test('workout verify is satisfied by a session that day', () {
+      const h = Habit(id: '2', title: 'Train', section: 'exercise', verify: 'workout', createdAt: 'x');
+      expect(corroboratedOn(h, '2026-06-25', logs: const {}, workoutDays: {'2026-06-25'}, foodDays: const {}), true);
+      expect(corroboratedOn(h, '2026-06-25', logs: const {}, workoutDays: const {}, foodDays: const {}), false);
+    });
+    test('diet verify is satisfied by a food log that day', () {
+      const h = Habit(id: '3', title: 'Log meals', section: 'diet', verify: 'diet', createdAt: 'x');
+      expect(corroboratedOn(h, '2026-06-25', logs: const {}, workoutDays: const {}, foodDays: {'2026-06-25'}), true);
+    });
+    test('manual verify is never auto-corroborated', () {
+      const h = Habit(id: '4', title: 'Skincare', section: 'aesthetics', verify: 'manual', createdAt: 'x');
+      expect(corroboratedOn(h, '2026-06-25', logs: const {}, workoutDays: const {}, foodDays: const {}), false);
+    });
   });
 
   group('currentStreak', () {

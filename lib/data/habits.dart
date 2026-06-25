@@ -1,3 +1,5 @@
+import '../engine/rank_engine.dart' show Log;
+
 // data/habits.dart — the Habits layer (Phase 2), redesigned to be SCAFFOLDED:
 // a habit lives in a SECTION (sleep/exercise/diet/aesthetics/recovery/misc), is
 // usually a PRESET from that section's menu (so data checks stay in-realm and the
@@ -143,12 +145,34 @@ bool isDueOn(Habit h, DateTime date) =>
 bool isDueToday(Habit h, {DateTime? today}) => isDueOn(h, today ?? DateTime.now());
 
 /// Two-step verification: a ticked habit is [verified] when its `verify` rule is
-/// corroborated by the day's logs, else [manual]; untouched is [notDone].
+/// corroborated by the day's data, else [manual]; untouched is [notDone].
 HabitStatus statusFor(Habit h,
     {required bool doneToday, required bool corroborated}) {
   if (!doneToday) return HabitStatus.notDone;
   if (h.verify != 'manual' && corroborated) return HabitStatus.verified;
   return HabitStatus.manual;
+}
+
+/// Is the habit's verify rule corroborated by the day's data? Pure + testable.
+/// Works for both manual logs AND auto-synced Google Health logs — both are `Log`s
+/// carrying a same-day `ts` (e.g. a synced sleep_score sample), so a metric habit
+/// like "Sleep 8h" verifies straight off the auto-collected data.
+bool corroboratedOn(Habit h, String day, {
+  required Map<String, List<Log>> logs,
+  required Set<String> workoutDays, // dateKeys with a workout session
+  required Set<String> foodDays, // dateKeys with a food entry
+}) {
+  switch (h.verify) {
+    case 'metric':
+      final ls = h.linkedMetricId == null ? null : logs[h.linkedMetricId];
+      return ls != null && ls.any((l) => l.ts.startsWith(day));
+    case 'workout':
+      return workoutDays.contains(day);
+    case 'diet':
+      return foodDays.contains(day);
+    default:
+      return false;
+  }
 }
 
 /// Consecutive completed days ending today — or yesterday if today isn't ticked
