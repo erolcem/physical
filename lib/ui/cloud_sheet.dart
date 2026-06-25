@@ -2,6 +2,7 @@
 // links your Google Health), then sync — all buttons, no terminal. Opened from
 // the app-bar ☁ icon.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/api_client.dart';
@@ -75,6 +76,46 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
       if (mounted) setState(() => _msg = 'Sign-in failed: ${e.message}');
     } catch (_) {
       if (mounted) setState(() => _msg = "Couldn't start sign-in.");
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  // Fetch the raw Google Health data and show it copyable — so the exact field
+  // shapes can be pasted to the developer to wire the remaining auto-metrics.
+  Future<void> _inspect() async {
+    setState(() => _busy = true);
+    final api = ref.read(apiClientProvider);
+    try {
+      final raw = await api.googleDebug();
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: _bg,
+          title: const Text('Google data', style: TextStyle(fontSize: 16)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: SelectableText(raw,
+                  style: const TextStyle(fontSize: 10.5, color: Colors.white70, height: 1.3)),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: raw));
+                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                    content: Text('Copied — paste it to Claude'), duration: Duration(seconds: 2)));
+              },
+              child: const Text('Copy'),
+            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (mounted) setState(() => _msg = "Couldn't fetch Google data.");
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -201,7 +242,15 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
                 style: FilledButton.styleFrom(backgroundColor: _accent, minimumSize: const Size.fromHeight(46)),
               ),
             const SizedBox(height: 8),
-            TextButton(onPressed: _busy ? null : _signOut, child: const Text('Sign out')),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              TextButton.icon(
+                onPressed: _busy ? null : _inspect,
+                icon: const Icon(Icons.bug_report_outlined, size: 16),
+                label: const Text('Inspect Google data'),
+                style: TextButton.styleFrom(foregroundColor: Colors.grey),
+              ),
+              TextButton(onPressed: _busy ? null : _signOut, child: const Text('Sign out')),
+            ]),
           ],
           if (_busy) const Padding(padding: EdgeInsets.only(top: 16), child: Center(child: CircularProgressIndicator())),
           if (_msg != null)

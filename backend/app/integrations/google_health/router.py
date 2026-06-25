@@ -77,6 +77,18 @@ def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
             out[metric_id] = {"status": status, "sample": sample}
         except Exception as e:
             out[metric_id] = {"error": str(e)[:300]}
+    # Extra probes for the features still pending — profile (height/DOB→age) and
+    # exercise sessions (for the workout dual-auth). Paths are best-guess; the raw
+    # status/body reveals what actually exists so we can wire them precisely.
+    for label, path in {
+        "_profile": "/users/me/profile",
+        "_sessions": "/users/me/sessions?pageSize=3",
+    }.items():
+        try:
+            status, body = client.get_raw(path)
+            out[label] = {"status": status, "body": body}
+        except Exception as e:
+            out[label] = {"error": str(e)[:300]}
     return out
 
 

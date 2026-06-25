@@ -20,11 +20,16 @@ const _accent = Color(0xFF5B6AF8);
 const _teal = Color(0xFF4CE0C3);
 const _muted = Color(0xFF7880A8);
 
-const _suggestions = [
-  'Review my training',
-  'Review my sleep & recovery',
-  'What should I improve?',
-  'Plan my week',
+// A fixed selection of coach functions (PDF Table 3) — keeps responses robust and
+// on-rails. Each is sent as a structured prompt the coach answers over your data.
+const _coachFunctions = <(String, String)>[
+  ('😴 Sleep review', 'Review my sleep & recovery from my recent data and habits, then give 2–3 specific suggestions.'),
+  ('🥗 Diet review', 'Review my diet — calories, protein and macros vs my weight/body-fat — and suggest concrete adjustments.'),
+  ('💪 Training review', 'Review my training: recent volume, sessions, and which lifts/ranks lag. What should I prioritise this week?'),
+  ('✨ Aesthetics', 'Review my aesthetics routine and scores; suggest evidence-based improvements for skin/hair/oral health.'),
+  ('🎯 Set a goal', 'Help me set one emphasised goal: ask what I want to prioritise, then tailor my habits toward it.'),
+  ('🏆 My progress', 'Discuss my progress and any milestones across my ranks — what to celebrate and what is next.'),
+  ('📈 What should I improve?', 'Across all my data, what is my single highest-leverage thing to improve right now, and how?'),
 ];
 
 class _Msg {
@@ -163,6 +168,34 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     }
   }
 
+  void _showFunctions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _bg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Coach functions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 12),
+            for (final f in _coachFunctions)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(f.$1),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _send(f.$2);
+                },
+              ),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showContext() async {
     final api = ref.read(apiClientProvider);
     final habits = _habitsCtx();
@@ -289,12 +322,20 @@ class _CoachTabState extends ConsumerState<CoachTab> {
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('Your AI coach',
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
-          TextButton.icon(
-            onPressed: _showContext,
-            icon: const Icon(Icons.visibility_outlined, size: 15),
-            label: const Text('What I see'),
-            style: TextButton.styleFrom(foregroundColor: _muted, textStyle: const TextStyle(fontSize: 12)),
-          ),
+          Row(children: [
+            TextButton.icon(
+              onPressed: _showFunctions,
+              icon: const Icon(Icons.auto_awesome_outlined, size: 15),
+              label: const Text('Functions'),
+              style: TextButton.styleFrom(foregroundColor: _accent, textStyle: const TextStyle(fontSize: 12)),
+            ),
+            TextButton.icon(
+              onPressed: _showContext,
+              icon: const Icon(Icons.visibility_outlined, size: 15),
+              label: const Text('What I see'),
+              style: TextButton.styleFrom(foregroundColor: _muted, textStyle: const TextStyle(fontSize: 12)),
+            ),
+          ]),
         ]),
       ),
       Expanded(
@@ -333,13 +374,13 @@ class _CoachTabState extends ConsumerState<CoachTab> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final s in _suggestions)
+              for (final f in _coachFunctions)
                 ActionChip(
-                  label: Text(s),
+                  label: Text(f.$1),
                   backgroundColor: _card,
                   side: const BorderSide(color: _accent),
                   labelStyle: const TextStyle(color: _accent, fontSize: 12),
-                  onPressed: () => _send(s),
+                  onPressed: () => _send(f.$2),
                 ),
             ],
           ),

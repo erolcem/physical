@@ -192,6 +192,15 @@ class ApiClient {
   }
 
   /// Ask the backend to pull fresh data from the user's Google Health.
+  /// Raw Google Health debug output (status + a real sample per data type, plus
+  /// profile/session probes) — returned verbatim for the in-app inspector to copy.
+  Future<String> googleDebug() async {
+    final r = await _client
+        .get(Uri.parse('$baseUrl/integrations/google/debug'), headers: _headers())
+        .timeout(const Duration(seconds: 45));
+    return r.body;
+  }
+
   Future<Map<String, dynamic>> triggerGoogleSync({int days = 7}) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/integrations/google/sync?days=$days'),
