@@ -26,9 +26,10 @@ class HabitsTab extends ConsumerWidget {
     final habits = st.habits;
     final doneCount = habits.where((h) => st.doneToday(h.id)).length;
 
-    bool linkedLogToday(Habit h) =>
+    bool verifiedOn(Habit h, String day) =>
         h.linkedMetricId != null &&
-        (logs[h.linkedMetricId]?.any((l) => l.ts.startsWith(todayKey())) ?? false);
+        (logs[h.linkedMetricId]?.any((l) => l.ts.startsWith(day)) ?? false);
+    final last7 = lastNDays(7);
 
     return Container(
       color: _bg,
@@ -39,6 +40,8 @@ class HabitsTab extends ConsumerWidget {
           if (habits.isNotEmpty) ...[
             const SizedBox(height: 12),
             _planCard(habits),
+            const SizedBox(height: 12),
+            _weekCard(habits, st.completions),
           ],
           const SizedBox(height: 4),
           Align(
@@ -59,7 +62,10 @@ class HabitsTab extends ConsumerWidget {
                   streak: currentStreak(st.doneFor(h.id)),
                   status: statusFor(h,
                       doneToday: st.doneToday(h.id),
-                      hasLinkedLogToday: linkedLogToday(h))),
+                      hasLinkedLogToday: verifiedOn(h, todayKey())),
+                  last7: last7,
+                  doneDays: st.doneFor(h.id),
+                  verifiedOn: (day) => verifiedOn(h, day)),
         ],
       ),
     );
@@ -162,6 +168,63 @@ class HabitsTab extends ConsumerWidget {
     ]);
   }
 
+  // ── Weekly history (the Phase 2 exit-gate summary) ──
+  Widget _weekCard(List<Habit> habits, Map<String, Set<String>> completions) {
+    final counts = dailyDoneCounts(habits, completions);
+    final days = lastNDays(7);
+    final total = habits.length;
+    return Card(
+      color: _card,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('LAST 7 DAYS',
+              style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (var i = 0; i < days.length; i++)
+                Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text('${counts[i]}',
+                      style: const TextStyle(fontSize: 10, color: _muted)),
+                  const SizedBox(height: 3),
+                  Container(
+                    width: 22,
+                    height: total == 0 ? 3 : 3 + 30 * counts[i] / total,
+                    decoration: BoxDecoration(
+                        color: counts[i] == total && total > 0 ? _teal : _accent,
+                        borderRadius: BorderRadius.circular(4)),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(_weekdayLetter(days[i]),
+                      style: const TextStyle(fontSize: 9, color: _muted)),
+                ]),
+            ],
+          ),
+        ]),
+      ),
+    );
+  }
+
+  String _weekdayLetter(String dayKey) {
+    const letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    return letters[DateTime.parse(dayKey).weekday - 1];
+  }
+
+  Widget _weekDot(bool done, bool verified) => Container(
+        width: 9,
+        height: 9,
+        margin: const EdgeInsets.only(right: 4),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: done ? (verified ? _teal : _accent) : Colors.transparent,
+          border:
+              done ? null : Border.all(color: _muted.withValues(alpha: 0.5)),
+        ),
+      );
+
   Widget _empty() => Padding(
         padding: const EdgeInsets.only(top: 40),
         child: Column(children: const [
@@ -177,7 +240,12 @@ class HabitsTab extends ConsumerWidget {
 
   // ── One habit row ──
   Widget _habitTile(BuildContext context, WidgetRef ref, Habit h,
-      {required bool done, required int streak, required HabitStatus status}) {
+      {required bool done,
+      required int streak,
+      required HabitStatus status,
+      required List<String> last7,
+      required Set<String> doneDays,
+      required bool Function(String day) verifiedOn}) {
     final cat = categoryOf(h.category);
     final cc = Color(cat.color);
     return Dismissible(
@@ -238,6 +306,14 @@ class HabitsTab extends ConsumerWidget {
                                     'verifies with ${metricById(h.linkedMetricId!).label}',
                                     style: const TextStyle(fontSize: 10, color: _muted)),
                               ),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Row(children: [
+                                for (final day in last7)
+                                  _weekDot(doneDays.contains(day),
+                                      doneDays.contains(day) && verifiedOn(day)),
+                              ]),
+                            ),
                           ]),
                     ),
                     if (status == HabitStatus.verified)

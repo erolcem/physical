@@ -104,6 +104,26 @@ HabitStatus statusFor(Habit h,
   return HabitStatus.manual;
 }
 
+/// The last [n] day-keys, oldest first, ending today.
+List<String> lastNDays(int n, {DateTime? today}) {
+  final t = today ?? DateTime.now();
+  final base = DateTime(t.year, t.month, t.day);
+  return [
+    for (var i = n - 1; i >= 0; i--) dateKey(base.subtract(Duration(days: i)))
+  ];
+}
+
+/// For each of the last [n] days (oldest first), how many of [habits] were ticked
+/// — the data behind the weekly summary strip.
+List<int> dailyDoneCounts(
+    List<Habit> habits, Map<String, Set<String>> completions,
+    {int n = 7, DateTime? today}) {
+  return [
+    for (final day in lastNDays(n, today: today))
+      habits.where((h) => (completions[h.id] ?? const {}).contains(day)).length
+  ];
+}
+
 /// Budgeter rollup across all (daily-cadence) habits.
 class HabitPlan {
   final int minutesPerDay;

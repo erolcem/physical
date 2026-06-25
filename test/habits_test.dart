@@ -112,6 +112,31 @@ void main() {
     });
   });
 
+  group('weekly history', () {
+    final today = DateTime(2026, 6, 24);
+
+    test('lastNDays returns n keys, oldest first, ending today', () {
+      final days = lastNDays(7, today: today);
+      expect(days.length, 7);
+      expect(days.first, '2026-06-18');
+      expect(days.last, '2026-06-24');
+    });
+
+    test('dailyDoneCounts tallies completions per day across habits', () {
+      const habits = [
+        Habit(id: '1', title: 'a', createdAt: 'x'),
+        Habit(id: '2', title: 'b', createdAt: 'x'),
+      ];
+      final completions = {
+        '1': {'2026-06-24', '2026-06-23'},
+        '2': {'2026-06-24'},
+      };
+      // days 18..24 → both ticked only today, h1 also yesterday.
+      expect(dailyDoneCounts(habits, completions, today: today),
+          [0, 0, 0, 0, 0, 1, 2]);
+    });
+  });
+
   group('Repository habits', () {
     test('save / load / update by id (no dupes)', () {
       final r = InMemoryRepository();
