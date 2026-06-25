@@ -128,6 +128,79 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     }
   }
 
+  Future<void> _showContext() async {
+    final api = ref.read(apiClientProvider);
+    final habits = _habitsCtx();
+    final profile = _profileCtx();
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _bg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => FutureBuilder<Map<String, dynamic>>(
+        future: api.coachContext(habits: habits, profile: profile),
+        builder: (ctx, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const SizedBox(height: 220, child: Center(child: CircularProgressIndicator()));
+          }
+          if (!snap.hasData) {
+            return const SizedBox(
+                height: 160,
+                child: Center(child: Text("Couldn't load the context.",
+                    style: TextStyle(color: _muted))));
+          }
+          return _contextSheet(snap.data!);
+        },
+      ),
+    );
+  }
+
+  Widget _contextSheet(Map<String, dynamic> c) {
+    final cats = (c['categories'] as Map?) ?? const {};
+    final recent = (c['recent'] as Map?) ?? const {};
+    final habits = ((c['habits'] as List?) ?? const []).cast<String>();
+    Widget row(String label, String value) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(width: 96, child: Text(label, style: const TextStyle(color: _muted, fontSize: 12))),
+            Expanded(child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+          ]),
+        );
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('What your coach sees',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 14),
+          if (c['profile'] != null) row('Profile', c['profile'] as String),
+          if (c['overall'] != null) row('Overall', c['overall'] as String),
+          if (cats.isNotEmpty)
+            row('Categories', cats.entries.map((e) => '${e.key}: ${e.value}').join('\n')),
+          if (c['weakest'] != null) row('Weakest', c['weakest'] as String),
+          if (c['strongest'] != null) row('Strongest', c['strongest'] as String),
+          if (recent.isNotEmpty)
+            row('Recent', recent.entries.map((e) => '${e.key}: ${e.value}').join(', ')),
+          row('Habits', habits.isEmpty ? '—' : habits.join('\n')),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: _card, borderRadius: BorderRadius.circular(10)),
+            child: Row(children: [
+              const Icon(Icons.lock_outline, color: _teal, size: 16),
+              const SizedBox(width: 8),
+              Expanded(child: Text((c['note'] as String?) ?? '',
+                  style: const TextStyle(fontSize: 11.5, color: _muted))),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
@@ -169,6 +242,19 @@ class _CoachTabState extends ConsumerState<CoachTab> {
 
   Widget _chat() {
     return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 6, 0),
+        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('Your AI coach',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+          TextButton.icon(
+            onPressed: _showContext,
+            icon: const Icon(Icons.visibility_outlined, size: 15),
+            label: const Text('What I see'),
+            style: TextButton.styleFrom(foregroundColor: _muted, textStyle: const TextStyle(fontSize: 12)),
+          ),
+        ]),
+      ),
       Expanded(
         child: _messages.isEmpty
             ? _welcome()

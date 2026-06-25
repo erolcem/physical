@@ -6,12 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth import current_user
-from ..coach import compose_system, parse_actions
+from ..coach import compose_system, context_sections, parse_actions
 from ..config import settings
 from ..db import get_db
 from ..integrations.gemini import client as gemini
 from ..models import Sample
-from ..schemas import CoachChatIn, CoachChatOut
+from ..schemas import CoachChatIn, CoachChatOut, CoachContextIn
 
 router = APIRouter(prefix="/me/coach", tags=["coach"])
 
@@ -21,6 +21,15 @@ def status():
     """Whether the coach is available (so the app can show a clean message)."""
     return {"configured": gemini.configured(),
             "model": settings.gemini_model if gemini.configured() else None}
+
+
+@router.post("/context")
+def context(body: CoachContextIn,
+            user_id: str = Depends(current_user),
+            db: Session = Depends(get_db)):
+    """Exactly what the coach sees — for the transparency view. No model call."""
+    samples = list(db.scalars(select(Sample).where(Sample.user_id == user_id)))
+    return context_sections(samples, body.habits, body.profile)
 
 
 @router.post("/chat", response_model=CoachChatOut)

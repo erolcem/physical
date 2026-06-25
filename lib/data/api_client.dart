@@ -274,4 +274,18 @@ class ApiClient {
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
+
+  /// Exactly what the coach sees — for the transparency view.
+  Future<Map<String, dynamic>> coachContext({
+    List<Map<String, dynamic>> habits = const [],
+    Map<String, dynamic>? profile,
+  }) async {
+    final r = await _client
+        .post(Uri.parse('$baseUrl/me/coach/context'),
+            headers: _headers({'Content-Type': 'application/json'}),
+            body: jsonEncode({'habits': habits, if (profile != null) 'profile': profile}))
+        .timeout(const Duration(seconds: 15));
+    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
 }

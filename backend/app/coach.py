@@ -131,3 +131,45 @@ def build_context(samples, habits=None, profile=None) -> str:
 
 def compose_system(samples, habits=None, profile=None) -> str:
     return f"{SYSTEM_PROMPT}\n\n=== USER DATA ===\n{build_context(samples, habits, profile)}"
+
+
+def context_sections(samples, habits=None, profile=None) -> dict:
+    """The exact context the coach holds, as labelled sections — powers the
+    transparency view so the user sees precisely what is (and isn't) shared."""
+    habits = habits or []
+    out = {
+        "profile": None, "overall": None, "categories": {},
+        "weakest": None, "strongest": None, "recent": {}, "habits": [],
+        "note": ("Only this data is sent to your AI coach. Your email, name, and "
+                 "account id are never shared."),
+    }
+    if profile:
+        bits = []
+        if profile.get("age"):
+            bits.append(f"age {int(profile['age'])}")
+        if profile.get("gender"):
+            bits.append(str(profile["gender"]))
+        if profile.get("heightCm"):
+            bits.append(f"{float(profile['heightCm']):.0f}cm")
+        if profile.get("weightKg"):
+            bits.append(f"{float(profile['weightKg']):.0f}kg")
+        if profile.get("bodyFatPct"):
+            bits.append(f"{float(profile['bodyFatPct']):.0f}% body fat")
+        out["profile"] = ", ".join(bits) or None
+    if samples:
+        overall, categories, metrics = compute_ranks(samples)
+        out["overall"] = _fmt_rank(overall)
+        out["categories"] = {c: _fmt_rank(r) for c, r in categories.items()}
+        ranked = sorted(metrics.items(), key=lambda kv: kv[1]["rank_value"])
+        if ranked:
+            out["weakest"] = f"{ranked[0][0]} — {_fmt_rank(ranked[0][1])}"
+            out["strongest"] = f"{ranked[-1][0]} — {_fmt_rank(ranked[-1][1])}"
+        out["recent"] = {m: metrics[m]["value"] for m in _RECENT if m in metrics}
+    out["habits"] = [
+        h.get("title", "?")
+        + (f" [{h['category']}]" if h.get("category") else "")
+        + (f" · streak {int(h['streak'])}" if h.get("streak") else "")
+        + (" · done today" if h.get("done_today") else "")
+        for h in habits
+    ]
+    return out

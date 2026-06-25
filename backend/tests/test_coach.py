@@ -79,6 +79,21 @@ def test_coach_chat_sees_real_data(client, monkeypatch):
     assert captured["turns"][-1] == {"role": "user", "text": "How am I doing?"}
 
 
+def test_coach_context_sections(client):
+    client.post("/me/samples", json=[
+        {"metric_id": "bench", "ts": "2026-06-01T08:00:00", "bodyweight_at_ts": 80,
+         "value": 100, "source": "manual", "source_id": "b1"}])
+    r = client.post("/me/coach/context", json={
+        "habits": [{"title": "Train", "category": "strength", "streak": 4, "done_today": True}],
+        "profile": {"age": 28, "gender": "male"}})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["profile"] == "age 28, male"
+    assert body["overall"]  # has an overall rank from the bench log
+    assert body["habits"] == ["Train [strength] · streak 4 · done today"]
+    assert "never shared" in body["note"]
+
+
 def test_coach_requires_auth():
     from fastapi.testclient import TestClient
     from app.main import app
