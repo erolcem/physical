@@ -13,9 +13,9 @@ import httpx
 BASE = "https://health.googleapis.com/v4"
 
 # canonical metric_id → Google Health dataType identifier (from the v4 discovery doc).
-# Clean daily/per-night types only. steps / active-zone / active-energy are
-# per-minute intraday streams that need pagination or a daily rollup for an
-# accurate total — deferred (background metrics) rather than ingesting partials.
+# The daily-* rollup types give one clean value per day. steps/active-zone/active-
+# energy are added as daily rollups too (background tier); if a name 404s the sync
+# just skips it (resilient), so confirm exact identifiers via /debug once connected.
 DATA_TYPES = {
     "resting_hr": "daily-resting-heart-rate",
     "hrv": "daily-heart-rate-variability",
@@ -23,6 +23,10 @@ DATA_TYPES = {
     "bodyweight": "weight",
     "body_fat_pct": "body-fat",
     "sleep": "sleep",
+    # Background context (AI tier).
+    "steps": "daily-steps",
+    "active_zone": "daily-active-zone-minutes",
+    "energy_burned": "daily-active-calories-burned",
 }
 
 

@@ -67,12 +67,26 @@ def _bodyweight(c):
     return g / 1000.0 if g is not None else None
 
 
+def _first(c, keys):
+    """First present numeric among candidate field names (shapes vary by type)."""
+    for k in keys:
+        v = _to_float(c.get(k))
+        if v is not None:
+            return v
+    return None
+
+
 _EXTRACTORS = {
     "resting_hr": lambda c: _to_float(c.get("beatsPerMinute")),
     "hrv": _hrv,
     "vo2max": lambda c: _to_float(c.get("vo2Max")),
     "bodyweight": _bodyweight,
     "body_fat_pct": lambda c: _to_float(c.get("percentage")),
+    # Background context (AI tier). Field names are best-effort across candidates;
+    # confirm against /debug if a daily type lands empty.
+    "steps": lambda c: _first(c, ("count", "steps", "stepCount", "totalSteps")),
+    "active_zone": lambda c: _first(c, ("minutes", "activeZoneMinutes", "totalActiveZoneMinutes")),
+    "energy_burned": lambda c: _first(c, ("energyKcal", "calories", "kilocalories", "kcal", "energy")),
 }
 
 

@@ -84,6 +84,20 @@ def test_sleep_score_prefers_vendor_score_when_present():
     assert out["sleep_score"]["value"] == 88.0
 
 
+def test_background_steps_active_zone_energy_extractors():
+    steps = mapping.to_samples("steps", [{"dataSource": {}, "dailySteps": {
+        "date": {"year": 2026, "month": 6, "day": 24}, "count": "8000"}}])
+    assert steps[0]["value"] == 8000.0 and steps[0]["ts"] == "2026-06-24T00:00:00"
+
+    azm = mapping.to_samples("active_zone", [{"dataSource": {}, "dailyActiveZoneMinutes": {
+        "date": {"year": 2026, "month": 6, "day": 24}, "minutes": 45}}])
+    assert azm[0]["value"] == 45.0
+
+    energy = mapping.to_samples("energy_burned", [{"dataSource": {}, "dailyActiveCaloriesBurned": {
+        "date": {"year": 2026, "month": 6, "day": 24}, "energyKcal": 520}}])
+    assert energy[0]["value"] == 520.0
+
+
 def test_valueless_points_are_skipped():
     assert mapping.to_samples("vo2max", []) == []
     assert mapping.to_samples("hrv", [{"dataSource": {}, "dailyHeartRateVariability": {
