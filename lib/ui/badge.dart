@@ -1,7 +1,9 @@
 // ui/badge.dart — polished tier medallions. Faithful port of the prototype's
 // metallic SVG badges (crisp white facets + dimensional white→dark shading),
-// wrapped with a radial halo + tight glow so the badge reads as a hero element
-// on the dark mobile background.
+// wrapped with a radial halo + tight glow + a specular light-catch sheen so the
+// badge reads as a hero element on the dark mobile background. The sheen is masked
+// to the medallion silhouette (so only the metal lights up) and grows lustier with
+// tier — Glory catches the most light.
 //
 // The sub-rank (I/II/III) is intentionally NOT drawn on the medallion face:
 // every place a badge appears, the UI already shows "Tier Sub" as text beside
@@ -32,6 +34,8 @@ class RankBadge extends StatelessWidget {
     // Higher tiers glow brighter and wider — earns the prestige.
     final haloAlpha = (0.26 + idx * 0.05).clamp(0.0, 0.62);
     final glowSigma = 4.0 + idx * 1.4;
+    // A touch more specular lustre for higher tiers (prestige reads as polish).
+    final sheenAlpha = (0.30 + idx * 0.025).clamp(0.0, 0.52);
 
     return SizedBox(
       width: size,
@@ -64,6 +68,25 @@ class RankBadge extends StatelessWidget {
           // 3. The medallion itself.
           SvgPicture.string(svgString,
               width: inner, height: inner, allowDrawingOutsideViewBox: true),
+          // 4. Specular sheen — a soft top-left light-catch, masked to the
+          //    medallion silhouette so only the metal lights up (not the
+          //    transparent surround).
+          ShaderMask(
+            blendMode: BlendMode.srcIn,
+            shaderCallback: (rect) => RadialGradient(
+              center: const Alignment(-0.45, -0.65),
+              radius: 0.95,
+              colors: [
+                Colors.white.withValues(alpha: sheenAlpha),
+                Colors.white.withValues(alpha: 0.0),
+              ],
+            ).createShader(rect),
+            child: ColorFiltered(
+              colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+              child: SvgPicture.string(svgString,
+                  width: inner, height: inner, allowDrawingOutsideViewBox: true),
+            ),
+          ),
         ],
       ),
     );
