@@ -5,7 +5,7 @@ from the plan lives. Companion to `GUIDE.md` (usage), `backend/DEPLOY.md` (hosti
 `backend/VERIFICATION.md` (Google review), and `All readmes/` (the design docs + PDF).
 
 **Status:** the **entire plan (Parts 1–7, AI coach included)** is implemented.
-100 Flutter tests + 44 backend tests green, 0 analyzer issues, Python⇄Dart engine
+103 Flutter tests + 45 backend tests green, 0 analyzer issues, Python⇄Dart engine
 parity to ~1e-5. Hosted on Railway; iPhone via TestFlight. The coach runs on
 **Gemini** to stay in the user's Google ecosystem.
 
