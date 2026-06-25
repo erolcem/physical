@@ -329,8 +329,11 @@ lift's rank (1RM/rep-volume). 7-day rollups (volume/sessions/muscles) feed the c
 session (needs the auto-exercises sync).
 
 ### 10.3 Diet logging (`data/diet.dart`, `ui/diet_screen.dart`)
-Food entries with macros (kcal + P/C/F) → **daily totals**, shown and fed to the
-coach (today's energy + protein).
+A **holistic diet page**: food entries with macros (kcal + P/C/F + **fibre**) →
+**daily totals** with a **macro-kcal breakdown bar** and a **7-day calorie trend**
+(`caloriesLastNDays`), fed to the coach. The Progress "Diet" subpage routes here
+(its own domain layout). *Remaining:* full micronutrients (needs a food database)
+and tailored graph layouts for the exercise + sleep subpages.
 
 ### 10.4 Friends (`backend/.../friends.py` + Profile section)
 Add by email → pending → accept → a **mini leaderboard** of friends' overall ranks
@@ -494,10 +497,11 @@ best-set updates the rank. *Remaining:* the **time-window dual-authorisation aga
 the Google Health exercise session** (needs the auto-exercises sync + a live `/debug`
 look at the Google session shape).
 
-**P1 · Diet = holistic, not just calories.** *Current:* kcal + macros (P/C/F) +
-daily totals. *Target:* fuller macro breakdown **+ micronutrients** (needs a food
-database), on a dedicated diet-style page; and give each graph subpage (diet /
-exercise / sleep) its **own tailored layout** instead of one generic chart.
+**🟡 MOSTLY DONE · Diet = holistic.** Shipped: kcal + P/C/F + **fibre**, a macro-kcal
+breakdown bar, a 7-day calorie trend, and the Diet graph subpage routing to this
+holistic layout. *Remaining:* full **micronutrients** (needs a food database, maybe
+a Gemini-assisted lookup) and tailored graph layouts for the **exercise + sleep**
+subpages too.
 
 **✅ DONE · Habits = structured & data-aligned, not free-text.** Shipped: sections +
 in-realm presets + bounded custom; verify modes (metric/workout/diet/manual)
@@ -518,7 +522,7 @@ autonomous strategic-correlation pinning; dynamic volume auto-regulation on a
 daily-readiness drop). Voice = out of scope.
 
 **Build order:** (1) ✅ **Habits redesign** → (2) 🟡 **Workout tracker** (grouped sets
-done; Google-session dual-auth pending live data) → (3) Diet macros/micros +
-per-domain graph layouts → (4) Profile auto-port from Google Health → (5) Rank-badge/
-graph visual polish (Liftoff-style) → (6) Coach fixed-response selection. Each shipped
-behind its own tests.
+done; Google-session dual-auth pending live data) → (3) 🟡 **Diet** (holistic page +
+fibre + trend done; micros + exercise/sleep tailored layouts pending) → (4) Profile
+auto-port from Google Health → (5) Rank-badge/graph visual polish (Liftoff-style) →
+(6) Coach fixed-response selection. Each shipped behind its own tests.
