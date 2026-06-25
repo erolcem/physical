@@ -7,10 +7,11 @@ import '../state/providers.dart';
 import 'api_client.dart';
 import 'repository.dart';
 
-// Backend URL. Defaults to localhost for dev; point a real build at the hosted
-// server with:  flutter build ... --dart-define=BACKEND_URL=https://your-host
-const String kBackendUrl =
-    String.fromEnvironment('BACKEND_URL', defaultValue: 'http://localhost:8000');
+// Backend URL. Defaults to the hosted Railway backend so a plain `flutter run`
+// (and the iPhone build) sync with zero config. For local backend development,
+// override it:  flutter run ... --dart-define=BACKEND_URL=http://localhost:8000
+const String kBackendUrl = String.fromEnvironment('BACKEND_URL',
+    defaultValue: 'https://physical-production-883c.up.railway.app');
 const String kLocalUserId = 'local-dev'; // only used by the dev sign-in path
 
 final apiClientProvider =
