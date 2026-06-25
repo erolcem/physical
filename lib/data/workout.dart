@@ -37,6 +37,16 @@ class WorkoutSession {
       );
 }
 
+/// Group sets under their exercise, preserving first-seen order — the workout-
+/// tracker view (Bench: 100×5, 110×3 …). Map keeps insertion order in Dart.
+Map<String, List<WorkoutSet>> groupByExercise(List<WorkoutSet> sets) {
+  final m = <String, List<WorkoutSet>>{};
+  for (final s in sets) {
+    (m[s.exerciseId] ??= []).add(s);
+  }
+  return m;
+}
+
 /// Best set per exercise — highest canonical strength value (1RM for compounds,
 /// rep-volume for isolations). This is the set that updates the lift's rank.
 Map<String, WorkoutSet> bestSets(WorkoutSession session) {

@@ -64,6 +64,13 @@ void main() {
       expect(exercisesOverDays(all, today: today), {'bench', 'curl'});
     });
 
+    test('groupByExercise groups sets under each exercise in order', () {
+      final g = groupByExercise(session.sets);
+      expect(g.keys.toList(), ['bench', 'curl']); // first-seen order
+      expect(g['bench']!.length, 2);
+      expect(g['curl']!.length, 2);
+    });
+
     test('WorkoutSession json round-trip', () {
       final back = WorkoutSession.fromJson(session.toJson());
       expect(back.sets.length, 4);
