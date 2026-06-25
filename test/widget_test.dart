@@ -20,7 +20,7 @@ void main() {
     await tester.pumpWidget(const ProviderScope(child: PhysicalApp()));
     await tester.pump(const Duration(milliseconds: 300));
 
-    for (final label in ['Progress', 'Habits', 'Profile', 'Dashboard']) {
+    for (final label in ['Progress', 'Habits', 'Coach', 'Profile', 'Home']) {
       await tester.tap(find.widgetWithText(Tab, label));
       await tester.pump(); // start the tab transition
       await tester.pump(const Duration(milliseconds: 400)); // let it settle

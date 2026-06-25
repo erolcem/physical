@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'cloud_sheet.dart';
+import 'coach_screen.dart';
 import 'habits_screen.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
@@ -20,7 +21,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -49,11 +50,12 @@ class _MainScreenState extends ConsumerState<MainScreen>
           controller: _tabController,
           isScrollable: false,
           indicatorColor: const Color(0xFF5B6AF8),
-          labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 2),
           tabs: const [
-            Tab(icon: Icon(Icons.dashboard), text: 'Dashboard'),
+            Tab(icon: Icon(Icons.dashboard), text: 'Home'),
             Tab(icon: Icon(Icons.show_chart), text: 'Progress'),
             Tab(icon: Icon(Icons.checklist), text: 'Habits'),
+            Tab(icon: Icon(Icons.auto_awesome), text: 'Coach'),
             Tab(icon: Icon(Icons.person), text: 'Profile'),
           ],
         ),
@@ -64,6 +66,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
           HomeTab(),
           ProgressTab(),
           HabitsTab(),
+          CoachTab(),
           ProfileTab(),
         ],
       ),

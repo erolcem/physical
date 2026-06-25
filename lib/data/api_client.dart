@@ -243,4 +243,33 @@ class ApiClient {
         .timeout(const Duration(seconds: 15));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
   }
+
+  // ── AI coach (PDF Part 5) ──
+  Future<Map<String, dynamic>> coachStatus() async {
+    final r = await _client
+        .get(Uri.parse('$baseUrl/me/coach/status'), headers: _headers())
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
+  Future<String> coachChat({
+    required String message,
+    List<Map<String, String>> history = const [],
+    List<Map<String, dynamic>> habits = const [],
+    Map<String, dynamic>? profile,
+  }) async {
+    final r = await _client
+        .post(Uri.parse('$baseUrl/me/coach/chat'),
+            headers: _headers({'Content-Type': 'application/json'}),
+            body: jsonEncode({
+              'message': message,
+              'history': history,
+              'habits': habits,
+              if (profile != null) 'profile': profile,
+            }))
+        .timeout(const Duration(seconds: 60));
+    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
+    return (jsonDecode(r.body) as Map<String, dynamic>)['reply'] as String;
+  }
 }
