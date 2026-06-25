@@ -413,7 +413,7 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     final notifier = ref.read(habitsProvider.notifier);
     if (a['type'] == 'add_habit') {
       notifier.addHabit(a['title'] as String,
-          category: (a['category'] as String?) ?? 'other',
+          section: (a['category'] as String?) ?? 'misc',
           time: a['time'] as String?,
           durationMins: (a['durationMins'] as num?)?.toInt() ?? 0);
     } else if (a['type'] == 'remove_habit') {

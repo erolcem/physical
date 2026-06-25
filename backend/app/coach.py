@@ -26,7 +26,7 @@ SYSTEM_PROMPT = (
     '"durationMins": 10, "time": "07:00"}\n'
     "```\n"
     'or {"type": "remove_habit", "title": "<existing habit title>"}. category is one '
-    "of strength|performance|sleep|diet|aesthetics|other; include only the fields you "
+    "of sleep|exercise|diet|aesthetics|recovery|misc; include only the fields you "
     "mean; keep titles short. Propose at most one or two actions per reply, and only "
     "when clearly useful.\n"
     "Dynamic volume auto-regulation: if recovery markers (sleep score, HRV, resting "
@@ -40,7 +40,7 @@ SYSTEM_PROMPT = (
 
 _ACTION_RE = re.compile(r"```action\s*(\{.*?\})\s*```", re.DOTALL)
 _ACTION_TYPES = {"add_habit", "remove_habit", "pin_correlation"}
-_CATEGORIES = {"strength", "performance", "sleep", "diet", "aesthetics", "other"}
+_CATEGORIES = {"sleep", "exercise", "diet", "aesthetics", "recovery", "misc"}
 _TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
 
 
@@ -67,7 +67,7 @@ def parse_actions(text: str):
             continue
         if t == "add_habit":
             act = {"type": t, "title": title,
-                   "category": obj.get("category") if obj.get("category") in _CATEGORIES else "other"}
+                   "category": obj.get("category") if obj.get("category") in _CATEGORIES else "misc"}
             dur = obj.get("durationMins")
             if isinstance(dur, (int, float)) and not isinstance(dur, bool):
                 act["durationMins"] = int(dur)
