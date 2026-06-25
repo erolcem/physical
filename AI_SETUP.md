@@ -93,6 +93,21 @@ just works once you're signed in. Same for friends, calendar, and notifications
 
 ---
 
+## F. Send the developer your Google data (to wire the last auto-metrics) — no code
+
+A few features (auto height/age, the workout↔Google-session check, deeper sleep
+fields, exact step/energy field names) need to see the **real shape** of your Google
+Health data. You can hand that over in 4 taps — no terminal:
+
+1. Open the app (signed in) and tap the **☁ cloud icon**.
+2. Tap **Sync now** once (so there's fresh Google data).
+3. Tap **Inspect Google data** (next to "Sign out").
+4. In the popup, tap **Copy**, then **paste it into the chat** to Claude.
+
+That output is just numbers/shapes (heart rate, sleep stages, steps, etc.) — no
+passwords or tokens. With it, the remaining auto-metrics get wired precisely instead
+of guessed.
+
 ## Troubleshooting
 - **Coach tab says "not set up yet"** → `GEMINI_API_KEY` isn't on Railway yet (step C),
   or the redeploy hasn't finished.

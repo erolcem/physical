@@ -513,8 +513,10 @@ totals, and goal-emphasis the coach remembers.
 label crowding (this round). Further: make the ranks/graph layouts more credible and
 striking, especially **upgrading the rank-badge assets**.
 
-**P2 · AI coach — fixed context + fixed response selection.** Keep context structured
-and responses a robust selection per Table 3 (Sleep / Diet / Exercise / Aesthetics
+**✅ DONE · AI coach — fixed context + fixed response selection.** Shipped: a fixed
+menu of coach functions (Sleep/Diet/Training/Aesthetics review, Set a goal, My
+progress, What should I improve?) in the welcome + a mid-chat Functions sheet, each
+sending a structured prompt. Context stays structured per Table 3 (Sleep / Diet / Exercise / Aesthetics
 review; Strategic goal-setting with an emphasised goal + plateau detection; Milestone
 discussion; Notifications; Habit-update-aware; deletable structured context;
 autonomous strategic-correlation pinning; dynamic volume auto-regulation on a
@@ -524,5 +526,8 @@ daily-readiness drop). Voice = out of scope.
 done; Google-session dual-auth pending live data) → (3) 🟡 **Diet** (holistic page +
 fibre + trend done; micros + exercise/sleep tailored layouts pending) → (4) 🟡
 **Profile auto-port** (weight/body-fat auto-filled; height/DOB pending live data) →
-(5) Rank-badge/graph visual polish (Liftoff-style) → (6) Coach fixed-response
-selection. Each shipped behind its own tests.
+(5) Rank-badge/graph visual polish (Liftoff-style) → (6) ✅ **Coach fixed-response selection** (done). Each shipped behind its own tests.
+
+**Next unblock:** an in-app **Cloud → Inspect Google data** button now copies the raw
+Google field shapes — paste that to wire the live-data items (workout dual-auth,
+height/DOB, deeper sleep, step/energy names).
