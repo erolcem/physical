@@ -36,5 +36,10 @@ class Settings:
     contact_email: str = os.environ.get("CONTACT_EMAIL", "your-email@example.com")
     app_name: str = os.environ.get("APP_NAME", "Physical")
 
+    # AI coach (PDF Part 5) — Gemini, to stay in the user's Google ecosystem.
+    # Get a key from Google AI Studio (aistudio.google.com). Flash = cheap + fast.
+    gemini_api_key: str = os.environ.get("GEMINI_API_KEY", "")
+    gemini_model: str = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+
 
 settings = Settings()

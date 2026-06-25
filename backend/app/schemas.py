@@ -89,3 +89,20 @@ class FriendOut(BaseModel):
 class PendingFriendOut(BaseModel):
     requester_id: str
     email: str | None = None
+
+
+# ── AI coach (PDF Part 5) ──
+class CoachTurn(BaseModel):
+    role: str  # "user" | "model"
+    text: str
+
+
+class CoachChatIn(BaseModel):
+    message: str
+    history: list[CoachTurn] = []
+    habits: list[dict] = []  # app-supplied: {title, category?, done_today?, streak?}
+    profile: dict | None = None
+
+
+class CoachChatOut(BaseModel):
+    reply: str
