@@ -28,7 +28,10 @@ SYSTEM_PROMPT = (
     'or {"type": "remove_habit", "title": "<existing habit title>"}. category is one '
     "of strength|performance|sleep|diet|aesthetics|other; include only the fields you "
     "mean; keep titles short. Propose at most one or two actions per reply, and only "
-    "when clearly useful."
+    "when clearly useful.\n"
+    "Dynamic volume auto-regulation: if recovery markers (sleep score, HRV, resting "
+    "heart rate) look poor, proactively propose easing the plan — remove or lighten a "
+    "heavy training habit and/or add a short mobility/recovery one — via those actions."
 )
 
 _ACTION_RE = re.compile(r"```action\s*(\{.*?\})\s*```", re.DOTALL)
