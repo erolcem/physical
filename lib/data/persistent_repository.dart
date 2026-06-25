@@ -7,18 +7,21 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../engine/rank_engine.dart' show Log;
 import 'habits.dart';
+import 'profile.dart';
 import 'repository.dart';
 
 class PersistentRepository implements Repository {
   static const _key = 'physical_logs_v1';
   static const _habitsKey = 'physical_habits_v1';
   static const _doneKey = 'physical_habit_done_v1';
+  static const _profileKey = 'physical_profile_v1';
   final SharedPreferences _prefs;
   final Map<String, List<Log>> _cache;
   final List<Habit> _habits;
   final Map<String, Set<String>> _completions;
-  PersistentRepository._(
-      this._prefs, this._cache, this._habits, this._completions);
+  ProfileData _profile;
+  PersistentRepository._(this._prefs, this._cache, this._habits,
+      this._completions, this._profile);
 
   /// Load once at startup. First run seeds demo data, then persists it.
   static Future<PersistentRepository> create() async {
@@ -29,6 +32,7 @@ class PersistentRepository implements Repository {
       raw == null ? {} : _decode(raw),
       _decodeHabits(prefs.getString(_habitsKey)),
       _decodeDone(prefs.getString(_doneKey)),
+      _decodeProfile(prefs.getString(_profileKey)),
     );
     if (raw == null) applyDemoSeed(repo); // first run only
     return repo;
@@ -85,14 +89,29 @@ class PersistentRepository implements Repository {
   }
 
   @override
+  ProfileData loadProfile() => _profile;
+
+  @override
+  void saveProfile(ProfileData profile) {
+    _profile = profile;
+    unawaited(_prefs.setString(_profileKey, jsonEncode(profile.toJson())));
+  }
+
+  @override
   void clear() {
     _cache.clear();
     _habits.clear();
     _completions.clear();
+    _profile = ProfileData.empty;
     _persist();
     _persistHabits();
     _persistDone();
+    unawaited(_prefs.remove(_profileKey));
   }
+
+  static ProfileData _decodeProfile(String? s) => s == null
+      ? ProfileData.empty
+      : ProfileData.fromJson(jsonDecode(s) as Map<String, dynamic>);
 
   void _persist() => unawaited(_prefs.setString(_key, _encode(_cache)));
 

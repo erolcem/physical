@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'cloud_sheet.dart';
 import 'habits_screen.dart';
 import 'home_screen.dart';
+import 'profile_screen.dart';
 import 'progress_screen.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
@@ -19,7 +20,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -46,11 +47,14 @@ class _MainScreenState extends ConsumerState<MainScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: false,
           indicatorColor: const Color(0xFF5B6AF8),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 4),
           tabs: const [
             Tab(icon: Icon(Icons.dashboard), text: 'Dashboard'),
             Tab(icon: Icon(Icons.show_chart), text: 'Progress'),
             Tab(icon: Icon(Icons.checklist), text: 'Habits'),
+            Tab(icon: Icon(Icons.person), text: 'Profile'),
           ],
         ),
       ),
@@ -60,6 +64,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
           HomeTab(),
           ProgressTab(),
           HabitsTab(),
+          ProfileTab(),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(

@@ -4,6 +4,7 @@
 // is wired in main.dart for real on-device storage. Same interface either way.
 import '../engine/rank_engine.dart' show Log, strengthValue;
 import 'habits.dart';
+import 'profile.dart';
 
 abstract class Repository {
   Map<String, List<Log>> loadLogs();
@@ -17,12 +18,17 @@ abstract class Repository {
   void deleteHabit(String id);
   Map<String, Set<String>> loadCompletions(); // habitId → set of done date-keys
   void setCompletion(String habitId, String day, bool done);
+
+  // Profile (PDF Part 1) — static identity fields, stored separately.
+  ProfileData loadProfile();
+  void saveProfile(ProfileData profile);
 }
 
 class InMemoryRepository implements Repository {
   final Map<String, List<Log>> _logs = {};
   final List<Habit> _habits = [];
   final Map<String, Set<String>> _completions = {};
+  ProfileData _profile = ProfileData.empty;
 
   @override
   Map<String, List<Log>> loadLogs() =>
@@ -67,10 +73,17 @@ class InMemoryRepository implements Repository {
   }
 
   @override
+  ProfileData loadProfile() => _profile;
+
+  @override
+  void saveProfile(ProfileData profile) => _profile = profile;
+
+  @override
   void clear() {
     _logs.clear();
     _habits.clear();
     _completions.clear();
+    _profile = ProfileData.empty;
   }
 
   InMemoryRepository seedDemo() {
