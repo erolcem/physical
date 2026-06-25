@@ -4,10 +4,12 @@ import '../data/notifications.dart';
 import '../state/habit_providers.dart';
 import 'cloud_sheet.dart';
 import 'coach_screen.dart';
+import 'diet_screen.dart';
 import 'habits_screen.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
 import 'progress_screen.dart';
+import 'workout_screen.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -77,10 +79,43 @@ class _MainScreenState extends ConsumerState<MainScreen>
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => openLogSheet(context),
+        onPressed: () => _showLogChooser(context),
         icon: const Icon(Icons.add),
         label: const Text('Log'),
         backgroundColor: const Color(0xFF5B6AF8),
+      ),
+    );
+  }
+
+  void _showLogChooser(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF12152E),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 8),
+          ListTile(
+            leading: const Icon(Icons.fitness_center, color: Color(0xFF5B6AF8)),
+            title: const Text('Log metric'),
+            subtitle: const Text('A lift, field test, or vital'),
+            onTap: () { Navigator.pop(ctx); openLogSheet(context); },
+          ),
+          ListTile(
+            leading: const Icon(Icons.sports_gymnastics, color: Color(0xFF4CE0C3)),
+            title: const Text('Log workout'),
+            subtitle: const Text('A session of sets → volume + ranks'),
+            onTap: () { Navigator.pop(ctx); openWorkoutScreen(context); },
+          ),
+          ListTile(
+            leading: const Icon(Icons.restaurant, color: Color(0xFFF6CF3E)),
+            title: const Text('Log food'),
+            subtitle: const Text('Calories + macros for today'),
+            onTap: () { Navigator.pop(ctx); openDietScreen(context); },
+          ),
+          const SizedBox(height: 8),
+        ]),
       ),
     );
   }

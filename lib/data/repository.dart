@@ -3,8 +3,10 @@
 // fallback/default (and used in tests); PersistentRepository (shared_preferences)
 // is wired in main.dart for real on-device storage. Same interface either way.
 import '../engine/rank_engine.dart' show Log, strengthValue;
+import 'diet.dart';
 import 'habits.dart';
 import 'profile.dart';
+import 'workout.dart';
 
 abstract class Repository {
   Map<String, List<Log>> loadLogs();
@@ -22,6 +24,16 @@ abstract class Repository {
   // Profile (PDF Part 1) — static identity fields, stored separately.
   ProfileData loadProfile();
   void saveProfile(ProfileData profile);
+
+  // Diet (PDF Part 1) — food log entries with macros.
+  List<FoodEntry> loadFood();
+  void saveFood(FoodEntry entry);
+  void deleteFood(String id);
+
+  // Exercise (PDF Part 1) — workout sessions (sets → volume + muscle groups).
+  List<WorkoutSession> loadWorkouts();
+  void saveWorkout(WorkoutSession session);
+  void deleteWorkout(String id);
 }
 
 class InMemoryRepository implements Repository {
@@ -29,6 +41,8 @@ class InMemoryRepository implements Repository {
   final List<Habit> _habits = [];
   final Map<String, Set<String>> _completions = {};
   ProfileData _profile = ProfileData.empty;
+  final List<FoodEntry> _food = [];
+  final List<WorkoutSession> _workouts = [];
 
   @override
   Map<String, List<Log>> loadLogs() =>
@@ -79,11 +93,31 @@ class InMemoryRepository implements Repository {
   void saveProfile(ProfileData profile) => _profile = profile;
 
   @override
+  List<FoodEntry> loadFood() => List.of(_food);
+
+  @override
+  void saveFood(FoodEntry entry) => _food.add(entry);
+
+  @override
+  void deleteFood(String id) => _food.removeWhere((e) => e.id == id);
+
+  @override
+  List<WorkoutSession> loadWorkouts() => List.of(_workouts);
+
+  @override
+  void saveWorkout(WorkoutSession session) => _workouts.add(session);
+
+  @override
+  void deleteWorkout(String id) => _workouts.removeWhere((w) => w.id == id);
+
+  @override
   void clear() {
     _logs.clear();
     _habits.clear();
     _completions.clear();
     _profile = ProfileData.empty;
+    _food.clear();
+    _workouts.clear();
   }
 
   InMemoryRepository seedDemo() {

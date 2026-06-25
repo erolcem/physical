@@ -29,7 +29,8 @@ def context(body: CoachContextIn,
             db: Session = Depends(get_db)):
     """Exactly what the coach sees — for the transparency view. No model call."""
     samples = list(db.scalars(select(Sample).where(Sample.user_id == user_id)))
-    return context_sections(samples, body.habits, body.profile)
+    return context_sections(samples, body.habits, body.profile,
+                            body.diet, body.training, body.aesthetics)
 
 
 @router.post("/chat", response_model=CoachChatOut)
@@ -39,7 +40,8 @@ def chat(body: CoachChatIn,
     if not gemini.configured():
         raise HTTPException(503, "AI coach isn't configured on the server yet")
     samples = list(db.scalars(select(Sample).where(Sample.user_id == user_id)))
-    system = compose_system(samples, body.habits, body.profile)
+    system = compose_system(samples, body.habits, body.profile,
+                            body.diet, body.training, body.aesthetics)
     turns = [{"role": t.role, "text": t.text} for t in body.history]
     turns.append({"role": "user", "text": body.message})
     try:

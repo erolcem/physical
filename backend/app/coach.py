@@ -77,9 +77,38 @@ def _fmt_rank(r) -> str:
     return f"{r['tier']} {r['sub']} (top {r['top_pct']:.0f}%)" if r else "unranked"
 
 
-def build_context(samples, habits=None, profile=None) -> str:
+def _diet_line(diet) -> str | None:
+    if not diet:
+        return None
+    cal, pro = diet.get("calories"), diet.get("protein")
+    if not cal and not pro and not diet.get("items"):
+        return None
+    extra = ""
+    if diet.get("carbs") or diet.get("fat"):
+        extra = f", {int(diet.get('carbs') or 0)}g carbs, {int(diet.get('fat') or 0)}g fat"
+    return f"Today's diet: {int(cal or 0)} kcal, {int(pro or 0)}g protein{extra}"
+
+
+def _training_line(training) -> str | None:
+    if not training or not training.get("sessions"):
+        return None
+    ex = training.get("exercises") or []
+    vol = int(training.get("weekly_volume") or 0)
+    tail = f"; trained {', '.join(ex[:8])}" if ex else ""
+    return f"Training (last 7d): {int(training['sessions'])} sessions, {vol} volume{tail}"
+
+
+def _aesthetics_line(aesthetics) -> str | None:
+    if not aesthetics:
+        return None
+    parts = [f"{k} {int(v)}" for k, v in aesthetics.items() if v is not None]
+    return ("Aesthetics: " + ", ".join(parts)) if parts else None
+
+
+def build_context(samples, habits=None, profile=None, diet=None, training=None,
+                  aesthetics=None) -> str:
     """A compact, PII-free USER DATA block from canonical samples + app-supplied
-    habits/profile. `habits` items: {title, category?, done_today?, streak?}."""
+    habits/profile/diet/training/aesthetics."""
     habits = habits or []
     lines: list[str] = []
 
@@ -115,6 +144,10 @@ def build_context(samples, habits=None, profile=None) -> str:
     else:
         lines.append("No logged or synced data yet.")
 
+    for line in (_diet_line(diet), _training_line(training), _aesthetics_line(aesthetics)):
+        if line:
+            lines.append(line)
+
     if habits:
         done = sum(1 for h in habits if h.get("done_today"))
         items = "; ".join(
@@ -129,17 +162,22 @@ def build_context(samples, habits=None, profile=None) -> str:
     return "\n".join(lines)
 
 
-def compose_system(samples, habits=None, profile=None) -> str:
-    return f"{SYSTEM_PROMPT}\n\n=== USER DATA ===\n{build_context(samples, habits, profile)}"
+def compose_system(samples, habits=None, profile=None, diet=None, training=None,
+                   aesthetics=None) -> str:
+    ctx = build_context(samples, habits, profile, diet, training, aesthetics)
+    return f"{SYSTEM_PROMPT}\n\n=== USER DATA ===\n{ctx}"
 
 
-def context_sections(samples, habits=None, profile=None) -> dict:
+def context_sections(samples, habits=None, profile=None, diet=None, training=None,
+                     aesthetics=None) -> dict:
     """The exact context the coach holds, as labelled sections — powers the
     transparency view so the user sees precisely what is (and isn't) shared."""
     habits = habits or []
     out = {
         "profile": None, "overall": None, "categories": {},
-        "weakest": None, "strongest": None, "recent": {}, "habits": [],
+        "weakest": None, "strongest": None, "recent": {},
+        "diet": _diet_line(diet), "training": _training_line(training),
+        "aesthetics": _aesthetics_line(aesthetics), "habits": [],
         "note": ("Only this data is sent to your AI coach. Your email, name, and "
                  "account id are never shared."),
     }

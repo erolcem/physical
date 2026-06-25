@@ -102,6 +102,9 @@ class CoachChatIn(BaseModel):
     history: list[CoachTurn] = []
     habits: list[dict] = []  # app-supplied: {title, category?, done_today?, streak?}
     profile: dict | None = None
+    diet: dict | None = None        # today's totals: {calories, protein, carbs, fat, items}
+    training: dict | None = None    # {weekly_volume, sessions, exercises: [...]}
+    aesthetics: dict | None = None  # {skin: 80, oral: 90, ...}
 
 
 class CoachChatOut(BaseModel):
@@ -112,3 +115,6 @@ class CoachChatOut(BaseModel):
 class CoachContextIn(BaseModel):
     habits: list[dict] = []
     profile: dict | None = None
+    diet: dict | None = None
+    training: dict | None = None
+    aesthetics: dict | None = None

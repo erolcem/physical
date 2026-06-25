@@ -39,6 +39,18 @@ def test_build_context_structured_and_pii_free():
     assert "@" not in ctx and "user_id" not in ctx
 
 
+def test_context_includes_diet_training_aesthetics():
+    ctx = build_context(
+        [],
+        diet={"calories": 2200, "protein": 150, "items": 4},
+        training={"sessions": 3, "weekly_volume": 12000, "exercises": ["Bench", "Squat"]},
+        aesthetics={"skin": 82, "oral": 90},
+    )
+    assert "2200 kcal" in ctx and "150g protein" in ctx
+    assert "3 sessions" in ctx and "12000 volume" in ctx and "Bench" in ctx
+    assert "skin 82" in ctx and "oral 90" in ctx
+
+
 def test_compose_system_wraps_prompt_and_data():
     s = compose_system([], habits=[], profile=None)
     assert "AI coach" in s and "USER DATA" in s and "not a clinician" in s

@@ -6,22 +6,28 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../engine/rank_engine.dart' show Log;
+import 'diet.dart';
 import 'habits.dart';
 import 'profile.dart';
 import 'repository.dart';
+import 'workout.dart';
 
 class PersistentRepository implements Repository {
   static const _key = 'physical_logs_v1';
   static const _habitsKey = 'physical_habits_v1';
   static const _doneKey = 'physical_habit_done_v1';
   static const _profileKey = 'physical_profile_v1';
+  static const _foodKey = 'physical_food_v1';
+  static const _workoutKey = 'physical_workouts_v1';
   final SharedPreferences _prefs;
   final Map<String, List<Log>> _cache;
   final List<Habit> _habits;
   final Map<String, Set<String>> _completions;
   ProfileData _profile;
+  final List<FoodEntry> _food;
+  final List<WorkoutSession> _workouts;
   PersistentRepository._(this._prefs, this._cache, this._habits,
-      this._completions, this._profile);
+      this._completions, this._profile, this._food, this._workouts);
 
   /// Load once at startup. First run seeds demo data, then persists it.
   static Future<PersistentRepository> create() async {
@@ -33,6 +39,8 @@ class PersistentRepository implements Repository {
       _decodeHabits(prefs.getString(_habitsKey)),
       _decodeDone(prefs.getString(_doneKey)),
       _decodeProfile(prefs.getString(_profileKey)),
+      _decodeFood(prefs.getString(_foodKey)),
+      _decodeWorkouts(prefs.getString(_workoutKey)),
     );
     if (raw == null) applyDemoSeed(repo); // first run only
     return repo;
@@ -98,20 +106,68 @@ class PersistentRepository implements Repository {
   }
 
   @override
+  List<FoodEntry> loadFood() => List.of(_food);
+
+  @override
+  void saveFood(FoodEntry entry) {
+    _food.add(entry);
+    _persistFood();
+  }
+
+  @override
+  void deleteFood(String id) {
+    _food.removeWhere((e) => e.id == id);
+    _persistFood();
+  }
+
+  @override
+  List<WorkoutSession> loadWorkouts() => List.of(_workouts);
+
+  @override
+  void saveWorkout(WorkoutSession session) {
+    _workouts.add(session);
+    _persistWorkouts();
+  }
+
+  @override
+  void deleteWorkout(String id) {
+    _workouts.removeWhere((w) => w.id == id);
+    _persistWorkouts();
+  }
+
+  @override
   void clear() {
     _cache.clear();
     _habits.clear();
     _completions.clear();
     _profile = ProfileData.empty;
+    _food.clear();
+    _workouts.clear();
     _persist();
     _persistHabits();
     _persistDone();
+    _persistFood();
+    _persistWorkouts();
     unawaited(_prefs.remove(_profileKey));
   }
+
+  void _persistFood() => unawaited(_prefs.setString(
+      _foodKey, jsonEncode([for (final e in _food) e.toJson()])));
+
+  void _persistWorkouts() => unawaited(_prefs.setString(
+      _workoutKey, jsonEncode([for (final w in _workouts) w.toJson()])));
 
   static ProfileData _decodeProfile(String? s) => s == null
       ? ProfileData.empty
       : ProfileData.fromJson(jsonDecode(s) as Map<String, dynamic>);
+
+  static List<FoodEntry> _decodeFood(String? s) => s == null
+      ? []
+      : [for (final e in (jsonDecode(s) as List)) FoodEntry.fromJson(e as Map<String, dynamic>)];
+
+  static List<WorkoutSession> _decodeWorkouts(String? s) => s == null
+      ? []
+      : [for (final w in (jsonDecode(s) as List)) WorkoutSession.fromJson(w as Map<String, dynamic>)];
 
   void _persist() => unawaited(_prefs.setString(_key, _encode(_cache)));
 

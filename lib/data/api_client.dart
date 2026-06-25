@@ -260,6 +260,9 @@ class ApiClient {
     List<Map<String, String>> history = const [],
     List<Map<String, dynamic>> habits = const [],
     Map<String, dynamic>? profile,
+    Map<String, dynamic>? diet,
+    Map<String, dynamic>? training,
+    Map<String, dynamic>? aesthetics,
   }) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/coach/chat'),
@@ -269,6 +272,9 @@ class ApiClient {
               'history': history,
               'habits': habits,
               if (profile != null) 'profile': profile,
+              if (diet != null) 'diet': diet,
+              if (training != null) 'training': training,
+              if (aesthetics != null) 'aesthetics': aesthetics,
             }))
         .timeout(const Duration(seconds: 60));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
@@ -279,11 +285,20 @@ class ApiClient {
   Future<Map<String, dynamic>> coachContext({
     List<Map<String, dynamic>> habits = const [],
     Map<String, dynamic>? profile,
+    Map<String, dynamic>? diet,
+    Map<String, dynamic>? training,
+    Map<String, dynamic>? aesthetics,
   }) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/coach/context'),
             headers: _headers({'Content-Type': 'application/json'}),
-            body: jsonEncode({'habits': habits, if (profile != null) 'profile': profile}))
+            body: jsonEncode({
+              'habits': habits,
+              if (profile != null) 'profile': profile,
+              if (diet != null) 'diet': diet,
+              if (training != null) 'training': training,
+              if (aesthetics != null) 'aesthetics': aesthetics,
+            }))
         .timeout(const Duration(seconds: 15));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
     return jsonDecode(r.body) as Map<String, dynamic>;

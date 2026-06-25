@@ -4,10 +4,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/api_client.dart';
+import '../data/diet.dart' show todayDiet;
 import '../data/habits.dart' show currentStreak;
+import '../data/metrics.dart' show metricById, metrics, MetricTier;
 import '../data/sync.dart' show apiClientProvider;
+import '../data/workout.dart' show exercisesOverDays, sessionsOverDays, volumeOverDays;
 import '../state/habit_providers.dart';
+import '../state/log_providers.dart';
 import '../state/profile_providers.dart';
+import '../state/providers.dart' show latestLogsProvider;
 
 const _bg = Color(0xFF08091A);
 const _card = Color(0xFF12152E);
@@ -95,6 +100,35 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     };
   }
 
+  Map<String, dynamic> _dietCtx() {
+    final t = todayDiet(ref.read(dietProvider));
+    return {
+      'calories': t.calories, 'protein': t.protein,
+      'carbs': t.carbs, 'fat': t.fat, 'items': t.items,
+    };
+  }
+
+  Map<String, dynamic> _trainingCtx() {
+    final w = ref.read(workoutProvider);
+    final ids = exercisesOverDays(w);
+    return {
+      'weekly_volume': volumeOverDays(w).round(),
+      'sessions': sessionsOverDays(w),
+      'exercises': [for (final id in ids) metricById(id).label],
+    };
+  }
+
+  Map<String, dynamic> _aestheticsCtx() {
+    final latest = ref.read(latestLogsProvider);
+    final out = <String, dynamic>{};
+    for (final m in metrics) {
+      if (m.category != 'aesthetics' || m.tier != MetricTier.tracked) continue;
+      final l = latest[m.id];
+      if (l != null) out[m.label] = l.value;
+    }
+    return out;
+  }
+
   Future<void> _send(String raw) async {
     final text = raw.trim();
     if (text.isEmpty || _sending) return;
@@ -108,7 +142,8 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     _scrollToBottom();
     try {
       final res = await api.coachChat(
-          message: text, history: history, habits: _habitsCtx(), profile: _profileCtx());
+          message: text, history: history, habits: _habitsCtx(), profile: _profileCtx(),
+          diet: _dietCtx(), training: _trainingCtx(), aesthetics: _aestheticsCtx());
       final reply = (res['reply'] as String?) ?? '';
       final actions =
           ((res['actions'] as List?) ?? const []).cast<Map<String, dynamic>>();
@@ -132,6 +167,9 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     final api = ref.read(apiClientProvider);
     final habits = _habitsCtx();
     final profile = _profileCtx();
+    final diet = _dietCtx();
+    final training = _trainingCtx();
+    final aesthetics = _aestheticsCtx();
     if (!mounted) return;
     showModalBottomSheet(
       context: context,
@@ -140,7 +178,8 @@ class _CoachTabState extends ConsumerState<CoachTab> {
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => FutureBuilder<Map<String, dynamic>>(
-        future: api.coachContext(habits: habits, profile: profile),
+        future: api.coachContext(
+            habits: habits, profile: profile, diet: diet, training: training, aesthetics: aesthetics),
         builder: (ctx, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const SizedBox(height: 220, child: Center(child: CircularProgressIndicator()));
@@ -183,6 +222,9 @@ class _CoachTabState extends ConsumerState<CoachTab> {
           if (c['strongest'] != null) row('Strongest', c['strongest'] as String),
           if (recent.isNotEmpty)
             row('Recent', recent.entries.map((e) => '${e.key}: ${e.value}').join(', ')),
+          if (c['diet'] != null) row('Diet', c['diet'] as String),
+          if (c['training'] != null) row('Training', c['training'] as String),
+          if (c['aesthetics'] != null) row('Aesthetics', c['aesthetics'] as String),
           row('Habits', habits.isEmpty ? '—' : habits.join('\n')),
           const SizedBox(height: 14),
           Container(
