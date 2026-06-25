@@ -464,3 +464,60 @@ STANDARDS).
    unblock TestFlight + on-device verification of notifications; Google CASA
    verification (only for public release).
 7. **Voice logging** — intentionally out of scope.
+
+---
+
+## 17. Owner review (round 2) — corrected vision & build roadmap
+
+Captured verbatim-in-spirit from the owner's review so nothing is lost. Each item:
+current state → target → priority. (Setup for any user is in `AI_SETUP.md`.)
+
+**Guiding correction — auto over manual (seamlessness).** If a metric *can* be
+auto-logged, it should be, not typed.
+
+**P1 · Profile ported from Google Health.** *Current:* weight + body-fat already
+sync as metrics; age/height/DOB are manual on the Profile tab. *Target:* pull the
+Google Health profile (height, date-of-birth→age, weight, body-fat) on sign-in/sync,
+manual only as fallback. *Needs:* the Google Health profile read scope/endpoint —
+confirm shape via `/debug`.
+
+**P1 · Workout logging = a real tracker.** *Current:* a session is a flat list of
+sets (exercise+weight+reps), best-set updates the rank, total volume tracked.
+*Target:* group sets **under each exercise** like a standard workout-tracker app;
+surface per-exercise + total **load/volume**; and **two-step verify against the
+Google Health exercise *session* in the same time window** — time-based dual
+authorisation is what makes the checklist trustworthy.
+
+**P1 · Diet = holistic, not just calories.** *Current:* kcal + macros (P/C/F) +
+daily totals. *Target:* fuller macro breakdown **+ micronutrients** (needs a food
+database), on a dedicated diet-style page; and give each graph subpage (diet /
+exercise / sleep) its **own tailored layout** instead of one generic chart.
+
+**P1 · Habits = structured & data-aligned, not free-text.** *Current:* free-text
+title + optional linked metric + planner (time/duration/cost). *Target:*
+- A **fixed menu of habit types** bound to data domains — e.g. a *Sleep* goal that
+  watches all sleep+recovery data; an *Exercise* goal that watches workout sets +
+  strength/performance; *Diet*; *Aesthetics*; *Misc*. **Verification = the user's
+  logs meeting the habit's target, automatically.**
+- Time model: an **ideal time + duration** (the ideal time drives the calendar event
+  + notification; doing it at another time still checks off).
+- Cadence: **daily, or weekly with chosen days**; show a friendly **weekly roster +
+  daily roster**.
+- **Deprecate the monthly-cost field.**
+
+**P2 · Graphs & ranks — accessibility + "epic" polish.** Fixed the **"All" timeframe**
+label crowding (this round). Further: make the ranks/graph layouts more credible and
+striking, especially **upgrading the rank-badge assets**.
+
+**P2 · AI coach — fixed context + fixed response selection.** Keep context structured
+and responses a robust selection per Table 3 (Sleep / Diet / Exercise / Aesthetics
+review; Strategic goal-setting with an emphasised goal + plateau detection; Milestone
+discussion; Notifications; Habit-update-aware; deletable structured context;
+autonomous strategic-correlation pinning; dynamic volume auto-regulation on a
+daily-readiness drop). Voice = out of scope.
+
+**Suggested build order:** (1) Habits redesign (structured types + cadence + roster,
+drop cost) → (2) Workout tracker (grouped sets + Google-session dual-auth) → (3) Diet
+macros/micros + per-domain graph layouts → (4) Profile auto-port from Google Health →
+(5) Rank-badge/graph visual polish → (6) Coach fixed-response selection. Each shipped
+behind its own tests, as usual.

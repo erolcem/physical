@@ -545,7 +545,9 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
                 sideTitles: SideTitles(
                   showTitles: true,
                   reservedSize: 32,
-                  interval: timeSpanDays != null ? math.max(1, timeSpanDays / 6).toDouble() : null,
+                  // ~6 evenly-spaced date labels for ANY timeframe — incl. "All"
+                  // (a null interval made fl_chart draw one label per day → cramped).
+                  interval: math.max(1.0, daySpan / 6),
                   getTitlesWidget: (v, _) {
                     final dt = DateTime.fromMillisecondsSinceEpoch(globalFirstTs + (v * 86400000).toInt());
                     return Padding(
