@@ -4,8 +4,8 @@ A complete map of the system: every layer, how data flows, and where each featur
 from the plan lives. Companion to `GUIDE.md` (usage), `backend/DEPLOY.md` (hosting),
 `backend/VERIFICATION.md` (Google review), and `All readmes/` (the design docs + PDF).
 
-**Status:** all non-AI features of the plan (Parts 1–4, 6-sharing, 7) implemented.
-100 Flutter tests + 32 backend tests green, 0 analyzer issues, Python⇄Dart engine
+**Status:** all non-AI features of the plan (Parts 1–4, **6**, 7) implemented.
+100 Flutter tests + 36 backend tests green, 0 analyzer issues, Python⇄Dart engine
 parity to ~1e-5. Hosted on Railway; iPhone via TestFlight.
 
 ---
@@ -89,7 +89,7 @@ What it does:
 - **Imports `physical_rank_engine.py` directly** (`app/engine.py`) — single source
   of truth, no drift.
 - **Routers:** `health`, `legal` (`/privacy`,`/terms`), `auth`, `profile`,
-  `samples`, `ranks`, and the Google Health integration.
+  `samples`, `ranks`, `friends`, and the Google Health integration.
 - **Canonical `sample`** keyed by user, idempotent dedup on
   `(user, metric, source, source_id)`; server-side `strength_value` from raw
   `{weight, reps}`.
@@ -126,6 +126,13 @@ What it does:
   and **24h density bar**.
 - **Calendar push:** one-tap "Add to calendar" → Google Calendar daily event
   (`googleCalendarUrl`, via `url_launcher`).
+
+### Layer G — Friends / social (PDF Part 6)
+`backend/.../friends.py` + the Profile tab's Friends section:
+- Add a friend **by email** → pending request → **accept** → both can see each
+  other's **overall rank only** (tier/sub/top% — never raw samples), a mini
+  leaderboard sorted by rank. Privacy is by mutual consent (`pending|accepted`).
+- Plus the **Share my rank** clipboard slice. Friends require sign-in.
 
 ---
 
@@ -189,14 +196,15 @@ test/ (Flutter) + backend/tests/ (pytest) + test/golden_vectors.json
 
 ---
 
-## 7. Tests (132 total)
+## 7. Tests (136 total)
 - **Flutter (100):** engine parity vs golden vectors, system-verification
   (registry↔engine, PDF categories, every lift ranks, directions, overall/category),
   habits (streaks/verification/planner/weekly/calendar), profile, sync, and an
   **all-tabs runtime smoke test**.
-- **Backend (32):** engine load + coverage, auth, samples (incl. isolation
+- **Backend (36):** engine load + coverage, auth, samples (incl. isolation
   rep-volume + raw 1RM), ranks, Google Health mapping (every dataType shape +
-  derived sleep score + background metrics), legal pages.
+  derived sleep score + background metrics), friends (request/accept/rank/privacy),
+  legal pages.
 
 ---
 
@@ -208,6 +216,6 @@ test/ (Flutter) + backend/tests/ (pytest) + test/golden_vectors.json
 | 3 — Body graph & Ranks (tiers, sub-ranks, Glory, overall/category, correlation) | ✅ |
 | 4 — Habits (check-off, verification, planner, density, weekly, calendar) | ✅ (calendar via Google Calendar link) |
 | 5 — AI coach | ⏭️ excluded / future (Phase 3) |
-| 6 — Friends / sharing / QoL | 🟡 sharing done; friends/leaderboards are Phase 4 |
+| 6 — Friends / sharing / QoL | ✅ add-by-email → accept → compare overall ranks + share |
 | 7 — Underlying mathematics | ✅ (exceeds the doc) |
 ```
