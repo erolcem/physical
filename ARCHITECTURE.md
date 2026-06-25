@@ -151,7 +151,15 @@ the **Coach tab** (`coach_screen.dart`):
 - **Agentic actions** (with confirmation): the coach emits fenced ```action JSON
   blocks; `parse_actions()` safely extracts/sanitises them; the app renders each as
   an **Apply** card (add/remove habit) that runs through the habits notifier —
-  nothing changes without the user's tap.
+  nothing changes without the user's tap. **Dynamic volume auto-regulation**: poor
+  recovery → the coach proposes easing the plan.
+- **Transparency** (`/me/coach/context` + "What I see" sheet): the exact PII-free
+  context shown as labelled sections (profile / ranks / weakest-strongest / recent
+  readings / habits) so the user sees precisely what is and isn't shared.
+- **Proactive notifications** (`data/notifications.dart`): a daily local reminder
+  per timed habit (flutter_local_notifications + timezone), pure reminder logic
+  unit-tested, scheduler guarded to iOS/Android (no-op elsewhere), re-synced on any
+  habit change.
 
 ---
 
@@ -215,12 +223,12 @@ test/ (Flutter) + backend/tests/ (pytest) + test/golden_vectors.json
 
 ---
 
-## 7. Tests (144 total)
-- **Flutter (100):** engine parity vs golden vectors, system-verification
+## 7. Tests (148 total)
+- **Flutter (103):** engine parity vs golden vectors, system-verification
   (registry↔engine, PDF categories, every lift ranks, directions, overall/category),
   habits (streaks/verification/planner/weekly/calendar), profile, sync, and an
   **all-tabs runtime smoke test** (now 5 tabs incl. Coach).
-- **Backend (44):** engine load + coverage, auth, samples (incl. isolation
+- **Backend (45):** engine load + coverage, auth, samples (incl. isolation
   rep-volume + raw 1RM), ranks, Google Health mapping (every dataType shape +
   derived sleep score + background metrics), friends (request/accept/rank/privacy),
   coach (PII-free context + chat with Gemini mocked + guards), legal pages.
