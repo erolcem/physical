@@ -50,6 +50,23 @@ def status(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     return {"connected": db.get(GoogleHealthToken, user_id) is not None}
 
 
+@router.get("/profile")
+def google_profile(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
+    """The user's Google Health profile (age) for auto-porting into the app profile.
+    Google exposes age here but not height/DOB/gender — those stay manual."""
+    token = db.get(GoogleHealthToken, user_id)
+    if token is None:
+        raise HTTPException(404, "Google Health not connected")
+    try:
+        access = _valid_access_token(db, token)
+    except Exception as e:
+        return {"error": str(e)[:200]}
+    status, body = GoogleHealthClient(access).get_raw("/users/me/profile")
+    if status != 200 or not isinstance(body, dict):
+        return {}
+    return {"age": body.get("age")}
+
+
 @router.get("/debug")
 def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     """Diagnose an empty sync: what does Google actually have for this account?

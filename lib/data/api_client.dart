@@ -192,6 +192,19 @@ class ApiClient {
   }
 
   /// Ask the backend to pull fresh data from the user's Google Health.
+  /// The user's Google Health profile age (for auto-porting), or null.
+  Future<int?> googleProfileAge() async {
+    try {
+      final r = await _client
+          .get(Uri.parse('$baseUrl/integrations/google/profile'), headers: _headers())
+          .timeout(const Duration(seconds: 15));
+      if (r.statusCode != 200) return null;
+      return (jsonDecode(r.body) as Map<String, dynamic>)['age'] as int?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Raw Google Health debug output (status + a real sample per data type, plus
   /// profile/session probes) — returned verbatim for the in-app inspector to copy.
   Future<String> googleDebug() async {

@@ -45,6 +45,19 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
     _weight = TextEditingController(text: autoWeight?.toStringAsFixed(1) ?? '');
     _bodyFat = TextEditingController(text: autoBodyFat?.toStringAsFixed(1) ?? '');
     _gender = p.gender;
+    _maybeFetchAge();
+  }
+
+  // Age comes from the Google Health profile (height/DOB/gender aren't exposed).
+  Future<void> _maybeFetchAge() async {
+    if (_age.text.isNotEmpty) return;
+    final api = ref.read(apiClientProvider);
+    await api.loadPersistedToken();
+    if (!api.isSignedIn) return;
+    final age = await api.googleProfileAge();
+    if (age != null && mounted && _age.text.isEmpty) {
+      setState(() => _age.text = age.toString());
+    }
   }
 
   @override
