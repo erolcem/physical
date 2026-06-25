@@ -112,6 +112,23 @@ void main() {
     });
   });
 
+  group('calendar push', () {
+    test('untimed habit has no calendar url', () {
+      const h = Habit(id: '1', title: 'x', createdAt: 'x');
+      expect(googleCalendarUrl(h), isNull);
+    });
+
+    test('timed habit builds a daily recurring Google Calendar event', () {
+      const h = Habit(id: '1', title: 'AM Lift', time: '07:00', durationMins: 60, createdAt: 'x');
+      final url = googleCalendarUrl(h, now: DateTime(2026, 6, 24))!;
+      expect(url, startsWith('https://calendar.google.com/calendar/render?'));
+      expect(url, contains('action=TEMPLATE'));
+      expect(url, contains('text=AM%20Lift'));
+      expect(url, contains('dates=20260624T070000%2F20260624T080000')); // 07:00–08:00
+      expect(url, contains('FREQ%3DDAILY'));
+    });
+  });
+
   group('weekly history', () {
     final today = DateTime(2026, 6, 24);
 

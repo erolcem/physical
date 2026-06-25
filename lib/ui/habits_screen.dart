@@ -4,6 +4,7 @@
 // two-step verification badges). Add/remove in-tab; storage is local-first.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../data/habits.dart';
 import '../data/metrics.dart';
 import '../state/habit_providers.dart';
@@ -320,6 +321,15 @@ class HabitsTab extends ConsumerWidget {
                       _badge('✓ verified', _teal)
                     else if (streak > 0)
                       _badge('🔥 $streak', _accent),
+                    if (h.time != null)
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 18,
+                        color: _muted,
+                        tooltip: 'Add to calendar',
+                        icon: const Icon(Icons.event),
+                        onPressed: () => _addToCalendar(h),
+                      ),
                   ]),
                 ),
               ),
@@ -352,6 +362,13 @@ class HabitsTab extends ConsumerWidget {
         child: Text(text,
             style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 12)),
       );
+
+  Future<void> _addToCalendar(Habit h) async {
+    final url = googleCalendarUrl(h);
+    if (url != null) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    }
+  }
 
   // ── Add habit ──
   Future<void> _showAddDialog(BuildContext context, WidgetRef ref) async {

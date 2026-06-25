@@ -107,6 +107,34 @@ HabitStatus statusFor(Habit h,
   return HabitStatus.manual;
 }
 
+/// A Google Calendar "create event" URL for a timed daily habit — opens the
+/// calendar pre-filled (a daily recurring event) so the user can add it in one
+/// tap, the friction-reducing "calendar push" from the plan. Null if the habit
+/// has no time (a calendar event needs one). Times are floating/local.
+String? googleCalendarUrl(Habit h, {DateTime? now}) {
+  if (h.time == null) return null;
+  final parts = h.time!.split(':');
+  final hh = int.tryParse(parts[0]) ?? 0;
+  final mm = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+  final base = now ?? DateTime.now();
+  final start = DateTime(base.year, base.month, base.day, hh, mm);
+  final end = start.add(Duration(minutes: h.durationMins > 0 ? h.durationMins : 30));
+  String p2(int n) => n.toString().padLeft(2, '0');
+  String fmt(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}${p2(d.month)}${p2(d.day)}T${p2(d.hour)}${p2(d.minute)}00';
+  final params = {
+    'action': 'TEMPLATE',
+    'text': h.title,
+    'dates': '${fmt(start)}/${fmt(end)}',
+    'recur': 'RRULE:FREQ=DAILY',
+    'details': 'Physical habit',
+  };
+  final query = params.entries
+      .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+      .join('&');
+  return 'https://calendar.google.com/calendar/render?$query';
+}
+
 /// The last [n] day-keys, oldest first, ending today.
 List<String> lastNDays(int n, {DateTime? today}) {
   final t = today ?? DateTime.now();
