@@ -168,20 +168,16 @@ class _BodyPainter extends CustomPainter {
         final pth = path(parsePoly(ps));
 
         if (isRanked) {
-          // Drop-shadow glow behind ranked muscle
-          canvas.drawPath(
-            pth,
-            Paint()
-              ..color = c.withValues(alpha: 0.45)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
-          );
-          // Stronger inner glow
-          canvas.drawPath(
-            pth,
-            Paint()
-              ..color = c.withValues(alpha: 0.25)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14),
-          );
+          // Three-layer bloom (tight → mid → wide) for a richer, softer glow.
+          canvas.drawPath(pth, Paint()
+            ..color = c.withValues(alpha: 0.5)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+          canvas.drawPath(pth, Paint()
+            ..color = c.withValues(alpha: 0.3)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 13));
+          canvas.drawPath(pth, Paint()
+            ..color = c.withValues(alpha: 0.14)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24));
         }
 
         // Fill — glossy top-lit gradient for lit muscles; faint for the rest.
@@ -191,7 +187,12 @@ class _BodyPainter extends CustomPainter {
             Paint()
               ..shader = LinearGradient(
                 begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                colors: [Color.lerp(c, Colors.white, 0.42)!, c],
+                colors: [
+                  Color.lerp(c, Colors.white, 0.5)!,
+                  c,
+                  Color.lerp(c, Colors.black, 0.18)!,
+                ],
+                stops: const [0.0, 0.55, 1.0],
               ).createShader(pth.getBounds()),
           );
         } else {

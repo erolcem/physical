@@ -1,10 +1,14 @@
 // ui/badge.dart — tier medallions rendered from the handmade asset art
 // (assets/badges/<tier>.png — borderless, consistent placement), wrapped with a
-// soft tier-coloured aura so they pop on the dark background. The sub-rank (I/II/III)
-// is shown as text beside the badge wherever it appears, so it isn't drawn on the art;
-// `sub` is kept for API compatibility.
+// tier-scaled glow + shine behind the art so higher ranks visibly radiate more.
+// The sub-rank (I/II/III) is shown as text beside the badge wherever it appears,
+// so it isn't drawn on the art; `sub` is kept for API compatibility.
 import 'package:flutter/material.dart';
 import '../data/metrics.dart' show tierColor;
+
+const List<String> _tierOrder = [
+  'Wood', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Champion', 'Titan', 'Glory'
+];
 
 class RankBadge extends StatelessWidget {
   final String tier;
@@ -16,7 +20,12 @@ class RankBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = tierColor(tier);
-    final glow = animated ? 0.30 : 0.18;
+    final i = _tierOrder.indexOf(tier);
+    final t = (i < 0 ? 0 : i) / 8.0; // 0 (Wood) … 1 (Glory)
+    // Glow + halo size scale with the rank; the hero adds a little extra.
+    final auraA = ((0.16 + t * 0.5) * (animated ? 1.2 : 1.0)).clamp(0.0, 0.72);
+    final auraSize = size * (1.18 + t * 0.32);
+
     return SizedBox(
       width: size,
       height: size,
@@ -24,16 +33,40 @@ class RankBadge extends StatelessWidget {
         alignment: Alignment.center,
         clipBehavior: Clip.none,
         children: [
-          // Soft tier-coloured aura behind the art.
-          DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [c.withValues(alpha: glow), c.withValues(alpha: 0.0)],
-                stops: const [0.1, 0.75],
+          // Tier-coloured glow that extends beyond the medallion, stronger by rank.
+          SizedBox(
+            width: auraSize,
+            height: auraSize,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    c.withValues(alpha: auraA),
+                    c.withValues(alpha: auraA * 0.45),
+                    c.withValues(alpha: 0.0),
+                  ],
+                  stops: const [0.0, 0.42, 0.95],
+                ),
               ),
             ),
-            child: SizedBox(width: size, height: size),
+          ),
+          // A soft white shine core for extra lustre on higher tiers.
+          SizedBox(
+            width: size * 0.85,
+            height: size * 0.85,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.10 + t * 0.16),
+                    Colors.white.withValues(alpha: 0.0),
+                  ],
+                  stops: const [0.0, 0.6],
+                ),
+              ),
+            ),
           ),
           Image.asset(
             'assets/badges/${tier.toLowerCase()}.png',

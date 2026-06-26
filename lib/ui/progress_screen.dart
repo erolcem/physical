@@ -18,7 +18,7 @@ import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log;
 import '../state/providers.dart';
 import 'badge.dart';
-import 'home_screen.dart' show openLogSheet;
+import 'home_screen.dart' show openLogSheet, scoreColor;
 
 const List<String> _tierShort = [
   'Wood', 'Brz', 'Slv', 'Gld', 'Plt', 'Dia', 'Chp', 'Tit', 'Glr'
@@ -97,11 +97,28 @@ class _CategoryCard extends StatelessWidget {
     final cands = [for (final m in metrics) if (m.category == id) m];
     final withData = cands.where((m) => (logsMap[m.id] ?? const []).isNotEmpty).length;
     final allAuto = cands.isNotEmpty && cands.every((m) => m.autoSync);
-    final c = (ranked && rank != null) ? tierColor(rank!.tier) : _accent;
+
+    // Aesthetics has no rank, but it has a composite 0–100 score — show it as a
+    // score-coloured progress bar on the card (mirrors the home breakdown row).
+    double? aesAvg;
+    if (id == 'aesthetics') {
+      final vals = [
+        for (final mm in cands)
+          if (mm.unit == '/100' && (logsMap[mm.id]?.isNotEmpty ?? false))
+            logsMap[mm.id]!.last.value
+      ];
+      if (vals.isNotEmpty) aesAvg = vals.reduce((a, b) => a + b) / vals.length;
+    }
+
+    final c = (ranked && rank != null)
+        ? tierColor(rank!.tier)
+        : (aesAvg != null ? scoreColor(aesAvg) : _accent);
 
     String subtitle;
     if (ranked && rank != null) {
       subtitle = '${rank!.tier} ${rank!.sub} · top ${rank!.topPct.toStringAsFixed(1)}%';
+    } else if (aesAvg != null) {
+      subtitle = 'Composite ${aesAvg.round()}/100 · $withData of ${cands.length} tracked';
     } else if (withData > 0) {
       subtitle = '$withData of ${cands.length} tracked';
     } else if (allAuto) {
@@ -150,6 +167,15 @@ class _CategoryCard extends StatelessWidget {
                   Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                   const SizedBox(height: 2),
                   Text(subtitle, style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
+                  if (aesAvg != null) ...[
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                          value: (aesAvg / 100).clamp(0.0, 1.0), minHeight: 6,
+                          color: c, backgroundColor: c.withValues(alpha: 0.15)),
+                    ),
+                  ],
                 ]),
               ),
               if (ranked && rank != null)

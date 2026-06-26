@@ -29,7 +29,7 @@ TextStyle _secTitle() => const TextStyle(
 // A score-level colour (NOT a rank) for a 0–100 score, drawn across the full 9 rank-
 // tier palette: 20→Wood, 30→Bronze, 40→Silver … 100→Glory, interpolated between.
 // Used for tracked aesthetics — same palette as ranks, so it reads cohesively.
-Color _scoreColor(double score) {
+Color scoreColor(double score) {
   final t = ((score - 20) / 10).clamp(0.0, (_tierOrder.length - 1).toDouble());
   final lo = t.floor(), hi = t.ceil();
   if (lo == hi) return tierColor(_tierOrder[lo]);
@@ -182,13 +182,12 @@ class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.text);
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 2),
-        child: Container(
-          padding: const EdgeInsets.only(bottom: 6),
-          decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: _border, width: 1))),
-          child: Text(text, style: _secTitle()),
-        ),
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(children: [
+          const Expanded(child: Divider(color: _border, thickness: 1, endIndent: 12)),
+          Text(text, style: _secTitle()),
+          const Expanded(child: Divider(color: _border, thickness: 1, indent: 12)),
+        ]),
       );
 }
 
@@ -467,7 +466,7 @@ class _OverallBreakdownSheet extends ConsumerWidget {
   // Aesthetics: a composite SCORE (not a rank) — score-coloured, no sub-rank ticks.
   Widget _aestheticsRow(double? avg) {
     final has = avg != null;
-    final c = has ? _scoreColor(avg) : _muted;
+    final c = has ? scoreColor(avg) : _muted;
     final frac = has ? (avg / 100).clamp(0.0, 1.0) : 0.0;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -624,8 +623,8 @@ class _MetricGrid extends ConsumerWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, mainAxisSpacing: 6, crossAxisSpacing: 6,
-        childAspectRatio: 3.3,
+        crossAxisCount: 2, mainAxisSpacing: 8, crossAxisSpacing: 8,
+        childAspectRatio: 2.3,
       ),
       itemCount: ids.length,
       itemBuilder: (ctx, i) => _MetricCell(ids[i], latest[ids[i]], onTap),
@@ -654,7 +653,7 @@ class _MetricCell extends StatelessWidget {
         decoration: BoxDecoration(
           color: _surface,
           border: Border.all(color: hasData ? c.withValues(alpha: 0.35) : _border),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(12),
           gradient: hasData
               ? LinearGradient(
                   begin: Alignment.topLeft, end: Alignment.bottomRight,
@@ -666,25 +665,36 @@ class _MetricCell extends StatelessWidget {
           color: hasData ? c.withValues(alpha: 0.12) : Colors.transparent,
           child: InkWell(
             onTap: () => onTap(metricId),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(12),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               child: Row(children: [
-                Container(width: 10, height: 10,
+                Container(width: 11, height: 11,
                     decoration: BoxDecoration(
                       color: c,
                       shape: BoxShape.circle,
                       boxShadow: hasData
-                          ? [BoxShadow(color: c.withValues(alpha: 0.8), blurRadius: 6)]
+                          ? [BoxShadow(color: c.withValues(alpha: 0.8), blurRadius: 7, spreadRadius: 0.5)]
                           : null,
                     )),
-                const SizedBox(width: 8),
-                Expanded(child: Text(m.label, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
-                if (hasData) ...[
-                  Text('${log!.value.toStringAsFixed(0)}${m.unit}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: c)),
-                ] else
-                  const Text('—', style: TextStyle(fontSize: 11, color: _muted)),
+                const SizedBox(width: 10),
+                // Label on up to two lines, then the value on its own line.
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(m.label, maxLines: 2, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.15)),
+                      const SizedBox(height: 3),
+                      hasData
+                          ? Text('${log!.value.toStringAsFixed(0)} ${m.unit}',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: c))
+                          : const Text('—', style: TextStyle(fontSize: 12, color: _muted)),
+                    ],
+                  ),
+                ),
               ]),
             ),
           ),
@@ -837,7 +847,7 @@ class _AestheticsStrip extends ConsumerWidget {
         final hasData = logs.isNotEmpty;
         final score = hasData ? logs.last.value : null;
         // Tracked aesthetic — coloured by SCORE level on the 9-tier palette (not a rank).
-        final color = hasData ? _scoreColor(score!) : const Color(0xFF454964);
+        final color = hasData ? scoreColor(score!) : const Color(0xFF454964);
 
         return Column(mainAxisSize: MainAxisSize.min, children: [
           Material(
