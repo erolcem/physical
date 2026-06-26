@@ -97,25 +97,15 @@ def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
                 out[metric_id] = {"status": status, "sample": str(body)[:300]}
         except Exception as e:
             out[metric_id] = {"error": str(e)[:300]}
-    # Profile (height/DOB→age) + a hunt for an EXERCISE-SESSION endpoint (none found
-    # on /sessions yet). Several candidate paths are probed; whichever returns 200
-    # with data is the one to wire for porting Google workouts.
-    probes = {
-        "_profile": "/users/me/profile",
-        "_sessions": "/users/me/sessions?pageSize=3",
-        "_sess_exercise": "/users/me/dataTypes/exercise-session/dataPoints?pageSize=3",
-        "_sess_activity": "/users/me/dataTypes/activity-session/dataPoints?pageSize=3",
-        "_sess_workout": "/users/me/dataTypes/workout/dataPoints?pageSize=3",
-        "_sess_activity_summary": "/users/me/dataTypes/activity-summary/dataPoints?pageSize=3",
-        "_sess_session": "/users/me/dataTypes/session/dataPoints?pageSize=3",
-    }
-    for label, path in probes.items():
-        try:
-            status, body = client.get_raw(path)
-            # Show full body for success; just the error text for failures.
-            out[label] = {"status": status, "body": body if status < 400 else str(body)[:200]}
-        except Exception as e:
-            out[label] = {"error": str(e)[:200]}
+    # Profile (height/DOB→age). NOTE: exercise SESSIONS aren't available on this API —
+    # /users/me/sessions 404s and exercise-session/activity-session/workout/session/
+    # activity-summary all return 400 "Invalid data type ID" (confirmed via live debug).
+    # So Google workout import isn't possible; the in-app session system is manual.
+    try:
+        status, body = client.get_raw("/users/me/profile")
+        out["_profile"] = {"status": status, "body": body}
+    except Exception as e:
+        out["_profile"] = {"error": str(e)[:200]}
     return out
 
 
