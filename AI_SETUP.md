@@ -59,6 +59,10 @@ The coach needs one free key from Google. This is the only setup step.
 Done. Open the app's **Coach** tab — it switches from "not set up yet" to a live chat.
 *(Gemini Flash is very cheap; a typical coaching message costs a fraction of a cent.)*
 
+This **same key** also powers **diet auto-fill**: in **Diet → Log food**, type a food
+(e.g. "2 eggs and toast") and tap **Auto-fill nutrition with AI** to fill calories,
+macros, and micronutrients. Without the key you can still type the numbers in by hand.
+
 ---
 
 ## D. Use the coach

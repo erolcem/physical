@@ -13,7 +13,7 @@ the plan PDF, `STANDARDS_METHODOLOGY.md`, `STATUS.md`).
 implemented — including the two complex data types (exercise + diet) flowing into
 both the ranks and the AI, and the coach's advanced behaviours (agentic actions,
 dynamic volume auto-regulation, context transparency, strategic-correlation
-pinning). **126 Flutter tests + 48 backend tests pass, 0 analyzer issues**, the
+pinning). **127 Flutter tests + 57 backend tests pass, 0 analyzer issues**, the
 Python⇄Dart engine is parity-tested to ~1e-5, hosted on Railway, shipped to iPhone
 via TestFlight. The coach runs on **Gemini** so the whole stack lives in the user's
 Google account (sign-in, Health, Calendar, friends, AI).
@@ -328,13 +328,20 @@ lift's rank (1RM/rep-volume). 7-day rollups (volume/sessions/muscles) feed the c
 *Remaining:* time-window dual-authorisation against the Google Health exercise
 session (needs the auto-exercises sync).
 
-### 10.3 Diet logging (`data/diet.dart`, `ui/diet_screen.dart`)
-A **holistic diet page**: food entries with macros (kcal + P/C/F + **fibre**) →
-**daily totals** with a **macro-kcal breakdown bar** and a **7-day calorie trend**
-(`caloriesLastNDays`), fed to the coach. The Progress "Diet" subpage routes here
-(its own domain layout); **Sleep** (`ui/sleep_screen.dart`) and **Training** (the
-workout screen's analytics header) likewise have bespoke per-domain layouts.
-*Remaining:* full micronutrients (needs a food database).
+### 10.3 Diet logging (`data/diet.dart`, `ui/diet_screen.dart`, `app/nutrition.py`)
+A **holistic diet page**: food entries with macros (kcal + P/C/F + **fibre**) **and a
+micronutrient map** → **daily totals** with a **macro-kcal breakdown bar**, **summed
+micros**, and a **7-day calorie trend** (`caloriesLastNDays`), fed to the coach. The
+Progress "Diet" subpage routes here (its own domain layout); **Sleep**
+(`ui/sleep_screen.dart`) and **Training** (the workout screen's analytics header)
+likewise have bespoke per-domain layouts.
+
+**Nutrition auto-fill (Gemini-inferred micros).** Rather than a brittle food DB,
+"Auto-fill nutrition with AI" sends the typed food to `POST /me/nutrition`, which asks
+Gemini for a fixed set of macros + 8 micronutrients in fixed units (`nutrition.py`'s
+defensive parser coerces/clamps and rejects junk). Keys are unit-suffixed
+(`sodium_mg`, `vitamin_d_ug`, …) so they sum cleanly. Falls back to manual entry when
+the AI key is unset (503).
 
 ### 10.4 Friends (`backend/.../friends.py` + Profile section)
 Add by email → pending → accept → a **mini leaderboard** of friends' overall ranks
@@ -422,7 +429,8 @@ Add by email → pending → accept → a **mini leaderboard** of friends' overa
 - `habits.dart` — Habit model + streaks + verification + planner + density + weekly
   + calendar URL.
 - `profile.dart` — ProfileData + BMI.
-- `diet.dart` — FoodEntry + daily totals. *Add a micronutrient score (needs food DB).*
+- `diet.dart` — FoodEntry (macros + micros map) + daily totals (summed micros).
+  Micros are Gemini-inferred via `app/nutrition.py` + `POST /me/nutrition`.
 - `workout.dart` — WorkoutSession/Set → volume + best-set. *Add two-step verification
   vs a Google Health workout session.*
 - `correlation.dart` — Pearson + day-alignment + pin model.
@@ -465,12 +473,12 @@ STANDARDS).
 ## 16. Known limitations & future work (prioritised)
 1. **Ground the strength standards** with real data — the one provisional spot; most
    improves rank honesty.
-2. **Live `/debug` pass** to confirm Google background type-names (steps/zone/energy)
-   and wire deeper sleep sub-metrics + auto "exercises"/energy.
-3. **Two-step workout verification** vs a Google Health workout session.
-4. **Coach upgrades** — streaming replies, true function-calling, diet micronutrient
-   scoring.
-5. **Split the two big UI files** for maintainability.
+2. **Google background types confirmed via live `/debug`:** sleep sub-metrics
+   (time-to-sleep, awakenings, local-day) + age are wired; steps/active-zone/energy
+   have **no daily-rollup type** and an exercise-**session** endpoint **doesn't exist**
+   (404), so two-step workout verification stays blocked upstream.
+3. **Coach upgrades** — streaming replies, true function-calling.
+4. **Split the two big UI files** for maintainability.
 6. **External setup** — set `GEMINI_API_KEY`; clear the Apple Paid-Apps agreement to
    unblock TestFlight + on-device verification of notifications; Google CASA
    verification (only for public release).
@@ -504,7 +512,7 @@ own bespoke subpage, not the generic metric chart: **Diet** (kcal + P/C/F + **fi
 macro-kcal bar, 7-day calorie trend), **Sleep** (last-night deep/REM/light stage
 breakdown, 7-night score + hours-asleep trends, efficiency/time-to-sleep/awakenings
 stats), **Training** (7-day volume trend + week totals on the workout screen).
-*Remaining:* full **micronutrients** (needs a food database / Gemini-assisted lookup).
+**Micronutrients** are now inferred by Gemini at log time (no food DB) — see §10.3.
 
 **✅ DONE · Habits = structured & data-aligned, not free-text.** Shipped: sections +
 in-realm presets + bounded custom; verify modes (metric/workout/diet/manual)
@@ -530,12 +538,12 @@ daily-readiness drop). Voice = out of scope.
 
 **Build order:** (1) ✅ **Habits redesign** → (2) 🟡 **Workout tracker** (grouped sets +
 per-domain analytics done; Google-session dual-auth unavailable via the API) →
-(3) ✅ **Per-domain layouts** (Diet + Sleep + Training; micros pending a food DB) →
+(3) ✅ **Per-domain layouts** (Diet + Sleep + Training) **+ Gemini-inferred micros** →
 (4) ✅ **Profile auto-port** (weight/body-fat + age auto; height/gender manual — Google
 doesn't expose them) → (5) ✅ **Rank-badge/graph polish** (sheen + hero shine) →
-(6) ✅ **Coach fixed-response selection**. Each shipped behind its own tests. The
-roadmap is complete bar items gated on external data sources (micros DB; a Google
-exercise-session endpoint).
+(6) ✅ **Coach fixed-response selection**. Each shipped behind its own tests. **The
+roadmap is complete.** The one remaining external-data item — workout↔Google
+exercise-session dual-auth — is blocked by Google not exposing a sessions endpoint.
 
 **Next unblock:** an in-app **Cloud → Inspect Google data** button now copies the raw
 Google field shapes — paste that to wire the live-data items (workout dual-auth,
