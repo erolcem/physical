@@ -172,7 +172,10 @@ class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin 
 String _medallion(int idx) {
   final b = StringBuffer(_defs);
   if (idx == 8) b.write(_rays);                 // Glory: radiant burst
-  if (idx >= 3) b.write(_wings(large: idx == 8));
+  // Wings grow with prestige: none (Wood/Bronze) → small (Silver/Gold/Platinum)
+  // → large (Diamond/Champion/Titan) → grand (Glory).
+  final wl = idx >= 8 ? 3 : (idx >= 5 ? 2 : (idx >= 2 ? 1 : 0));
+  if (wl > 0) b.write(_wings(wl));
   b..write(_frame)..write(_gem);
   if (idx >= 6) b.write(_star);                 // Champion / Titan / Glory: crown star
   return b.toString();
@@ -206,28 +209,42 @@ const String _star =
     '<path d="M40,-3 L43.2,7 L53.5,7 L45.2,13.2 L48.4,23 L40,17 L31.6,23 L34.8,13.2 L26.5,7 L36.8,7 Z" fill="rgba(255,255,255,.95)"/>'
     '<path d="M40,1 L42,7 L48.5,7 L43.3,11 L45,17 L40,13.4 L35,17 L36.7,11 L31.5,7 L38,7 Z" fill="{c}" opacity=".55"/>';
 
-// Layered feather wings flanking the crest (extend outside the viewBox; allowed).
-String _wings({bool large = false}) {
-  if (large) {
-    return '<g fill="{c}" opacity=".95">'
-        '<path d="M19,22 Q-3,14 -18,17 Q-3,21 7,27 Z"/>'
-        '<path d="M19,29 Q-5,25 -20,31 Q-2,34 11,37 Z"/>'
-        '<path d="M19,36 Q-1,34 -14,43 Q3,41 15,43 Z"/>'
-        '<path d="M19,42 Q3,43 -7,52 Q9,49 17,49 Z"/>'
-        '<path d="M61,22 Q83,14 98,17 Q83,21 73,27 Z"/>'
-        '<path d="M61,29 Q85,25 100,31 Q82,34 69,37 Z"/>'
-        '<path d="M61,36 Q81,34 94,43 Q77,41 65,43 Z"/>'
-        '<path d="M61,42 Q77,43 87,52 Q71,49 63,49 Z"/>'
-        '</g>';
+// Upswept feather wings flanking the crest (extend outside the viewBox; allowed).
+// Level 1 = small, 2 = large, 3 = grand. Feathers fan from a high outer tip down.
+String _wings(int level) {
+  switch (level) {
+    case 3: // Glory — grand
+      return '<g fill="{c}" opacity=".95">'
+          '<path d="M19,30 Q-4,20 -24,8 Q-8,25 19,33 Z"/>'
+          '<path d="M19,34 Q-2,27 -20,19 Q-5,31 19,37 Z"/>'
+          '<path d="M19,38 Q-1,33 -14,29 Q-3,36 19,40 Z"/>'
+          '<path d="M19,41 Q1,40 -8,38 Q-2,41 19,43 Z"/>'
+          '<path d="M61,30 Q84,20 104,8 Q88,25 61,33 Z"/>'
+          '<path d="M61,34 Q82,27 100,19 Q85,31 61,37 Z"/>'
+          '<path d="M61,38 Q81,33 94,29 Q83,36 61,40 Z"/>'
+          '<path d="M61,41 Q79,40 88,38 Q82,41 61,43 Z"/>'
+          '</g>';
+    case 2: // Diamond / Champion / Titan — large
+      return '<g fill="{c}" opacity=".95">'
+          '<path d="M19,30 Q-2,22 -18,12 Q-6,26 19,33 Z"/>'
+          '<path d="M19,34 Q-1,28 -15,22 Q-4,31 19,37 Z"/>'
+          '<path d="M19,38 Q0,34 -10,31 Q-2,35 19,40 Z"/>'
+          '<path d="M19,41 Q2,40 -5,39 Q0,41 19,43 Z"/>'
+          '<path d="M61,30 Q82,22 98,12 Q86,26 61,33 Z"/>'
+          '<path d="M61,34 Q81,28 95,22 Q84,31 61,37 Z"/>'
+          '<path d="M61,38 Q80,34 90,31 Q82,35 61,40 Z"/>'
+          '<path d="M61,41 Q78,40 85,39 Q80,41 61,43 Z"/>'
+          '</g>';
+    default: // Silver / Gold / Platinum — small
+      return '<g fill="{c}" opacity=".92">'
+          '<path d="M19,29 Q4,23 -8,18 Q1,27 19,32 Z"/>'
+          '<path d="M19,33 Q5,30 -6,27 Q2,32 19,36 Z"/>'
+          '<path d="M19,37 Q6,36 -3,35 Q3,37 19,39 Z"/>'
+          '<path d="M61,29 Q76,23 88,18 Q79,27 61,32 Z"/>'
+          '<path d="M61,33 Q75,30 86,27 Q78,32 61,36 Z"/>'
+          '<path d="M61,37 Q74,36 83,35 Q77,37 61,39 Z"/>'
+          '</g>';
   }
-  return '<g fill="{c}" opacity=".92">'
-      '<path d="M19,25 Q2,18 -10,21 Q1,24 8,29 Z"/>'
-      '<path d="M19,32 Q-1,29 -13,35 Q3,37 12,39 Z"/>'
-      '<path d="M19,39 Q3,38 -7,47 Q6,44 15,45 Z"/>'
-      '<path d="M61,25 Q78,18 90,21 Q79,24 72,29 Z"/>'
-      '<path d="M61,32 Q81,29 93,35 Q77,37 68,39 Z"/>'
-      '<path d="M61,39 Q77,38 87,47 Q74,44 65,45 Z"/>'
-      '</g>';
 }
 
 // Radiant 16-point burst behind the crest (Glory only).
