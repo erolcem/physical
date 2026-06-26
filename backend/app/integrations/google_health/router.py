@@ -106,6 +106,26 @@ def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
         out["_profile"] = {"status": status, "body": body}
     except Exception as e:
         out["_profile"] = {"error": str(e)[:200]}
+
+    # Intraday probes: `steps` and `heart-rate` are continuous types that need a
+    # TIME RANGE (unlike the daily-* rollups) — bare requests came back empty before.
+    # A 2-day window confirms whether they return data + their shape.
+    now = dt.datetime.now(dt.timezone.utc)
+    start = (now - dt.timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    end = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    for label, dtid in {"_intraday_steps": "steps", "_intraday_hr": "heart-rate"}.items():
+        path = (f"/users/me/dataTypes/{dtid}/dataPoints"
+                f"?startTime={start}&endTime={end}&pageSize=20")
+        try:
+            status, body = client.get_raw(path)
+            if status < 400 and isinstance(body, dict):
+                pts = body.get("dataPoints") or []
+                out[label] = {"status": status, "count": len(pts),
+                              "sample": pts[0] if pts else {"_no_dataPoints": True, "keys": list(body.keys())}}
+            else:
+                out[label] = {"status": status, "body": str(body)[:250]}
+        except Exception as e:
+            out[label] = {"error": str(e)[:200]}
     return out
 
 
