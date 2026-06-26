@@ -305,12 +305,14 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
       final filtered = cutoff == null ? entries : entries.where((e) => DateTime.parse(e.ts).isAfter(cutoff)).toList();
 
       final dailyMax = <int, double>{};
+      final dailyActual = <int, double>{}; // the real metric value (kg, etc.) for tooltips
       for (final e in filtered) {
         final dt = DateTime.parse(e.ts);
         final dayStart = DateTime(dt.year, dt.month, dt.day).millisecondsSinceEpoch;
         final val = isRanked ? eng.scoreLog(e).rankValue : e.value;
         if (!dailyMax.containsKey(dayStart) || val > dailyMax[dayStart]!) {
           dailyMax[dayStart] = val;
+          dailyActual[dayStart] = e.value;
         }
       }
 
@@ -345,9 +347,11 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
         final normY = (val - mMin) / (mMax - mMin);
         spots.add(FlSpot(days.toDouble(), normY));
 
+        // Always show the real metric value (e.g. kg); add the tier for ranked ones.
+        final actual = dailyActual[d]!;
         final tooltipStr = isRanked
-            ? '${met.label}: ${_tierShort[val.floor().clamp(0, 8)]} ${val.toStringAsFixed(1)}'
-            : '${met.label}: ${val.toStringAsFixed(1)} ${met.unit}';
+            ? '${met.label}: ${actual.toStringAsFixed(1)} ${met.unit} · ${_tierShort[val.floor().clamp(0, 8)]}'
+            : '${met.label}: ${actual.toStringAsFixed(1)} ${met.unit}';
         tooltipData.putIfAbsent(days.toDouble(), () => {})[metricId] = tooltipStr;
       }
 
@@ -367,8 +371,9 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
         barWidth: 3,
         shadow: Shadow(color: lineCol.withValues(alpha: 0.5), blurRadius: 10),
         dotData: FlDotData(
-          // Single-metric view shows every point; ranked points are coloured by tier.
-          show: _selectedIds.length == 1 || spots.length == 1,
+          // Single-metric view shows every point (ranked points coloured by tier),
+          // but only up to a sane count — dense series render as a clean line.
+          show: (_selectedIds.length == 1 && spots.length <= 80) || spots.length == 1,
           getDotPainter: (spot, percent, barData, index) {
             var dotCol = lineCol;
             if (_selectedIds.length == 1 && isRanked) {
@@ -488,26 +493,24 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
       Text(subtitle, textAlign: TextAlign.center, style: TextStyle(color: subColor, fontSize: 13, fontWeight: FontWeight.w600)),
       const SizedBox(height: 16),
       Center(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: ['1W', '1M', '3M', '6M', '1Y', 'All'].map((t) {
-              final sel = t == _timeframe;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text(t, style: const TextStyle(fontSize: 10)),
-                  selected: sel,
-                  onSelected: (_) => setState(() => _timeframe = t),
-                  selectedColor: _accent.withValues(alpha: 0.2),
-                  backgroundColor: _bg3,
-                  side: BorderSide(color: sel ? _accent : _border),
-                  padding: EdgeInsets.zero,
-                ),
-              );
-            }).toList(),
-          ),
+        // Wrap (not a horizontal scroll) so the chips never overflow off-screen.
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: ['1W', '1M', '3M', '6M', '1Y', 'All'].map((t) {
+            final sel = t == _timeframe;
+            return ChoiceChip(
+              label: Text(t, style: const TextStyle(fontSize: 10)),
+              selected: sel,
+              onSelected: (_) => setState(() => _timeframe = t),
+              selectedColor: _accent.withValues(alpha: 0.2),
+              backgroundColor: _bg3,
+              side: BorderSide(color: sel ? _accent : _border),
+              padding: EdgeInsets.zero,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            );
+          }).toList(),
         ),
       ),
       const SizedBox(height: 24),

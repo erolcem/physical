@@ -13,6 +13,9 @@ const List<String> _ladderTiers = [
   'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Champion', 'Titan'
 ];
 
+// Cap the rendered history so a metric with hundreds of logs stays snappy.
+const int _historyLimit = 60;
+
 void openDetailSheet(BuildContext context, String metricId) {
   showModalBottomSheet(
     context: context,
@@ -210,7 +213,13 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
               Text('HISTORY · ${logs.length}',
                   style: const TextStyle(fontSize: 10, letterSpacing: 2, color: Colors.grey)),
               const SizedBox(height: 6),
-              for (final (idx, log) in ordered) _historyRow(m, log, idx),
+              for (final (idx, log) in ordered.take(_historyLimit)) _historyRow(m, log, idx),
+              if (ordered.length > _historyLimit)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text('+ ${ordered.length - _historyLimit} older entries',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                ),
             ],
           ]),
         ),
