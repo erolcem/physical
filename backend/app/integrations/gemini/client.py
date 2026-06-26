@@ -1,6 +1,6 @@
 """Thin Gemini (Google Generative Language API) client. Kept in the Google
-ecosystem so sign-in, Health, Calendar, friends, and the coach all flow through
-the user's Google account. The key comes from Google AI Studio.
+ecosystem so sign-in, Health, Calendar, and the coach all flow through the user's
+Google account. The key comes from Google AI Studio.
 
 Stateless `generate(...)` over the stable v1beta `generateContent` REST shape — a
 system instruction + a list of conversation turns → the model's text reply.

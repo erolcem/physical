@@ -11,18 +11,6 @@ def _utcnow() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
-class Profile(Base):
-    """One row per user. Bodyweight is NOT here — it's a tracked sample
-    (metric_id='bodyweight') so it can change over time (design doc §2.3)."""
-    __tablename__ = "profiles"
-
-    user_id: Mapped[str] = mapped_column(String, primary_key=True)
-    sex: Mapped[str | None] = mapped_column(String, nullable=True)
-    age: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    height_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
-    units_pref: Mapped[str] = mapped_column(String, default="metric")
-
-
 class Sample(Base):
     """The one canonical time-series shape every source normalises into.
 
@@ -62,23 +50,6 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String, nullable=True)
     name: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
-
-
-class Friendship(Base):
-    """A social link between two accounts (PDF Part 6). `pending` until the
-    addressee accepts; only `accepted` friends can see each other's overall rank
-    (never raw samples) — privacy by mutual consent."""
-    __tablename__ = "friendships"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    requester_id: Mapped[str] = mapped_column(String, index=True)
-    addressee_id: Mapped[str] = mapped_column(String, index=True)
-    status: Mapped[str] = mapped_column(String, default="pending")  # pending | accepted
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
-
-    __table_args__ = (
-        UniqueConstraint("requester_id", "addressee_id", name="uq_friendship"),
-    )
 
 
 class GoogleHealthToken(Base):

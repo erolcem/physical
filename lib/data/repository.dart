@@ -6,7 +6,6 @@ import '../engine/rank_engine.dart' show Log, strengthValue;
 import 'correlation.dart';
 import 'diet.dart';
 import 'habits.dart';
-import 'profile.dart';
 import 'workout.dart';
 
 abstract class Repository {
@@ -21,10 +20,6 @@ abstract class Repository {
   void deleteHabit(String id);
   Map<String, Set<String>> loadCompletions(); // habitId → set of done date-keys
   void setCompletion(String habitId, String day, bool done);
-
-  // Profile (PDF Part 1) — static identity fields, stored separately.
-  ProfileData loadProfile();
-  void saveProfile(ProfileData profile);
 
   // Diet (PDF Part 1) — food log entries with macros.
   List<FoodEntry> loadFood();
@@ -46,7 +41,6 @@ class InMemoryRepository implements Repository {
   final Map<String, List<Log>> _logs = {};
   final List<Habit> _habits = [];
   final Map<String, Set<String>> _completions = {};
-  ProfileData _profile = ProfileData.empty;
   final List<FoodEntry> _food = [];
   final List<WorkoutSession> _workouts = [];
   final List<PinnedCorrelation> _pins = [];
@@ -94,12 +88,6 @@ class InMemoryRepository implements Repository {
   }
 
   @override
-  ProfileData loadProfile() => _profile;
-
-  @override
-  void saveProfile(ProfileData profile) => _profile = profile;
-
-  @override
   List<FoodEntry> loadFood() => List.of(_food);
 
   @override
@@ -133,7 +121,6 @@ class InMemoryRepository implements Repository {
     _logs.clear();
     _habits.clear();
     _completions.clear();
-    _profile = ProfileData.empty;
     _food.clear();
     _workouts.clear();
     _pins.clear();

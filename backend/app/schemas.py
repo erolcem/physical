@@ -4,19 +4,6 @@ import datetime as dt
 from pydantic import BaseModel, ConfigDict
 
 
-# ── Profile ──
-class ProfileIn(BaseModel):
-    sex: str | None = None
-    age: int | None = None
-    height_cm: float | None = None
-    units_pref: str = "metric"
-
-
-class ProfileOut(ProfileIn):
-    user_id: str
-    model_config = ConfigDict(from_attributes=True)
-
-
 # ── Samples ──
 class SampleIn(BaseModel):
     metric_id: str
@@ -72,23 +59,6 @@ class RanksOut(BaseModel):
     overall: GroupRank
     categories: dict[str, GroupRank]
     metrics: dict[str, MetricRank]
-
-
-# ── Friends (PDF Part 6) ──
-class FriendRequestIn(BaseModel):
-    email: str
-
-
-class FriendOut(BaseModel):
-    user_id: str
-    email: str | None = None
-    name: str | None = None
-    rank: GroupRank | None = None  # overall rank only; None if they have no data yet
-
-
-class PendingFriendOut(BaseModel):
-    requester_id: str
-    email: str | None = None
 
 
 # ── AI coach (PDF Part 5) ──

@@ -8,7 +8,7 @@ import 'package:physical/main.dart';
 
 void main() {
   // The api client reads a persisted token via shared_preferences; mock it empty
-  // so the (signed-out) Friends section resolves without any network.
+  // so the (signed-out) Coach tab resolves without any network.
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets('App boots', (tester) async {
@@ -20,7 +20,7 @@ void main() {
     await tester.pumpWidget(const ProviderScope(child: PhysicalApp()));
     await tester.pump(const Duration(milliseconds: 300));
 
-    for (final label in ['Progress', 'Habits', 'Coach', 'Profile', 'Home']) {
+    for (final label in ['Progress', 'Habits', 'Coach', 'Home']) {
       await tester.tap(find.widgetWithText(Tab, label));
       await tester.pump(); // start the tab transition
       await tester.pump(const Duration(milliseconds: 400)); // let it settle

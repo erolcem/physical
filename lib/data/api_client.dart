@@ -239,47 +239,6 @@ class ApiClient {
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
-  // ── Friends (PDF Part 6) ──
-  Future<Map<String, dynamic>> addFriend(String email) async {
-    final r = await _client
-        .post(Uri.parse('$baseUrl/me/friends'),
-            headers: _headers({'Content-Type': 'application/json'}),
-            body: jsonEncode({'email': email}))
-        .timeout(const Duration(seconds: 15));
-    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
-    return jsonDecode(r.body) as Map<String, dynamic>;
-  }
-
-  Future<List<Map<String, dynamic>>> listFriends() async {
-    final r = await _client
-        .get(Uri.parse('$baseUrl/me/friends'), headers: _headers())
-        .timeout(const Duration(seconds: 15));
-    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
-    return (jsonDecode(r.body) as List).cast<Map<String, dynamic>>();
-  }
-
-  Future<List<Map<String, dynamic>>> pendingFriendRequests() async {
-    final r = await _client
-        .get(Uri.parse('$baseUrl/me/friends/requests'), headers: _headers())
-        .timeout(const Duration(seconds: 15));
-    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
-    return (jsonDecode(r.body) as List).cast<Map<String, dynamic>>();
-  }
-
-  Future<void> acceptFriend(String requesterId) async {
-    final r = await _client
-        .post(Uri.parse('$baseUrl/me/friends/$requesterId/accept'), headers: _headers())
-        .timeout(const Duration(seconds: 15));
-    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
-  }
-
-  Future<void> removeFriend(String otherId) async {
-    final r = await _client
-        .delete(Uri.parse('$baseUrl/me/friends/$otherId'), headers: _headers())
-        .timeout(const Duration(seconds: 15));
-    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
-  }
-
   // ── AI coach (PDF Part 5) ──
   Future<Map<String, dynamic>> coachStatus() async {
     final r = await _client

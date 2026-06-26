@@ -24,6 +24,7 @@ DATA_TYPES = {
     "vo2max": "daily-vo2-max",
     "bodyweight": "weight",
     "body_fat_pct": "body-fat",
+    "height": "height",  # auto-ports the user's height (confirm shape via /debug)
     "sleep": "sleep",
 }
 

@@ -69,6 +69,17 @@ def _bodyweight(c):
     return g / 1000.0 if g is not None else None
 
 
+def _height(c):
+    """Height in cm from whatever unit Google uses (shape confirmed via /debug)."""
+    m = _to_float(c.get("heightMeters"))
+    if m is not None:
+        return round(m * 100.0, 1)
+    mm = _to_float(c.get("heightMm")) or _to_float(c.get("heightMillimeters"))
+    if mm is not None:
+        return round(mm / 10.0, 1)
+    return _to_float(c.get("heightCm")) or _to_float(c.get("heightCentimeters"))
+
+
 def _first(c, keys):
     """First present numeric among candidate field names (shapes vary by type)."""
     for k in keys:
@@ -84,6 +95,7 @@ _EXTRACTORS = {
     "vo2max": lambda c: _to_float(c.get("vo2Max")),
     "bodyweight": _bodyweight,
     "body_fat_pct": lambda c: _to_float(c.get("percentage")),
+    "height": _height,
     # Background context (AI tier). Field names are best-effort across candidates;
     # confirm against /debug if a daily type lands empty.
     "steps": lambda c: _first(c, ("count", "steps", "stepCount", "totalSteps")),

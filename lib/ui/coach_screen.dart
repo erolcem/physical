@@ -11,8 +11,7 @@ import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart' show exercisesOverDays, sessionsOverDays, volumeOverDays;
 import '../state/habit_providers.dart';
 import '../state/log_providers.dart';
-import '../state/profile_providers.dart';
-import '../state/providers.dart' show latestLogsProvider;
+import '../state/providers.dart' show currentBodyweightProvider, latestLogsProvider;
 
 const _bg = Color(0xFF08091A);
 const _card = Color(0xFF12152E);
@@ -50,6 +49,7 @@ class _CoachTabState extends ConsumerState<CoachTab> {
   final _scroll = ScrollController();
   final List<_Msg> _messages = [];
   bool _loading = true, _signedIn = false, _configured = false, _sending = false;
+  int? _age; // auto-ported from the Google Health profile (no manual profile page)
 
   @override
   void initState() {
@@ -73,8 +73,14 @@ class _CoachTabState extends ConsumerState<CoachTab> {
         return;
       }
       final st = await api.coachStatus();
+      final age = await api.googleProfileAge(); // one fetch per coach session
       if (mounted) {
-        setState(() { _signedIn = true; _configured = st['configured'] == true; _loading = false; });
+        setState(() {
+          _signedIn = true;
+          _configured = st['configured'] == true;
+          _age = age;
+          _loading = false;
+        });
       }
     } catch (_) {
       if (mounted) setState(() { _signedIn = true; _configured = false; _loading = false; });
@@ -94,14 +100,19 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     ];
   }
 
+  // Stats are auto-sourced (no manual profile page): age from Google, height/weight/
+  // body-fat from synced logs. Gender defaults to the app's young-male cohort.
   Map<String, dynamic> _profileCtx() {
-    final p = ref.read(profileProvider);
+    final latest = ref.read(latestLogsProvider);
+    final weight = ref.read(currentBodyweightProvider);
+    final height = latest['height']?.value;
+    final bodyFat = latest['body_fat_pct']?.value;
     return {
-      if (p.age != null) 'age': p.age,
-      'gender': p.gender,
-      if (p.heightCm != null) 'heightCm': p.heightCm,
-      if (p.weightKg != null) 'weightKg': p.weightKg,
-      if (p.bodyFatPct != null) 'bodyFatPct': p.bodyFatPct,
+      if (_age != null) 'age': _age,
+      'gender': 'male',
+      if (height != null) 'heightCm': height,
+      if (weight != null) 'weightKg': weight,
+      if (bodyFat != null) 'bodyFatPct': bodyFat,
     };
   }
 

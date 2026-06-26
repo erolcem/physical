@@ -51,13 +51,3 @@ def test_value_required_when_no_raw(client):
         {"metric_id": "bench", "ts": "2026-06-01T08:00:00", "bodyweight_at_ts": 80},
     ])
     assert r.status_code == 422
-
-
-def test_profile_upsert_and_get(client):
-    client.put("/me/profile", json={"sex": "male", "age": 25, "height_cm": 180})
-    p = client.get("/me/profile").json()
-    assert p["age"] == 25 and p["user_id"] == "local-dev"
-    # Isolation: a different signed-in user has no profile of their own.
-    bob = client.post("/auth/dev", json={"user_id": "bob"}).json()["access_token"]
-    assert client.get("/me/profile",
-                      headers={"Authorization": f"Bearer {bob}"}).status_code == 404

@@ -7,7 +7,6 @@ import 'coach_screen.dart';
 import 'diet_screen.dart';
 import 'habits_screen.dart';
 import 'home_screen.dart';
-import 'profile_screen.dart';
 import 'progress_screen.dart';
 import 'workout_screen.dart';
 
@@ -25,7 +24,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -64,7 +63,6 @@ class _MainScreenState extends ConsumerState<MainScreen>
             Tab(icon: Icon(Icons.show_chart), text: 'Progress'),
             Tab(icon: Icon(Icons.checklist), text: 'Habits'),
             Tab(icon: Icon(Icons.auto_awesome), text: 'Coach'),
-            Tab(icon: Icon(Icons.person), text: 'Profile'),
           ],
         ),
       ),
@@ -75,7 +73,6 @@ class _MainScreenState extends ConsumerState<MainScreen>
           ProgressTab(),
           HabitsTab(),
           CoachTab(),
-          ProfileTab(),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
