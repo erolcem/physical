@@ -153,7 +153,7 @@ class _CategoryCard extends StatelessWidget {
                 ]),
               ),
               if (ranked && rank != null)
-                RankBadge(tier: rank!.tier, sub: rank!.sub, size: 38),
+                RankBadge(tier: rank!.tier, sub: rank!.sub, size: 50),
               const Icon(Icons.chevron_right, color: _muted),
             ]),
           ),

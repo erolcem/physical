@@ -12,7 +12,6 @@ import '../state/providers.dart';
 import 'badge.dart';
 import 'body_graph.dart';
 import 'metric_detail_sheet.dart';
-import 'dart:math' as math;
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const _bg2 = Color(0xFF0F1128);
@@ -27,14 +26,14 @@ TextStyle _secTitle() => const TextStyle(
     fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 2.5,
     color: _muted);
 
-// A score-level colour (NOT a rank): red → amber → teal as a 0..1 score rises.
-// Used for tracked aesthetics, which have no defensible rank but deserve a cue.
-Color _scoreColor(double pct) {
-  pct = pct.clamp(0.0, 1.0);
-  const lo = Color(0xFFF85B5B), mid = Color(0xFFF6CF3E), hi = Color(0xFF4CE0C3);
-  return pct < 0.5
-      ? Color.lerp(lo, mid, pct * 2)!
-      : Color.lerp(mid, hi, (pct - 0.5) * 2)!;
+// A score-level colour (NOT a rank) for a 0–100 score, drawn across the full 9 rank-
+// tier palette: 20→Wood, 30→Bronze, 40→Silver … 100→Glory, interpolated between.
+// Used for tracked aesthetics — same palette as ranks, so it reads cohesively.
+Color _scoreColor(double score) {
+  final t = ((score - 20) / 10).clamp(0.0, (_tierOrder.length - 1).toDouble());
+  final lo = t.floor(), hi = t.ceil();
+  if (lo == hi) return tierColor(_tierOrder[lo]);
+  return Color.lerp(tierColor(_tierOrder[lo]), tierColor(_tierOrder[hi]), t - lo)!;
 }
 
 /// Average of the latest 0–100 aesthetic scores (skin/oral/eye/grooming/voice),
@@ -225,11 +224,25 @@ class _RankBar extends StatelessWidget {
           FractionallySizedBox(
             widthFactor: f,
             child: Container(decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [color.withValues(alpha: 0.55), color]),
+              gradient: LinearGradient(colors: [color.withValues(alpha: 0.5), color]),
               borderRadius: BorderRadius.circular(radius),
-              boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 9, spreadRadius: -2)],
+              boxShadow: [BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 12, spreadRadius: -1)],
             )),
           ),
+          // Bright leading-edge cap at the progress point — an energy-bar flourish.
+          if (f > 0.04 && f < 0.992)
+            Positioned(
+              left: (f * w) - height * 0.5,
+              top: -height * 0.18, bottom: -height * 0.18,
+              child: Container(
+                width: height,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.92),
+                  boxShadow: [BoxShadow(color: color, blurRadius: height, spreadRadius: height * 0.18)],
+                ),
+              ),
+            ),
           // Thin specular highlight along the top of the fill (a Padding band so it
           // spans the fill width — an Align'd width-less Container would collapse).
           if (f > 0.02)
@@ -270,20 +283,20 @@ class _OverallCard extends StatelessWidget {
       child: Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-          colors: [c.withValues(alpha: 0.12), _bg2],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [c.withValues(alpha: 0.18), _bg2],
         ),
-        border: Border.all(color: c.withValues(alpha: 0.35)),
+        border: Border.all(color: c.withValues(alpha: 0.45)),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 32, offset: const Offset(0, 8)),
-          BoxShadow(color: c.withValues(alpha: 0.08), blurRadius: 24, spreadRadius: -4),
+          BoxShadow(color: c.withValues(alpha: 0.22), blurRadius: 34, spreadRadius: -6),
         ],
       ),
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        RankBadge(tier: r.tier, sub: r.sub, size: 118, animated: true),
+        RankBadge(tier: r.tier, sub: r.sub, size: 134, animated: true),
         const SizedBox(height: 16),
         const Text('OVERALL RANK',
             textAlign: TextAlign.center,
@@ -377,7 +390,7 @@ class _OverallBreakdownSheet extends ConsumerWidget {
                     decoration: BoxDecoration(color: _border2, borderRadius: BorderRadius.circular(3)))),
               ),
             ),
-            Center(child: RankBadge(tier: overall.tier, sub: overall.sub, size: 106, animated: true)),
+            Center(child: RankBadge(tier: overall.tier, sub: overall.sub, size: 122, animated: true)),
             const SizedBox(height: 10),
             Center(child: Text('${overall.tier} ${overall.sub}',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: c, height: 1))),
@@ -422,12 +435,12 @@ class _OverallBreakdownSheet extends ConsumerWidget {
     final col = tierColor(tier);
     final on = count > 0;
     return SizedBox(
-      width: 58,
+      width: 68,
       child: Column(children: [
         SizedBox(
-          width: 48, height: 48,
+          width: 58, height: 58,
           child: Stack(clipBehavior: Clip.none, children: [
-            Center(child: Opacity(opacity: on ? 1.0 : 0.22, child: RankBadge(tier: tier, size: 44))),
+            Center(child: Opacity(opacity: on ? 1.0 : 0.22, child: RankBadge(tier: tier, size: 56))),
             if (on)
               Positioned(
                 right: -4, top: -4,
@@ -454,7 +467,7 @@ class _OverallBreakdownSheet extends ConsumerWidget {
   // Aesthetics: a composite SCORE (not a rank) — score-coloured, no sub-rank ticks.
   Widget _aestheticsRow(double? avg) {
     final has = avg != null;
-    final c = has ? _scoreColor(avg / 100) : _muted;
+    final c = has ? _scoreColor(avg) : _muted;
     final frac = has ? (avg / 100).clamp(0.0, 1.0) : 0.0;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -507,13 +520,13 @@ class _OverallBreakdownSheet extends ConsumerWidget {
       ),
       child: Row(children: [
         if (ranked)
-          RankBadge(tier: r.tier, sub: r.sub, size: 46)
+          RankBadge(tier: r.tier, sub: r.sub, size: 58)
         else
           Container(
-            width: 46, height: 46, alignment: Alignment.center,
+            width: 56, height: 56, alignment: Alignment.center,
             decoration: BoxDecoration(
                 shape: BoxShape.circle, color: _surface, border: Border.all(color: _border)),
-            child: const Icon(Icons.lock_outline, size: 18, color: _muted),
+            child: const Icon(Icons.lock_outline, size: 20, color: _muted),
           ),
         const SizedBox(width: 12),
         Expanded(
@@ -798,6 +811,16 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
       );
 }
 
+// Recognisable glyph per tracked aesthetic — "what it should be" at a glance.
+const Map<String, IconData> _aestheticIcons = {
+  'skin': Icons.face_retouching_natural,
+  'hair': Icons.face_3,
+  'eye': Icons.remove_red_eye,
+  'oral': Icons.sentiment_very_satisfied,
+  'grooming': Icons.content_cut,
+  'voice': Icons.graphic_eq,
+};
+
 class _AestheticsStrip extends ConsumerWidget {
   final BuildContext parentContext;
   const _AestheticsStrip(this.parentContext);
@@ -806,35 +829,37 @@ class _AestheticsStrip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final logsMap = ref.watch(logsProvider);
     final metricsToDisplay = metrics.where((m) => m.category == 'aesthetics').toList();
-    
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: metricsToDisplay.map((m) {
-        final region = headRegions.firstWhere((r) => r.muscle == m.id, orElse: () => const BodyRegion('', []));
         final logs = logsMap[m.id] ?? [];
         final hasData = logs.isNotEmpty;
         final score = hasData ? logs.last.value : null;
-        // Tracked aesthetic — coloured by SCORE level (not a rank).
-        final color = hasData ? _scoreColor(score! / 100) : const Color(0xFF454964);
+        // Tracked aesthetic — coloured by SCORE level on the 9-tier palette (not a rank).
+        final color = hasData ? _scoreColor(score!) : const Color(0xFF454964);
 
         return Column(mainAxisSize: MainAxisSize.min, children: [
           Material(
             color: Colors.transparent,
             child: Ink(
-              width: 46,
-              height: 46,
+              width: 52,
+              height: 52,
               decoration: BoxDecoration(
-                color: const Color(0xFF161830),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: hasData ? color.withValues(alpha: 0.55) : const Color(0x12FFFFFF)),
-                boxShadow: hasData ? [BoxShadow(color: color.withValues(alpha: 0.25), blurRadius: 8)] : [],
+                gradient: hasData
+                    ? LinearGradient(
+                        begin: Alignment.topLeft, end: Alignment.bottomRight,
+                        colors: [color.withValues(alpha: 0.18), const Color(0xFF161830)])
+                    : null,
+                color: hasData ? null : const Color(0xFF161830),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: hasData ? color.withValues(alpha: 0.6) : const Color(0x12FFFFFF)),
+                boxShadow: hasData ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 10)] : [],
               ),
               child: InkWell(
                 onTap: () => openDetailSheet(parentContext, m.id),
-                borderRadius: BorderRadius.circular(12),
-                child: CustomPaint(
-                  painter: _RegionIconPainter(region, color),
-                ),
+                borderRadius: BorderRadius.circular(14),
+                child: Center(child: Icon(_aestheticIcons[m.id] ?? Icons.spa, color: color, size: 26)),
               ),
             ),
           ),
@@ -849,49 +874,3 @@ class _AestheticsStrip extends ConsumerWidget {
   }
 }
 
-class _RegionIconPainter extends CustomPainter {
-  final BodyRegion region;
-  final Color color;
-  _RegionIconPainter(this.region, this.color);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (region.polys.isEmpty) return;
-    final path = Path();
-    double minX = double.infinity, minY = double.infinity;
-    double maxX = double.negativeInfinity, maxY = double.negativeInfinity;
-
-    for (final pStr in region.polys) {
-      final points = parsePoly(pStr);
-      if (points.isEmpty) continue;
-      path.moveTo(points.first.dx, points.first.dy);
-      for (var i = 1; i < points.length; i++) {
-        path.lineTo(points[i].dx, points[i].dy);
-      }
-      path.close();
-      for (final p in points) {
-        if (p.dx < minX) minX = p.dx;
-        if (p.dx > maxX) maxX = p.dx;
-        if (p.dy < minY) minY = p.dy;
-        if (p.dy > maxY) maxY = p.dy;
-      }
-    }
-
-    final w = maxX - minX;
-    final h = maxY - minY;
-    if (w <= 0 || h <= 0) return;
-
-    final scale = math.min(size.width / w, size.height / h) * 0.55;
-    canvas.translate(size.width / 2, size.height / 2);
-    canvas.scale(scale);
-    canvas.translate(-(minX + w / 2), -(minY + h / 2));
-
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(_RegionIconPainter old) => old.region != region || old.color != color;
-}
