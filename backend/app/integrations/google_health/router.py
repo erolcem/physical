@@ -67,6 +67,26 @@ def google_profile(user_id: str = Depends(current_user), db: Session = Depends(g
     return {"age": body.get("age")}
 
 
+@router.get("/exercises")
+def google_exercises(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
+    """The user's recent Google exercise SESSIONS (type, duration, calories, distance,
+    avg-HR, zone-minutes) for importing into the app's Exercise section."""
+    token = db.get(GoogleHealthToken, user_id)
+    if token is None:
+        raise HTTPException(404, "Google Health not connected")
+    try:
+        access = _valid_access_token(db, token)
+    except Exception as e:
+        return {"error": str(e)[:200], "sessions": []}
+    try:
+        status, body = GoogleHealthClient(access).get_raw(
+            "/users/me/dataTypes/exercise/dataPoints?pageSize=30")
+        pts = body.get("dataPoints", []) if isinstance(body, dict) else []
+    except Exception as e:
+        return {"error": str(e)[:200], "sessions": []}
+    return {"sessions": mapping.parse_exercise_sessions(pts)}
+
+
 @router.get("/debug")
 def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     """Diagnose an empty sync: what does Google actually have for this account?

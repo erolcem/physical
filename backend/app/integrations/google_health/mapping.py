@@ -190,6 +190,67 @@ def _sleep_samples(datapoints: list[dict]) -> list[dict]:
     return out
 
 
+# Google exercise types → our locked session types.
+_EX_TYPE_MAP = {
+    "WALKING": "Walk", "HIKING": "Walk", "RUNNING": "Run", "TREADMILL": "Run",
+    "BIKING": "Cycle", "OUTDOOR_BIKE": "Cycle", "MOUNTAIN_BIKING": "Cycle",
+    "SWIMMING": "Swim", "WEIGHTS": "Weightlifting", "WEIGHTLIFTING": "Weightlifting",
+}
+
+
+def _secs(v):
+    if v is None:
+        return None
+    try:
+        return int(str(v).rstrip("s"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _local_start(interval: dict):
+    """interval.startTime (UTC) shifted by startUtcOffset → local 'YYYY-MM-DDTHH:MM:SS'."""
+    start = interval.get("startTime")
+    if not isinstance(start, str):
+        return None
+    try:
+        d = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        off = int(str(interval.get("startUtcOffset", "0s")).rstrip("s") or 0)
+        return (d + timedelta(seconds=off)).strftime("%Y-%m-%dT%H:%M:%S")
+    except Exception:
+        return start[:19]
+
+
+def parse_exercise_sessions(datapoints: list[dict]) -> list[dict]:
+    """Google `exercise` dataPoints → session dicts the app imports as WorkoutSessions
+    (type, duration, and a cardio summary: calories/distance/steps/avg-HR/zone-minutes)."""
+    out = []
+    for p in datapoints:
+        c = p.get("exercise")
+        if not isinstance(c, dict):
+            continue
+        ms = c.get("metricsSummary") or {}
+        zones = ms.get("heartRateZoneDurations") or {}
+        active = sum((_secs(zones.get(k)) or 0)
+                     for k in ("moderateTime", "vigorousTime", "peakTime"))
+        dur = _secs(c.get("activeDuration"))
+        dist_mm = _to_float(ms.get("distanceMillimeters"))
+        ex_type = c.get("exerciseType") or ""
+        out.append({
+            "google_id": (p.get("name") or "").rsplit("/", 1)[-1] or None,
+            "type": _EX_TYPE_MAP.get(ex_type, "Other"),
+            "exercise_type": ex_type,
+            "display_name": c.get("displayName") or ex_type.title().replace("_", " ") or None,
+            "start": _local_start(c.get("interval") or {}),
+            "duration_mins": round(dur / 60) if dur else None,
+            "calories": _to_float(ms.get("caloriesKcal")),
+            "distance_km": round(dist_mm / 1_000_000, 2) if dist_mm else None,
+            "steps": _to_float(ms.get("steps")),
+            "avg_hr": _to_float(ms.get("averageHeartRateBeatsPerMinute")),
+            "zone_minutes": round(active / 60) if active else None,
+        })
+    return out
+
+
 def to_samples(metric_id: str, datapoints: list[dict]) -> list[dict]:
     if metric_id == "sleep":
         return _sleep_samples(datapoints)

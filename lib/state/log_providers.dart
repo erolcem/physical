@@ -95,6 +95,21 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
     repo.deleteWorkout(id);
     state = repo.loadWorkouts();
   }
+
+  /// Import Google exercise sessions (dedup by googleId), returning how many were new.
+  /// Existing imports keep any sets the user has logged into them.
+  int importGoogle(List<Map<String, dynamic>> sessions) {
+    final have = {for (final s in state) if (s.googleId != null) s.googleId};
+    var added = 0;
+    for (final g in sessions) {
+      final gid = g['google_id'];
+      if (gid == null || have.contains(gid)) continue;
+      repo.saveWorkout(WorkoutSession.fromGoogle(g));
+      added++;
+    }
+    if (added > 0) state = repo.loadWorkouts();
+    return added;
+  }
 }
 
 final pinsProvider =

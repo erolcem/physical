@@ -219,6 +219,20 @@ class ApiClient {
     }
   }
 
+  /// Recent Google exercise SESSIONS (parsed), for importing into the Exercise section.
+  Future<List<Map<String, dynamic>>> googleExercises() async {
+    try {
+      final r = await _client
+          .get(Uri.parse('$baseUrl/integrations/google/exercises'), headers: _headers())
+          .timeout(const Duration(seconds: 30));
+      if (r.statusCode != 200) return const [];
+      final body = jsonDecode(r.body) as Map<String, dynamic>;
+      return ((body['sessions'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Raw Google Health debug output (status + a real sample per data type, plus
   /// profile/session probes) — returned verbatim for the in-app inspector to copy.
   Future<String> googleDebug() async {

@@ -5,6 +5,7 @@
 // the coach + habit verification.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart';
 import '../state/log_providers.dart';
 
@@ -23,18 +24,80 @@ String _shortDate(String iso) {
   return d == null ? '' : '${d.day}/${d.month}';
 }
 
-class ExerciseScreen extends ConsumerWidget {
+/// The stat chips to show for a session — duration + (for Google sessions) the cardio
+/// summary, plus sets/volume when present.
+List<(String, String)> sessionStats(WorkoutSession s) {
+  final out = <(String, String)>[];
+  if (s.durationMins != null) out.add(('${s.durationMins}m', 'duration'));
+  if (s.fromGoogle) {
+    final cal = s.summary['calories'], dist = s.summary['distance_km'], hr = s.summary['avg_hr'];
+    if (cal != null) out.add(('${cal.round()}', 'kcal'));
+    if (dist != null && dist > 0) out.add((dist.toStringAsFixed(2), 'km'));
+    if (hr != null) out.add(('${hr.round()}', 'avg hr'));
+    if ((s.zoneMinutes ?? 0) > 0) out.add(('${s.zoneMinutes}', 'zone min'));
+  }
+  if (s.setCount > 0) out.add(('${s.setCount}', 'sets'));
+  if (s.volume > 0) out.add(('${s.volume.round()}', 'volume'));
+  if (out.isEmpty) out.add(('${s.setCount}', 'sets'));
+  return out;
+}
+
+class ExerciseScreen extends ConsumerStatefulWidget {
   const ExerciseScreen({super.key});
+  @override
+  ConsumerState<ExerciseScreen> createState() => _ExerciseScreenState();
+}
+
+class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
+  bool _syncing = false;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncGoogle());
+  }
+
+  // Pull recent Google exercise sessions and import the new ones (dedup by id).
+  Future<void> _syncGoogle() async {
+    final api = ref.read(apiClientProvider);
+    setState(() => _syncing = true);
+    try {
+      await api.loadPersistedToken();
+      if (api.isSignedIn) {
+        final sessions = await api.googleExercises();
+        final added = ref.read(workoutProvider.notifier).importGoogle(sessions);
+        if (added > 0 && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Imported $added Google workout${added == 1 ? '' : 's'}'),
+              duration: const Duration(seconds: 2)));
+        }
+      }
+    } catch (_) {/* offline / not signed in — manual still works */}
+    if (mounted) setState(() => _syncing = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final sessions = sortedByRecent(ref.watch(workoutProvider));
     return Scaffold(
       backgroundColor: _bg,
-      appBar: AppBar(backgroundColor: _bg, title: const Text('Exercise')),
+      appBar: AppBar(
+        backgroundColor: _bg,
+        title: const Text('Exercise'),
+        actions: [
+          _syncing
+              ? const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
+              : IconButton(
+                  tooltip: 'Import Google workouts',
+                  icon: const Icon(Icons.cloud_download_outlined),
+                  onPressed: _syncGoogle),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: _accent,
-        onPressed: () => _newSession(context, ref),
+        onPressed: _newSession,
         icon: const Icon(Icons.add),
         label: const Text('New workout'),
       ),
@@ -42,7 +105,7 @@ class ExerciseScreen extends ConsumerWidget {
         if (sessions.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 48),
-            child: Center(child: Text('No workouts yet — start one with “New workout”.',
+            child: Center(child: Text('No workouts yet — start one, or import from Google (☁).',
                 style: TextStyle(color: _muted))))
         else ...[
           _lastCard(sessions.first),
@@ -70,17 +133,14 @@ class ExerciseScreen extends ConsumerWidget {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(s.label, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
-                  Text('${s.type} · ${_shortDate(s.start)}', style: const TextStyle(fontSize: 12, color: _muted)),
+                  Text('${s.type} · ${_shortDate(s.start)}${s.fromGoogle ? ' · ☁ Google' : ''}',
+                      style: const TextStyle(fontSize: 12, color: _muted)),
                 ]),
               ),
             ]),
             const SizedBox(height: 14),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-              _stat('${s.setCount}', 'sets'),
-              _stat('${s.volume.round()}', 'volume'),
-              if (s.durationMins != null) _stat('${s.durationMins}m', 'duration'),
-              _stat('${s.exercises.length}', 'exercises'),
-            ]),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [for (final (v, l) in sessionStats(s).take(4)) _stat(v, l)]),
           ]),
         ),
       );
@@ -127,10 +187,15 @@ class ExerciseScreen extends ConsumerWidget {
         color: _card,
         child: ListTile(
           leading: Text(typeEmoji(s.type), style: const TextStyle(fontSize: 24)),
-          title: Text(s.label, style: const TextStyle(fontWeight: FontWeight.w700)),
+          title: Row(children: [
+            Flexible(child: Text(s.label, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700))),
+            if (s.fromGoogle)
+              const Padding(padding: EdgeInsets.only(left: 6),
+                  child: Icon(Icons.cloud, size: 13, color: _muted)),
+          ]),
           subtitle: Text(
-              '${s.type} · ${_shortDate(s.start)} · ${s.setCount} sets'
-              '${s.volume > 0 ? ' · ${s.volume.round()} vol' : ''}',
+              '${_shortDate(s.start)} · ${sessionStats(s).map((e) => '${e.$1} ${e.$2}').take(3).join(' · ')}',
               style: const TextStyle(fontSize: 12, color: _muted)),
           trailing: const Icon(Icons.chevron_right, color: _muted),
           onTap: () => Navigator.of(context).push(
@@ -138,7 +203,7 @@ class ExerciseScreen extends ConsumerWidget {
         ),
       );
 
-  Future<void> _newSession(BuildContext context, WidgetRef ref) async {
+  Future<void> _newSession() async {
     var type = sessionTypes.first.$1;
     final title = TextEditingController();
     final dur = TextEditingController();
@@ -177,16 +242,15 @@ class ExerciseScreen extends ConsumerWidget {
         ),
       ),
     );
-    if (created != true || !context.mounted) return;
+    if (created != true || !mounted) return;
     final s = ref.read(workoutProvider.notifier).createSession(
           type: type,
           title: title.text.trim().isEmpty ? null : title.text.trim(),
           durationMins: int.tryParse(dur.text),
         );
-    if (context.mounted) {
-      Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => SessionDetailScreen(sessionId: s.id)));
-    }
+    if (!mounted) return;
+    Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => SessionDetailScreen(sessionId: s.id)));
   }
 }
 
@@ -228,11 +292,11 @@ class SessionDetailScreen extends ConsumerWidget {
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
         _header(s),
         const SizedBox(height: 12),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-          _stat('${s.setCount}', 'sets'),
-          _stat('${s.volume.round()}', 'volume'),
-          _stat('${s.exercises.length}', 'exercises'),
-        ]),
+        Wrap(
+          alignment: WrapAlignment.spaceAround,
+          spacing: 20, runSpacing: 12,
+          children: [for (final (v, l) in sessionStats(s)) _stat(v, l)],
+        ),
         const SizedBox(height: 16),
         if (s.sets.isEmpty)
           const Padding(padding: EdgeInsets.symmetric(vertical: 24),
@@ -255,8 +319,7 @@ class SessionDetailScreen extends ConsumerWidget {
                 Text(s.label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                 Text(
                     '${s.type} · ${_shortDate(s.start)}'
-                    '${s.durationMins != null ? ' · ${s.durationMins} min' : ''}'
-                    '${s.cardioLoad != null ? ' · load ${s.cardioLoad!.round()}' : ''}',
+                    '${s.fromGoogle ? ' · ☁ from Google' : ''}',
                     style: const TextStyle(fontSize: 12, color: _muted)),
               ]),
             ),

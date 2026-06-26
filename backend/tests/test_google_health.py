@@ -48,6 +48,34 @@ def test_bodyweight_nested_date_and_grams_to_kg():
     assert out[0]["value"] == 82.0 and out[0]["ts"] == "2026-04-30T00:00:00"
 
 
+def test_parse_exercise_sessions_real_shape():
+    pts = [{
+        "name": "users/x/dataTypes/exercise/dataPoints/5044284279678279720",
+        "dataSource": {"platform": "FITBIT"},
+        "exercise": {
+            "interval": {"startTime": "2026-06-23T03:43:41Z", "startUtcOffset": "36000s",
+                         "endTime": "2026-06-23T04:21:01Z", "endUtcOffset": "36000s"},
+            "exerciseType": "WALKING",
+            "metricsSummary": {
+                "caloriesKcal": 229, "distanceMillimeters": 1635492, "steps": "2148",
+                "averageHeartRateBeatsPerMinute": "73",
+                "heartRateZoneDurations": {"lightTime": "2280s", "moderateTime": "120s",
+                                           "vigorousTime": "0s", "peakTime": "0s"},
+            },
+            "displayName": "Walk", "activeDuration": "2240s",
+        },
+    }]
+    s = mapping.parse_exercise_sessions(pts)[0]
+    assert s["google_id"] == "5044284279678279720"
+    assert s["type"] == "Walk" and s["exercise_type"] == "WALKING"
+    assert s["start"] == "2026-06-23T13:43:41"  # +10h local
+    assert s["duration_mins"] == 37  # 2240s
+    assert s["calories"] == 229.0
+    assert s["distance_km"] == 1.64  # 1635492 mm
+    assert s["steps"] == 2148.0 and s["avg_hr"] == 73.0
+    assert s["zone_minutes"] == 2  # 120s moderate
+
+
 def test_height_real_shape_mm_to_cm():
     pts = [{"name": "x", "dataSource": {}, "height": {
         "sampleTime": {"civilTime": {"date": {"year": 2026, "month": 4, "day": 30}}},

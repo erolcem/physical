@@ -90,11 +90,15 @@ class WorkoutSession {
   final String start; // ISO datetime
   final int? durationMins;
   final List<WorkoutSet> sets;
-  final double? cardioLoad; // optional (Google session data when available)
-  final int? zoneMinutes;
+  final double? cardioLoad; // calories-derived load (Google sessions)
+  final int? zoneMinutes; // active zone minutes (Google sessions)
+  final String source; // 'manual' | 'google'
+  final String? googleId; // dedup key for imported Google sessions
+  final Map<String, double> summary; // Google cardio summary: calories/distanceKm/steps/avgHr
   const WorkoutSession({
     required this.id, required this.type, this.title, required this.start,
     this.durationMins, this.sets = const [], this.cardioLoad, this.zoneMinutes,
+    this.source = 'manual', this.googleId, this.summary = const {},
   });
 
   String get dateKey => start.length >= 10 ? start.substring(0, 10) : start;
@@ -102,6 +106,7 @@ class WorkoutSession {
   int get setCount => sets.length;
   Set<String> get exercises => {for (final s in sets) s.name};
   String get label => (title != null && title!.trim().isNotEmpty) ? title! : type;
+  bool get fromGoogle => source == 'google';
 
   WorkoutSession copyWith({List<WorkoutSet>? sets, String? title, int? durationMins}) =>
       WorkoutSession(
@@ -110,6 +115,7 @@ class WorkoutSession {
         durationMins: durationMins ?? this.durationMins,
         sets: sets ?? this.sets,
         cardioLoad: cardioLoad, zoneMinutes: zoneMinutes,
+        source: source, googleId: googleId, summary: summary,
       );
 
   Map<String, dynamic> toJson() => {
@@ -118,6 +124,9 @@ class WorkoutSession {
         'sets': [for (final s in sets) s.toJson()],
         if (cardioLoad != null) 'cl': cardioLoad,
         if (zoneMinutes != null) 'zm': zoneMinutes,
+        if (source != 'manual') 'src': source,
+        if (googleId != null) 'gid': googleId,
+        if (summary.isNotEmpty) 'sum': summary,
       };
 
   factory WorkoutSession.fromJson(Map<String, dynamic> j) => WorkoutSession(
@@ -130,6 +139,31 @@ class WorkoutSession {
         sets: [for (final s in (j['sets'] as List? ?? const [])) WorkoutSet.fromJson(s as Map<String, dynamic>)],
         cardioLoad: (j['cl'] as num?)?.toDouble(),
         zoneMinutes: (j['zm'] as num?)?.toInt(),
+        source: j['src'] as String? ?? 'manual',
+        googleId: j['gid'] as String?,
+        summary: {
+          for (final e in ((j['sum'] as Map?) ?? const {}).entries)
+            e.key as String: (e.value as num).toDouble()
+        },
+      );
+
+  /// Build a session from a parsed Google `exercise` dataPoint (see backend
+  /// /integrations/google/exercises). Imported sessions are read-only at the top
+  /// level; the user can still log sets into them.
+  factory WorkoutSession.fromGoogle(Map<String, dynamic> g) => WorkoutSession(
+        id: 'g:${g['google_id']}',
+        type: (g['type'] as String?) ?? 'Other',
+        title: g['display_name'] as String?,
+        start: (g['start'] as String?) ?? DateTime.now().toIso8601String(),
+        durationMins: (g['duration_mins'] as num?)?.toInt(),
+        cardioLoad: (g['calories'] as num?)?.toDouble(),
+        zoneMinutes: (g['zone_minutes'] as num?)?.toInt(),
+        source: 'google',
+        googleId: g['google_id'] as String?,
+        summary: {
+          for (final k in ['calories', 'distance_km', 'steps', 'avg_hr'])
+            if (g[k] != null) k: (g[k] as num).toDouble(),
+        },
       );
 }
 
