@@ -283,7 +283,7 @@ class _OverallCard extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        RankBadge(tier: r.tier, sub: r.sub, size: 100, animated: true),
+        RankBadge(tier: r.tier, sub: r.sub, size: 118, animated: true),
         const SizedBox(height: 16),
         const Text('OVERALL RANK',
             textAlign: TextAlign.center,
@@ -377,7 +377,7 @@ class _OverallBreakdownSheet extends ConsumerWidget {
                     decoration: BoxDecoration(color: _border2, borderRadius: BorderRadius.circular(3)))),
               ),
             ),
-            Center(child: RankBadge(tier: overall.tier, sub: overall.sub, size: 92, animated: true)),
+            Center(child: RankBadge(tier: overall.tier, sub: overall.sub, size: 106, animated: true)),
             const SizedBox(height: 10),
             Center(child: Text('${overall.tier} ${overall.sub}',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: c, height: 1))),
