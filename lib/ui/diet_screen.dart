@@ -204,7 +204,9 @@ class DietScreen extends ConsumerWidget {
             }
             setLocal(() => busy = true);
             try {
-              final n = await ref.read(apiClientProvider).inferNutrition(desc);
+              final api = ref.read(apiClientProvider);
+              await api.loadPersistedToken(); // ensure the auth header is set
+              final n = await api.inferNutrition(desc);
               kcal.text = n.calories.round().toString();
               p.text = n.protein.round().toString();
               c.text = n.carbs.round().toString();
@@ -214,9 +216,11 @@ class DietScreen extends ConsumerWidget {
               setLocal(() => busy = false);
             } catch (e) {
               setLocal(() => busy = false);
-              final msg = (e is ApiException && e.status == 503)
-                  ? 'Auto-fill needs the AI key set up — enter values manually.'
-                  : "Couldn't estimate that — enter values manually.";
+              final msg = switch (e) {
+                ApiException(status: 503) => 'Auto-fill needs the AI key set up — enter values manually.',
+                ApiException(status: 401) => 'Sign in with Google (☁) to use AI auto-fill.',
+                _ => "Couldn't estimate that — enter values manually.",
+              };
               if (ctx.mounted) {
                 ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
               }
