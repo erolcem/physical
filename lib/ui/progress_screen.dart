@@ -153,7 +153,7 @@ class _CategoryCard extends StatelessWidget {
                 ]),
               ),
               if (ranked && rank != null)
-                RankBadge(tier: rank!.tier, sub: rank!.sub, size: 68),
+                RankBadge(tier: rank!.tier, sub: rank!.sub, size: 78),
               const Icon(Icons.chevron_right, color: _muted),
             ]),
           ),
@@ -513,7 +513,7 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
           children: ['1W', '1M', '3M', '6M', '1Y', 'All'].map((t) {
             final sel = t == _timeframe;
             return ChoiceChip(
-              label: Text(t, style: const TextStyle(fontSize: 10)),
+              label: Text(t, style: const TextStyle(fontSize: 11)),
               selected: sel,
               onSelected: (_) => setState(() => _timeframe = t),
               selectedColor: _accent.withValues(alpha: 0.2),
@@ -586,9 +586,9 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(_tierShort[rank],
-                                style: TextStyle(color: tierColor(_tierFull[rank]), fontSize: 9, fontWeight: FontWeight.w700)),
+                                style: TextStyle(color: tierColor(_tierFull[rank]), fontSize: 10.5, fontWeight: FontWeight.w700)),
                             if (val != null)
-                              Text(val, style: const TextStyle(color: _muted, fontSize: 7.5, fontWeight: FontWeight.w600)),
+                              Text(val, style: const TextStyle(color: _muted, fontSize: 9, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       );
@@ -599,7 +599,7 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
                         : (lo + v * (hi - lo)).toStringAsFixed(0);
                     return Padding(
                       padding: const EdgeInsets.only(right: 6),
-                      child: Text(text, style: const TextStyle(color: _muted, fontSize: 9, fontWeight: FontWeight.w600)),
+                      child: Text(text, style: const TextStyle(color: _muted, fontSize: 10.5, fontWeight: FontWeight.w600)),
                     );
                   },
                 ),
@@ -615,7 +615,7 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
                     final dt = DateTime.fromMillisecondsSinceEpoch(globalFirstTs + (v * 86400000).toInt());
                     return Padding(
                       padding: const EdgeInsets.only(top: 12.0),
-                      child: Text('${dt.day}/${dt.month}', style: const TextStyle(color: _muted, fontSize: 10, fontWeight: FontWeight.w600)),
+                      child: Text('${dt.day}/${dt.month}', style: const TextStyle(color: _muted, fontSize: 11, fontWeight: FontWeight.w600)),
                     );
                   },
                 ),

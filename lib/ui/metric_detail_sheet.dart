@@ -126,11 +126,11 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
             // ── Header ──
             Row(children: [
               if (r != null)
-                RankBadge(tier: r.tier, sub: r.sub, size: 92)
+                RankBadge(tier: r.tier, sub: r.sub, size: 104)
               else
                 // Tracked / unranked metric — no tier, so no medallion.
                 Container(
-                  width: 90, height: 90,
+                  width: 102, height: 102,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: const Color(0xFF4CE0C3).withValues(alpha: 0.12),
@@ -204,8 +204,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
             ] else
               _field(_value, '${m.label} (${m.unit})'),
             const SizedBox(height: 12),
-            SizedBox(width: double.infinity,
-                child: FilledButton(onPressed: _save, child: const Text('Save'))),
+            _grandButton('Save', ranked ? c : const Color(0xFF5B6AF8), _save),
 
             // ── History (newest first by date) ──
             if (logs.isNotEmpty) ...[
@@ -292,6 +291,32 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
       ]),
     );
   }
+
+  // A grand gradient action button with a coloured glow.
+  Widget _grandButton(String label, Color c, VoidCallback onTap) => SizedBox(
+        width: double.infinity,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(colors: [c, Color.lerp(c, Colors.black, 0.28)!]),
+            boxShadow: [
+              BoxShadow(color: c.withValues(alpha: 0.45), blurRadius: 14, spreadRadius: -2, offset: const Offset(0, 4)),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                child: Center(child: Text(label,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16))),
+              ),
+            ),
+          ),
+        ),
+      );
 
   Widget _field(TextEditingController ctrl, String label) => TextField(
         controller: ctrl,

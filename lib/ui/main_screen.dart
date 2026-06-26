@@ -75,11 +75,34 @@ class _MainScreenState extends ConsumerState<MainScreen>
           CoachTab(),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showLogChooser(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Log'),
-        backgroundColor: const Color(0xFF5B6AF8),
+      // A grand gradient pill (FAB can't take a gradient natively) with a glow.
+      floatingActionButton: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(30),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [Color(0xFF7C8BFF), Color(0xFF5B6AF8)],
+          ),
+          boxShadow: [
+            BoxShadow(color: const Color(0xFF5B6AF8).withValues(alpha: 0.55),
+                blurRadius: 20, spreadRadius: -2, offset: const Offset(0, 6)),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _showLogChooser(context),
+            borderRadius: BorderRadius.circular(30),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 22, vertical: 15),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.add, color: Colors.white, size: 22),
+                SizedBox(width: 8),
+                Text('Log', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+              ]),
+            ),
+          ),
+        ),
       ),
     );
   }

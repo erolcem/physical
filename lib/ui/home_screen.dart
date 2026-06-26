@@ -296,11 +296,11 @@ class _OverallCard extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        RankBadge(tier: r.tier, sub: r.sub, size: 182, animated: true),
+        RankBadge(tier: r.tier, sub: r.sub, size: 210, animated: true),
         const SizedBox(height: 16),
         const Text('OVERALL RANK',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 10, letterSpacing: 2.5, color: _muted, fontWeight: FontWeight.w700)),
+            style: TextStyle(fontSize: 11, letterSpacing: 2.5, color: _muted, fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
         Text('${r.tier} ${r.sub}',
             textAlign: TextAlign.center,
@@ -313,11 +313,11 @@ class _OverallCard extends StatelessWidget {
         _RankBar(frac: frac, color: c, height: 12),
         const SizedBox(height: 6),
         Text('Avg ${r.rankValue.toStringAsFixed(2)}/8',
-            style: const TextStyle(fontSize: 10, color: _muted2)),
+            style: const TextStyle(fontSize: 11, color: _muted2)),
         const SizedBox(height: 10),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Text('TAP FOR CATEGORY BREAKDOWN',
-              style: TextStyle(fontSize: 9, letterSpacing: 1.5, color: c.withValues(alpha: 0.8), fontWeight: FontWeight.w700)),
+              style: TextStyle(fontSize: 10.5, letterSpacing: 1.5, color: c.withValues(alpha: 0.8), fontWeight: FontWeight.w700)),
           Icon(Icons.chevron_right, size: 14, color: c.withValues(alpha: 0.8)),
         ]),
       ]),
@@ -390,7 +390,7 @@ class _OverallBreakdownSheet extends ConsumerWidget {
                     decoration: BoxDecoration(color: _border2, borderRadius: BorderRadius.circular(3)))),
               ),
             ),
-            Center(child: RankBadge(tier: overall.tier, sub: overall.sub, size: 166, animated: true)),
+            Center(child: RankBadge(tier: overall.tier, sub: overall.sub, size: 188, animated: true)),
             const SizedBox(height: 10),
             Center(child: Text('${overall.tier} ${overall.sub}',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: c, height: 1))),
@@ -401,7 +401,7 @@ class _OverallBreakdownSheet extends ConsumerWidget {
             _RankBar(frac: overallFrac, color: c, height: 12),
             const SizedBox(height: 6),
             Center(child: Text('Avg ${overall.rankValue.toStringAsFixed(2)}/8',
-                style: const TextStyle(fontSize: 10, color: _muted2))),
+                style: const TextStyle(fontSize: 11, color: _muted2))),
             const SizedBox(height: 22),
             Text('CATEGORY RANKINGS', style: _secTitle()),
             const SizedBox(height: 10),
@@ -427,7 +427,7 @@ class _OverallBreakdownSheet extends ConsumerWidget {
 
   Widget _stat(String value, String label) => Column(children: [
         Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-        Text(label, style: const TextStyle(fontSize: 9, letterSpacing: 1.2, color: _muted, fontWeight: FontWeight.w700)),
+        Text(label, style: const TextStyle(fontSize: 10.5, letterSpacing: 1.2, color: _muted, fontWeight: FontWeight.w700)),
       ]);
 
   // One tier's medallion + a count pill (figure 3). Dimmed when no metric sits there.
@@ -435,12 +435,12 @@ class _OverallBreakdownSheet extends ConsumerWidget {
     final col = tierColor(tier);
     final on = count > 0;
     return SizedBox(
-      width: 90,
+      width: 100,
       child: Column(children: [
         SizedBox(
-          width: 78, height: 78,
+          width: 86, height: 86,
           child: Stack(clipBehavior: Clip.none, children: [
-            Center(child: Opacity(opacity: on ? 1.0 : 0.22, child: RankBadge(tier: tier, size: 76))),
+            Center(child: Opacity(opacity: on ? 1.0 : 0.22, child: RankBadge(tier: tier, size: 84))),
             if (on)
               Positioned(
                 right: -4, top: -4,
@@ -453,13 +453,13 @@ class _OverallBreakdownSheet extends ConsumerWidget {
                     border: Border.all(color: col, width: 1.5),
                   ),
                   child: Text('$count',
-                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: col)),
+                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: col)),
                 ),
               ),
           ]),
         ),
         const SizedBox(height: 3),
-        Text(tier, style: TextStyle(fontSize: 9, color: on ? col : _muted, fontWeight: FontWeight.w600)),
+        Text(tier, style: TextStyle(fontSize: 10.5, color: on ? col : _muted, fontWeight: FontWeight.w600)),
       ]),
     );
   }
@@ -499,7 +499,7 @@ class _OverallBreakdownSheet extends ConsumerWidget {
             _RankBar(frac: frac, color: c, height: 9, showThirds: false),
             const SizedBox(height: 5),
             Text(has ? 'Composite score · not ranked' : 'Log skin, oral, grooming…',
-                style: const TextStyle(fontSize: 10, color: _muted)),
+                style: const TextStyle(fontSize: 11, color: _muted)),
           ]),
         ),
       ]),
@@ -520,13 +520,13 @@ class _OverallBreakdownSheet extends ConsumerWidget {
       ),
       child: Row(children: [
         if (ranked)
-          RankBadge(tier: r.tier, sub: r.sub, size: 78)
+          RankBadge(tier: r.tier, sub: r.sub, size: 88)
         else
           Container(
-            width: 76, height: 76, alignment: Alignment.center,
+            width: 86, height: 86, alignment: Alignment.center,
             decoration: BoxDecoration(
                 shape: BoxShape.circle, color: _surface, border: Border.all(color: _border)),
-            child: const Icon(Icons.lock_outline, size: 26, color: _muted),
+            child: const Icon(Icons.lock_outline, size: 28, color: _muted),
           ),
         const SizedBox(width: 12),
         Expanded(
@@ -541,7 +541,7 @@ class _OverallBreakdownSheet extends ConsumerWidget {
             if (ranked) ...[
               const SizedBox(height: 5),
               Text('Top ${r.topPct.toStringAsFixed(1)}%  ·  avg ${r.rankValue.toStringAsFixed(2)}/8',
-                  style: const TextStyle(fontSize: 10, color: _muted)),
+                  style: const TextStyle(fontSize: 11, color: _muted)),
             ],
           ]),
         ),
@@ -600,7 +600,7 @@ class _BodyGraphSection extends StatelessWidget {
       else
         AspectRatio(aspectRatio: 148 / 420, child: graph),
       const SizedBox(height: 6),
-      Text(label, style: const TextStyle(fontSize: 10, letterSpacing: 2.5,
+      Text(label, style: const TextStyle(fontSize: 11, letterSpacing: 2.5,
           color: _muted, fontWeight: FontWeight.w700)),
     ]);
   }
