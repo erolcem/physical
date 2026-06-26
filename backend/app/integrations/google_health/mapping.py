@@ -70,13 +70,14 @@ def _bodyweight(c):
 
 
 def _height(c):
-    """Height in cm from whatever unit Google uses (shape confirmed via /debug)."""
+    """Height in cm. Confirmed via /debug: Google sends `heightMillimeters` (e.g.
+    "1900" → 190 cm); other units handled defensively in case the shape varies."""
+    mm = _to_float(c.get("heightMillimeters")) or _to_float(c.get("heightMm"))
+    if mm is not None:
+        return round(mm / 10.0, 1)
     m = _to_float(c.get("heightMeters"))
     if m is not None:
         return round(m * 100.0, 1)
-    mm = _to_float(c.get("heightMm")) or _to_float(c.get("heightMillimeters"))
-    if mm is not None:
-        return round(mm / 10.0, 1)
     return _to_float(c.get("heightCm")) or _to_float(c.get("heightCentimeters"))
 
 

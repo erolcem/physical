@@ -48,6 +48,14 @@ def test_bodyweight_nested_date_and_grams_to_kg():
     assert out[0]["value"] == 82.0 and out[0]["ts"] == "2026-04-30T00:00:00"
 
 
+def test_height_real_shape_mm_to_cm():
+    pts = [{"name": "x", "dataSource": {}, "height": {
+        "sampleTime": {"civilTime": {"date": {"year": 2026, "month": 4, "day": 30}}},
+        "heightMillimeters": "1900"}}]
+    out = mapping.to_samples("height", pts)
+    assert out[0]["value"] == 190.0 and out[0]["ts"] == "2026-04-30T00:00:00"
+
+
 def test_sleep_expands_to_duration_efficiency_and_stages():
     pts = [{"name": "x", "dataSource": {}, "sleep": {
         "interval": {"startTime": "2026-06-23T13:56:00Z", "endTime": "2026-06-23T23:41:00Z"},
