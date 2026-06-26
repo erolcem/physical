@@ -205,7 +205,7 @@ def rank_value(metric_id, value, bodyweight=None):
 def tier_of(metric_id, value, bodyweight=None):
     P = percentile(metric_id, value, bodyweight)
     rv = _rank_value_from_P(P)
-    idx = int(rv)
+    idx = min(int(rv), len(TIERS) - 1)  # rv hits 9.0 at P=1.0 → keep index in range
     return {"tier": TIERS[idx], "sub": SUB[min(int((rv - idx) * 3), 2)],
             "top_pct": (1 - P) * 100, "percentile": P * 100, "rank_value": rv}
 
@@ -241,7 +241,7 @@ def overall(logs):
         return {"tier": "Wood", "sub": "I", "top_pct": 99.9, "rank_value": 0.0}
     Pbar = _Z.cdf(sum(zs) / len(zs))
     rv = _rank_value_from_P(Pbar)
-    idx = int(rv)
+    idx = min(int(rv), len(TIERS) - 1)
     return {"tier": TIERS[idx], "sub": SUB[min(int((rv - idx) * 3), 2)],
             "top_pct": (1 - Pbar) * 100, "rank_value": rv}
 

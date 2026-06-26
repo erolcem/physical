@@ -241,7 +241,7 @@ class RankResult {
 RankResult tierOf(String metricId, double value, [double? bodyweight]) {
   final p = percentile(metricId, value, bodyweight);
   final rv = _rankValueFromP(p);
-  final idx = rv.floor();
+  final idx = rv.floor().clamp(0, tiers.length - 1);
   final si = ((rv - idx) * 3).floor().clamp(0, 2);
   return RankResult(tiers[idx], sub[si], (1 - p) * 100, p * 100, rv);
 }
@@ -275,7 +275,7 @@ RankResult overall(List<Log> logs) {
   final zbar = zs.reduce((a, b) => a + b) / zs.length;
   final pbar = _normCdf(zbar, 0, 1);
   final rv = _rankValueFromP(pbar);
-  final idx = rv.floor();
+  final idx = rv.floor().clamp(0, tiers.length - 1);
   final si = ((rv - idx) * 3).floor().clamp(0, 2);
   return RankResult(tiers[idx], sub[si], (1 - pbar) * 100, pbar * 100, rv);
 }
