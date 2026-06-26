@@ -30,7 +30,7 @@ class RankBadge extends StatelessWidget {
     final colorHex = _colorToHex(c);
     final svgString =
         '<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" style="overflow:visible">'
-        '${_shapes[idx].replaceAll('{c}', colorHex)}</svg>';
+        '${_medallion(idx).replaceAll('{c}', colorHex)}</svg>';
 
     // Render the medallion slightly inset so the halo has room inside the box.
     final inner = size * 0.82;
@@ -166,151 +166,70 @@ class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin 
   }
 }
 
-// Prototype-faithful medallion shapes (white→dark radial shading + bright white
-// facets). `{c}` is substituted with the tier colour at render time.
-const List<String> _shapes = [
-  // 0: Wood
-  '''
-  <defs><radialGradient id="g0" cx="40%" cy="30%"><stop offset="0%" stop-color="rgba(255,255,255,.25)"/><stop offset="100%" stop-color="rgba(0,0,0,.2)"/></radialGradient></defs>
-  <polygon points="40,4 67,20 67,52 40,68 13,52 13,20" fill="{c}"/>
-  <polygon points="40,4 67,20 67,52 40,68 13,52 13,20" fill="url(#g0)"/>
-  <polygon points="40,9 62,22 62,50 40,63 18,50 18,22" fill="none" stroke="rgba(255,210,140,.4)" stroke-width="1.5"/>
-  <path d="M40 20Q53 24 52 39Q47 48 38 44Q28 38 31 26Q35 18 40 20Z" fill="rgba(255,255,255,.88)"/>
-  <path d="M40 20L37 45" stroke="rgba(255,255,255,.4)" stroke-width="1.2" fill="none"/>
-  ''',
+// Medallion crest (inspired by tiered game ranks): a beveled frame + a faceted
+// central GEM, with WINGS that escalate on higher tiers and a STAR + radiant RAYS
+// at the top. `{c}` is substituted with the tier colour at render time.
+String _medallion(int idx) {
+  final b = StringBuffer(_defs);
+  if (idx == 8) b.write(_rays);                 // Glory: radiant burst
+  if (idx >= 3) b.write(_wings(large: idx == 8));
+  b..write(_frame)..write(_gem);
+  if (idx >= 6) b.write(_star);                 // Champion / Titan / Glory: crown star
+  return b.toString();
+}
 
-  // 1: Bronze
-  '''
-  <defs><radialGradient id="g1" cx="40%" cy="30%"><stop offset="0%" stop-color="rgba(255,255,255,.22)"/><stop offset="100%" stop-color="rgba(0,0,0,.22)"/></radialGradient></defs>
-  <polygon points="40,4 67,20 67,52 40,68 13,52 13,20" fill="{c}"/>
-  <polygon points="40,4 67,20 67,52 40,68 13,52 13,20" fill="url(#g1)"/>
-  <polygon points="40,9 62,22 62,50 40,63 18,50 18,22" fill="none" stroke="rgba(255,200,110,.4)" stroke-width="1.5"/>
-  <polygon points="40,20 56,32 40,54 24,32" fill="rgba(255,255,255,.1)"/>
-  <polygon points="40,20 56,32 40,32" fill="rgba(255,255,255,.78)"/>
-  <polygon points="40,20 24,32 40,32" fill="rgba(255,255,255,.5)"/>
-  <polygon points="40,54 56,32 40,32" fill="rgba(255,255,255,.18)"/>
-  <polygon points="40,54 24,32 40,32" fill="rgba(255,255,255,.28)"/>
-  <polygon points="40,20 56,32 40,54 24,32" fill="none" stroke="rgba(255,255,255,.55)" stroke-width=".8"/>
-  ''',
+const String _defs =
+    '<defs><radialGradient id="bvl" cx="42%" cy="30%">'
+    '<stop offset="0%" stop-color="rgba(255,255,255,.34)"/>'
+    '<stop offset="55%" stop-color="rgba(255,255,255,0)"/>'
+    '<stop offset="100%" stop-color="rgba(0,0,0,.32)"/></radialGradient></defs>';
 
-  // 2: Silver
-  '''
-  <defs><radialGradient id="g2" cx="40%" cy="30%"><stop offset="0%" stop-color="rgba(255,255,255,.28)"/><stop offset="100%" stop-color="rgba(0,0,0,.18)"/></radialGradient></defs>
-  <path d="M13 34Q5 41 9 54L17 48L15 37Z" fill="{c}" opacity=".75"/>
-  <path d="M67 34Q75 41 71 54L63 48L65 37Z" fill="{c}" opacity=".75"/>
-  <path d="M40 5L67 18L67 43Q67 62 40 74Q13 62 13 43L13 18Z" fill="{c}"/>
-  <path d="M40 5L67 18L67 43Q67 62 40 74Q13 62 13 43L13 18Z" fill="url(#g2)"/>
-  <path d="M40 11L61 22L61 43Q61 57 40 67Q19 57 19 43L19 22Z" fill="rgba(0,0,0,.2)"/>
-  <path d="M40 11L61 22L61 43Q61 57 40 67Q19 57 19 43L19 22Z" fill="none" stroke="rgba(210,230,255,.38)" stroke-width="1"/>
-  <polygon points="40,22 55,33 40,53 25,33" fill="rgba(255,255,255,.1)"/>
-  <polygon points="40,22 55,33 40,33" fill="rgba(255,255,255,.82)"/>
-  <polygon points="40,22 25,33 40,33" fill="rgba(255,255,255,.55)"/>
-  <polygon points="40,53 55,33 40,33" fill="rgba(255,255,255,.18)"/>
-  <polygon points="40,53 25,33 40,33" fill="rgba(255,255,255,.28)"/>
-  <polygon points="40,22 55,33 40,53 25,33" fill="none" stroke="rgba(255,255,255,.55)" stroke-width=".8"/>
-  ''',
+// Beveled hexagonal crest.
+const String _frame =
+    '<polygon points="40,7 63,20 63,47 40,62 17,47 17,20" fill="{c}"/>'
+    '<polygon points="40,7 63,20 63,47 40,62 17,47 17,20" fill="url(#bvl)"/>'
+    '<polygon points="40,12 58,22 58,45 40,55 22,45 22,22" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="1.3"/>';
 
-  // 3: Gold
-  '''
-  <defs><radialGradient id="g3" cx="40%" cy="30%"><stop offset="0%" stop-color="rgba(255,255,255,.3)"/><stop offset="100%" stop-color="rgba(0,0,0,.18)"/></radialGradient></defs>
-  <path d="M11 23Q1 37 7 55L19 45L17 27Z" fill="{c}" opacity=".85"/>
-  <path d="M5 27Q-1 39 5 53L13 47L9 31Z" fill="{c}" opacity=".5"/>
-  <path d="M69 23Q79 37 73 55L61 45L63 27Z" fill="{c}" opacity=".85"/>
-  <path d="M75 27Q81 39 75 53L67 47L71 31Z" fill="{c}" opacity=".5"/>
-  <path d="M40 4L66 16L66 42Q66 62 40 74Q14 62 14 42L14 16Z" fill="{c}"/>
-  <path d="M40 4L66 16L66 42Q66 62 40 74Q14 62 14 42L14 16Z" fill="url(#g3)"/>
-  <path d="M40 10L60 20L60 42Q60 57 40 67Q20 57 20 42L20 20Z" fill="rgba(0,0,0,.18)"/>
-  <path d="M40 10L60 20L60 42Q60 57 40 67Q20 57 20 42L20 20Z" fill="none" stroke="rgba(255,245,160,.45)" stroke-width="1"/>
-  <polygon points="40,21 58,33 40,57 22,33" fill="rgba(255,255,255,.08)"/>
-  <polygon points="40,21 58,33 40,33" fill="rgba(255,255,255,.85)"/>
-  <polygon points="40,21 22,33 40,33" fill="rgba(255,255,255,.58)"/>
-  <polygon points="40,57 58,33 40,33" fill="rgba(255,255,255,.18)"/>
-  <polygon points="40,57 22,33 40,33" fill="rgba(255,255,255,.3)"/>
-  <polygon points="40,21 58,33 40,57 22,33" fill="none" stroke="rgba(255,255,255,.55)" stroke-width=".9"/>
-  ''',
+// Faceted central gem: white body with colour-shaded facets + a top highlight.
+const String _gem =
+    '<polygon points="40,21 54,35 40,53 26,35" fill="rgba(0,0,0,.22)"/>'
+    '<polygon points="40,23 52,35 40,51 28,35" fill="rgba(255,255,255,.95)"/>'
+    '<polygon points="40,23 52,35 40,35" fill="{c}" opacity=".50"/>'
+    '<polygon points="40,23 28,35 40,35" fill="{c}" opacity=".28"/>'
+    '<polygon points="40,51 52,35 40,35" fill="{c}" opacity=".68"/>'
+    '<polygon points="40,51 28,35 40,35" fill="{c}" opacity=".44"/>'
+    '<line x1="28" y1="35" x2="52" y2="35" stroke="rgba(255,255,255,.55)" stroke-width=".8"/>'
+    '<polygon points="40,23 46,29 40,32 34,29" fill="rgba(255,255,255,.85)"/>';
 
-  // 4: Platinum
-  '''
-  <defs><radialGradient id="g4" cx="40%" cy="30%"><stop offset="0%" stop-color="rgba(255,255,255,.3)"/><stop offset="100%" stop-color="rgba(0,0,0,.2)"/></radialGradient></defs>
-  <path d="M9 26Q1 35 3 50L13 44L11 30Z" fill="{c}" opacity=".75"/>
-  <path d="M13 19Q3 30 5 45L17 38L15 22Z" fill="{c}" opacity=".55"/>
-  <path d="M5 33Q1 40 3 47L9 43Z" fill="{c}" opacity=".35"/>
-  <path d="M71 26Q79 35 77 50L67 44L69 30Z" fill="{c}" opacity=".75"/>
-  <path d="M67 19Q77 30 75 45L63 38L65 22Z" fill="{c}" opacity=".55"/>
-  <path d="M75 33Q79 40 77 47L71 43Z" fill="{c}" opacity=".35"/>
-  <polygon points="40,3 69,23 59,61 21,61 11,23" fill="{c}"/>
-  <polygon points="40,3 69,23 59,61 21,61 11,23" fill="url(#g4)"/>
-  <polygon points="40,9 64,26 55,57 25,57 16,26" fill="rgba(0,0,0,.2)"/>
-  <polygon points="40,9 64,26 55,57 25,57 16,26" fill="none" stroke="rgba(120,255,220,.42)" stroke-width="1.2"/>
-  <circle cx="40" cy="37" r="15" fill="rgba(0,0,0,.35)"/>
-  <circle cx="40" cy="37" r="15" fill="none" stroke="rgba(255,255,255,.32)" stroke-width="2"/>
-  <polygon points="40,22 52,31 40,31" fill="rgba(255,255,255,.85)"/>
-  <polygon points="40,22 28,31 40,31" fill="rgba(255,255,255,.6)"/>
-  <circle cx="40" cy="39" r="5" fill="{c}" opacity=".8"/>
-  <circle cx="40" cy="39" r="3" fill="rgba(255,255,255,.7)"/>
-  ''',
+// Five-point crown star above the crest.
+const String _star =
+    '<path d="M40,-3 L43.2,7 L53.5,7 L45.2,13.2 L48.4,23 L40,17 L31.6,23 L34.8,13.2 L26.5,7 L36.8,7 Z" fill="rgba(255,255,255,.95)"/>'
+    '<path d="M40,1 L42,7 L48.5,7 L43.3,11 L45,17 L40,13.4 L35,17 L36.7,11 L31.5,7 L38,7 Z" fill="{c}" opacity=".55"/>';
 
-  // 5: Diamond
-  '''
-  <defs><radialGradient id="g5" cx="40%" cy="30%"><stop offset="0%" stop-color="rgba(255,255,255,.3)"/><stop offset="100%" stop-color="rgba(0,0,0,.18)"/></radialGradient></defs>
-  <path d="M7 24Q-1 35 1 52L13 44L9 27Z" fill="{c}" opacity=".8"/>
-  <path d="M11 16Q1 29 3 46L17 37L13 19Z" fill="{c}" opacity=".58"/>
-  <path d="M3 31Q-1 40 1 49L7 45Z" fill="{c}" opacity=".38"/>
-  <path d="M73 24Q81 35 79 52L67 44L71 27Z" fill="{c}" opacity=".8"/>
-  <path d="M69 16Q79 29 77 46L63 37L67 19Z" fill="{c}" opacity=".58"/>
-  <path d="M77 31Q81 40 79 49L73 45Z" fill="{c}" opacity=".38"/>
-  <polygon points="40,2 71,22 61,64 19,64 9,22" fill="{c}"/>
-  <polygon points="40,2 71,22 61,64 19,64 9,22" fill="url(#g5)"/>
-  <polygon points="40,8 66,25 57,59 23,59 14,25" fill="rgba(0,0,0,.18)"/>
-  <polygon points="40,8 66,25 57,59 23,59 14,25" fill="none" stroke="rgba(160,210,255,.5)" stroke-width="1.2"/>
-  <path d="M40 16L44 28L57 28L47 36L51 50L40 42L29 50L33 36L23 28L36 28Z" fill="rgba(255,255,255,.92)"/>
-  <path d="M40 20L43 28L51 28L45 33L48 42L40 37L32 42L35 33L29 28L37 28Z" fill="{c}" opacity=".4"/>
-  ''',
+// Layered feather wings flanking the crest (extend outside the viewBox; allowed).
+String _wings({bool large = false}) {
+  if (large) {
+    return '<g fill="{c}" opacity=".95">'
+        '<path d="M19,22 Q-3,14 -18,17 Q-3,21 7,27 Z"/>'
+        '<path d="M19,29 Q-5,25 -20,31 Q-2,34 11,37 Z"/>'
+        '<path d="M19,36 Q-1,34 -14,43 Q3,41 15,43 Z"/>'
+        '<path d="M19,42 Q3,43 -7,52 Q9,49 17,49 Z"/>'
+        '<path d="M61,22 Q83,14 98,17 Q83,21 73,27 Z"/>'
+        '<path d="M61,29 Q85,25 100,31 Q82,34 69,37 Z"/>'
+        '<path d="M61,36 Q81,34 94,43 Q77,41 65,43 Z"/>'
+        '<path d="M61,42 Q77,43 87,52 Q71,49 63,49 Z"/>'
+        '</g>';
+  }
+  return '<g fill="{c}" opacity=".92">'
+      '<path d="M19,25 Q2,18 -10,21 Q1,24 8,29 Z"/>'
+      '<path d="M19,32 Q-1,29 -13,35 Q3,37 12,39 Z"/>'
+      '<path d="M19,39 Q3,38 -7,47 Q6,44 15,45 Z"/>'
+      '<path d="M61,25 Q78,18 90,21 Q79,24 72,29 Z"/>'
+      '<path d="M61,32 Q81,29 93,35 Q77,37 68,39 Z"/>'
+      '<path d="M61,39 Q77,38 87,47 Q74,44 65,45 Z"/>'
+      '</g>';
+}
 
-  // 6: Champion
-  '''
-  <defs><radialGradient id="g6" cx="40%" cy="30%"><stop offset="0%" stop-color="rgba(255,255,255,.28)"/><stop offset="100%" stop-color="rgba(0,0,0,.25)"/></radialGradient></defs>
-  <path d="M7 52L20 22L32 44L40 10L48 44L60 22L73 52Z" fill="{c}"/>
-  <path d="M7 52L20 22L32 44L40 10L48 44L60 22L73 52Z" fill="url(#g6)"/>
-  <rect x="7" y="50" width="66" height="17" rx="5" fill="{c}"/>
-  <rect x="7" y="50" width="66" height="17" rx="5" fill="url(#g6)"/>
-  <rect x="7" y="61" width="66" height="8" rx="3" fill="{c}" opacity=".7"/>
-  <path d="M11 52L22 25L33 45L40 14L47 45L58 25L69 52Z" fill="rgba(0,0,0,.22)"/>
-  <circle cx="40" cy="14" r="5.5" fill="rgba(255,255,255,.92)"/>
-  <circle cx="40" cy="14" r="3.5" fill="{c}"/>
-  <circle cx="20" cy="23" r="4" fill="rgba(255,255,255,.8)"/>
-  <circle cx="20" cy="23" r="2.5" fill="{c}"/>
-  <circle cx="60" cy="23" r="4" fill="rgba(255,255,255,.8)"/>
-  <circle cx="60" cy="23" r="2.5" fill="{c}"/>
-  <circle cx="40" cy="56" r="4.5" fill="rgba(255,255,255,.4)"/>
-  ''',
-
-  // 7: Titan
-  '''
-  <polygon points="40,1 43,17 51,7 49,21 59,13 53,25 65,21 57,31 71,31 61,39 73,43 61,45 69,55 57,51 59,63 49,55 47,67 40,59 33,67 31,55 21,63 23,51 11,55 19,45 7,43 19,39 9,31 23,31 15,21 27,25 21,13 31,21 29,7 37,17" fill="{c}" opacity=".65"/>
-  <circle cx="40" cy="40" r="27" fill="{c}"/>
-  <defs><radialGradient id="g7" cx="35%" cy="30%"><stop offset="0%" stop-color="rgba(255,255,255,.25)"/><stop offset="100%" stop-color="rgba(0,0,0,.25)"/></radialGradient></defs>
-  <circle cx="40" cy="40" r="27" fill="url(#g7)"/>
-  <circle cx="40" cy="40" r="21" fill="rgba(0,0,0,.35)"/>
-  <circle cx="40" cy="40" r="21" fill="none" stroke="rgba(255,170,90,.55)" stroke-width="1.8"/>
-  <circle cx="40" cy="40" r="15" fill="rgba(0,0,0,.45)"/>
-  <circle cx="40" cy="40" r="15" fill="none" stroke="rgba(255,190,100,.5)" stroke-width="1.2"/>
-  <circle cx="40" cy="40" r="10" fill="rgba(220,80,30,.85)"/>
-  <circle cx="40" cy="40" r="10" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="1"/>
-  <circle cx="36" cy="36" r="4" fill="rgba(255,255,255,.65)"/>
-  ''',
-
-  // 8: Glory (reuses the Titan starburst; rendered in the Glory colour)
-  '''
-  <polygon points="40,1 43,17 51,7 49,21 59,13 53,25 65,21 57,31 71,31 61,39 73,43 61,45 69,55 57,51 59,63 49,55 47,67 40,59 33,67 31,55 21,63 23,51 11,55 19,45 7,43 19,39 9,31 23,31 15,21 27,25 21,13 31,21 29,7 37,17" fill="{c}" opacity=".7"/>
-  <circle cx="40" cy="40" r="27" fill="{c}"/>
-  <defs><radialGradient id="g8" cx="35%" cy="30%"><stop offset="0%" stop-color="rgba(255,255,255,.5)"/><stop offset="100%" stop-color="rgba(0,0,0,.25)"/></radialGradient></defs>
-  <circle cx="40" cy="40" r="27" fill="url(#g8)"/>
-  <circle cx="40" cy="40" r="21" fill="rgba(0,0,0,.3)"/>
-  <circle cx="40" cy="40" r="21" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="1.8"/>
-  <circle cx="40" cy="40" r="15" fill="rgba(0,0,0,.35)"/>
-  <circle cx="40" cy="40" r="15" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="1.2"/>
-  <circle cx="40" cy="40" r="9" fill="rgba(255,255,255,.95)"/>
-  <circle cx="36" cy="36" r="3.5" fill="rgba(255,255,255,.8)"/>
-  '''
-];
+// Radiant 16-point burst behind the crest (Glory only).
+const String _rays =
+    '<polygon points="40,-6 45,20 56,2 53,24 70,12 60,30 82,30 62,38 80,52 58,44 64,66 46,50 48,76 40,56 32,76 34,50 16,66 22,44 0,52 18,38 -2,30 20,30 10,12 27,24 24,2 35,20" fill="{c}" opacity=".35"/>';
