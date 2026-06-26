@@ -10,6 +10,9 @@
 import 'package:flutter/material.dart';
 import 'diet_screen.dart';
 import 'sleep_screen.dart';
+import 'exercise_screen.dart' show openExerciseScreen;
+import '../data/workout.dart' show sortedByRecent, typeEmoji, sessionsOverDays;
+import '../state/log_providers.dart' show workoutProvider;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math' as math;
@@ -38,6 +41,7 @@ const List<(String, String, IconData, bool)> _sections = [
   ('strength', 'Strength', Icons.fitness_center, true),
   ('performance', 'Performance', Icons.bolt, true),
   ('recovery', 'Recovery', Icons.favorite, true),
+  ('exercise', 'Exercise', Icons.sports_gymnastics, false), // workout sessions (not metric-backed)
   ('aesthetics', 'Aesthetics', Icons.face_retouching_natural, false),
   ('sleep', 'Sleep', Icons.bedtime, false),
   ('diet', 'Diet & Nutrition', Icons.restaurant, false),
@@ -69,10 +73,13 @@ class ProgressTab extends ConsumerWidget {
                     style: TextStyle(fontSize: 11, letterSpacing: 2.5, color: _muted, fontWeight: FontWeight.w800)),
               ),
               for (final (id, title, icon, ranked) in _sections)
-                _CategoryCard(
-                  id: id, title: title, icon: icon, ranked: ranked,
-                  rank: cats[id], logsMap: logsMap,
-                ),
+                if (id == 'exercise')
+                  const _ExerciseCard()
+                else
+                  _CategoryCard(
+                    id: id, title: title, icon: icon, ranked: ranked,
+                    rank: cats[id], logsMap: logsMap,
+                  ),
             ],
           ),
         ),
@@ -180,6 +187,60 @@ class _CategoryCard extends StatelessWidget {
               ),
               if (ranked && rank != null)
                 RankBadge(tier: rank!.tier, sub: rank!.sub, size: 78),
+              const Icon(Icons.chevron_right, color: _muted),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Exercise card — workout sessions aren't metric-backed, so it has its own card
+// that summarises the last/weekly workouts and opens the Exercise section.
+class _ExerciseCard extends ConsumerWidget {
+  const _ExerciseCard();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    const c = Color(0xFF4CE0C3);
+    final sessions = ref.watch(workoutProvider);
+    final recent = sortedByRecent(sessions);
+    final last = recent.isEmpty ? null : recent.first;
+    final subtitle = last == null
+        ? 'No workouts yet · tap to start'
+        : 'Last: ${last.label} · ${sessionsOverDays(sessions, days: 7)} this week';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => openExerciseScreen(context),
+          child: Ink(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _bg3,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: last != null ? c.withValues(alpha: 0.3) : _border),
+            ),
+            child: Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: c.withValues(alpha: 0.12), shape: BoxShape.circle,
+                  border: Border.all(color: c.withValues(alpha: 0.35)),
+                ),
+                child: const Icon(Icons.sports_gymnastics, color: c, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Exercise', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: const TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+              if (last != null) Text(typeEmoji(last.type), style: const TextStyle(fontSize: 22)),
               const Icon(Icons.chevron_right, color: _muted),
             ]),
           ),

@@ -116,7 +116,12 @@ class PersistentRepository implements Repository {
 
   @override
   void saveWorkout(WorkoutSession session) {
-    _workouts.add(session);
+    final i = _workouts.indexWhere((w) => w.id == session.id);
+    if (i >= 0) {
+      _workouts[i] = session;
+    } else {
+      _workouts.add(session);
+    }
     _persistWorkouts();
   }
 
@@ -176,9 +181,16 @@ class PersistentRepository implements Repository {
       ? []
       : [for (final e in (jsonDecode(s) as List)) FoodEntry.fromJson(e as Map<String, dynamic>)];
 
-  static List<WorkoutSession> _decodeWorkouts(String? s) => s == null
-      ? []
-      : [for (final w in (jsonDecode(s) as List)) WorkoutSession.fromJson(w as Map<String, dynamic>)];
+  static List<WorkoutSession> _decodeWorkouts(String? s) {
+    if (s == null) return [];
+    final out = <WorkoutSession>[];
+    for (final w in (jsonDecode(s) as List)) {
+      try {
+        out.add(WorkoutSession.fromJson(w as Map<String, dynamic>));
+      } catch (_) {/* skip an unparseable legacy entry */}
+    }
+    return out;
+  }
 
   void _persist() => unawaited(_prefs.setString(_key, _encode(_cache)));
 

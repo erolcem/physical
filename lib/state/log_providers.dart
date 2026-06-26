@@ -1,13 +1,12 @@
 // state/log_providers.dart — Riverpod wiring for diet (food) and exercise
-// (workout) logging. Saving a workout also updates each exercise's rank from its
-// best set, so the "big" data types feed straight into the ranks and the AI.
+// (workout session) logging. Workouts are a training/volume log decoupled from
+// ranks (lifts are logged separately for ranking); both feed the coach + habits.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/correlation.dart';
 import '../data/diet.dart';
 import '../data/habits.dart' show todayKey;
 import '../data/repository.dart';
 import '../data/workout.dart';
-import '../engine/rank_engine.dart' show Log, strengthValue;
 import 'providers.dart';
 
 final dietProvider =
@@ -51,36 +50,44 @@ class DietNotifier extends StateNotifier<List<FoodEntry>> {
 
 final workoutProvider =
     StateNotifierProvider<WorkoutNotifier, List<WorkoutSession>>((ref) {
-  return WorkoutNotifier(ref);
+  return WorkoutNotifier(ref.watch(repositoryProvider));
 });
 
+// Exercise sessions are a training/volume log (stats + coach + habits) — decoupled
+// from ranks. Lifts are logged separately in their metric cards for ranking.
 class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
-  final Ref ref;
-  late final Repository repo;
-  WorkoutNotifier(this.ref) : super(const []) {
-    repo = ref.read(repositoryProvider);
+  final Repository repo;
+  WorkoutNotifier(this.repo) : super(repo.loadWorkouts());
+
+  /// Create a new session (a workout you then log sets into).
+  WorkoutSession createSession({required String type, String? title, int? durationMins}) {
+    final s = WorkoutSession(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      type: type, title: title, durationMins: durationMins,
+      start: DateTime.now().toIso8601String(),
+    );
+    repo.saveWorkout(s);
+    state = repo.loadWorkouts();
+    return s;
+  }
+
+  void updateSession(WorkoutSession s) {
+    repo.saveWorkout(s);
     state = repo.loadWorkouts();
   }
 
-  /// Save a session and update each exercise's rank from its best set (1RM for
-  /// compounds, rep-volume for isolations). Bodyweight defaults to the latest.
-  void add(List<WorkoutSet> sets, {double? bodyweight}) {
-    if (sets.isEmpty) return;
-    final session = WorkoutSession(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      dateKey: todayKey(),
-      sets: sets,
-    );
-    repo.saveWorkout(session);
-    final bw = bodyweight ?? ref.read(currentBodyweightProvider);
-    final logs = ref.read(logsProvider.notifier);
-    for (final s in bestSets(session).values) {
-      logs.add(
-        s.exerciseId,
-        Log(s.exerciseId, strengthValue(s.exerciseId, s.weight, s.reps),
-            bodyweight: bw, ts: DateTime.now().toIso8601String()),
-      );
-    }
+  void addSet(String sessionId, WorkoutSet set) {
+    final s = state.where((x) => x.id == sessionId).firstOrNull;
+    if (s == null) return;
+    repo.saveWorkout(s.copyWith(sets: [...s.sets, set]));
+    state = repo.loadWorkouts();
+  }
+
+  void removeSet(String sessionId, int index) {
+    final s = state.where((x) => x.id == sessionId).firstOrNull;
+    if (s == null || index < 0 || index >= s.sets.length) return;
+    final sets = [...s.sets]..removeAt(index);
+    repo.saveWorkout(s.copyWith(sets: sets));
     state = repo.loadWorkouts();
   }
 

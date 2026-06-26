@@ -1,77 +1,158 @@
-// data/workout.dart — exercise/workout logging (PDF Part 1: strength "reps &
-// weight → volume & 1RM"; "Lifting exercise sets" → volume + hit muscle groups).
-// A session is a dated list of sets; from it we derive total VOLUME (Σ weight×reps)
-// and the BEST set per exercise (the one that updates that lift's rank). Pure
-// model + logic, unit-tested.
-import '../engine/rank_engine.dart' show strengthValue;
+// data/workout.dart — exercise SESSIONS (PDF Part 1 "Lifting exercise sets" → volume,
+// plus general training). A session has a locked TYPE (Weightlifting/Run/…) + free-text
+// title + optional duration/cardio, and contains SETS. Each set has a free-text
+// exercise name and a locked MODE (weight×reps · reps · time · distance) with its
+// values. Decoupled from ranks (lifts are logged separately for ranking). The
+// cardioLoad/zoneMinutes fields are ready for Google session data if an endpoint
+// surfaces. Pure model + logic, unit-tested.
 import 'habits.dart' show lastNDays;
 
+enum SetMode { weightReps, reps, time, distance }
+
+extension SetModeX on SetMode {
+  String get label => switch (this) {
+        SetMode.weightReps => 'Weight × Reps',
+        SetMode.reps => 'Reps',
+        SetMode.time => 'Time',
+        SetMode.distance => 'Distance',
+      };
+}
+
+SetMode setModeFromId(String s) =>
+    SetMode.values.firstWhere((m) => m.name == s, orElse: () => SetMode.weightReps);
+
+// Locked session types (free-text title sits alongside).
+const List<(String, String)> sessionTypes = [
+  ('Weightlifting', '🏋'), ('Run', '🏃'), ('Walk', '🚶'), ('Cycle', '🚴'),
+  ('Swim', '🏊'), ('Sport', '⚽'), ('Other', '✨'),
+];
+
+String typeEmoji(String type) =>
+    sessionTypes.firstWhere((t) => t.$1 == type, orElse: () => ('', '🏋')).$2;
+
+String fmtDuration(double seconds) {
+  final t = seconds.round();
+  final h = t ~/ 3600, m = (t % 3600) ~/ 60, s = t % 60;
+  if (h > 0) return '${h}h ${m}m';
+  if (m > 0) return '${m}m${s > 0 ? ' ${s}s' : ''}';
+  return '${s}s';
+}
+
 class WorkoutSet {
-  final String exerciseId; // a strength metric id (bench, squat, curl, …)
-  final double weight;
-  final int reps;
-  const WorkoutSet(this.exerciseId, this.weight, this.reps);
+  final String name; // free text, e.g. "Chest Press"
+  final SetMode mode;
+  final double? weight; // kg (weightReps)
+  final int? reps; // weightReps, reps
+  final double? seconds; // time
+  final double? distance; // km (distance)
+  const WorkoutSet({required this.name, required this.mode,
+      this.weight, this.reps, this.seconds, this.distance});
 
-  double get volume => weight * reps;
+  /// Training volume — Σ weight×reps for lifting; 0 for non-weighted modes.
+  double get volume =>
+      (mode == SetMode.weightReps && weight != null && reps != null) ? weight! * reps! : 0.0;
 
-  Map<String, dynamic> toJson() => {'e': exerciseId, 'w': weight, 'r': reps};
-  factory WorkoutSet.fromJson(Map<String, dynamic> j) =>
-      WorkoutSet(j['e'] as String, (j['w'] as num).toDouble(), (j['r'] as num).toInt());
+  String get detail => switch (mode) {
+        SetMode.weightReps =>
+          '${_n(weight)} kg × ${reps ?? '?'}',
+        SetMode.reps => '${reps ?? '?'} reps',
+        SetMode.time => fmtDuration(seconds ?? 0),
+        SetMode.distance => '${_n(distance)} km',
+      };
+
+  static String _n(double? v) => v == null
+      ? '?'
+      : (v % 1 == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(v < 10 ? 2 : 1));
+
+  Map<String, dynamic> toJson() => {
+        'n': name, 'm': mode.name,
+        if (weight != null) 'w': weight,
+        if (reps != null) 'r': reps,
+        if (seconds != null) 's': seconds,
+        if (distance != null) 'd': distance,
+      };
+
+  factory WorkoutSet.fromJson(Map<String, dynamic> j) => WorkoutSet(
+        // 'e' is a legacy exerciseId from the old fixed-lift model.
+        name: (j['n'] ?? j['e'] ?? 'Exercise') as String,
+        mode: setModeFromId(j['m'] as String? ?? 'weightReps'),
+        weight: (j['w'] as num?)?.toDouble(),
+        reps: (j['r'] as num?)?.toInt(),
+        seconds: (j['s'] as num?)?.toDouble(),
+        distance: (j['d'] as num?)?.toDouble(),
+      );
 }
 
 class WorkoutSession {
   final String id;
-  final String dateKey;
+  final String type; // one of sessionTypes
+  final String? title; // free-text name
+  final String start; // ISO datetime
+  final int? durationMins;
   final List<WorkoutSet> sets;
-  const WorkoutSession({required this.id, required this.dateKey, required this.sets});
+  final double? cardioLoad; // optional (Google session data when available)
+  final int? zoneMinutes;
+  const WorkoutSession({
+    required this.id, required this.type, this.title, required this.start,
+    this.durationMins, this.sets = const [], this.cardioLoad, this.zoneMinutes,
+  });
 
-  double get volume => sets.fold(0.0, (s, x) => s + x.volume);
-  Set<String> get exercises => {for (final s in sets) s.exerciseId};
+  String get dateKey => start.length >= 10 ? start.substring(0, 10) : start;
+  double get volume => sets.fold(0.0, (a, s) => a + s.volume);
+  int get setCount => sets.length;
+  Set<String> get exercises => {for (final s in sets) s.name};
+  String get label => (title != null && title!.trim().isNotEmpty) ? title! : type;
 
-  Map<String, dynamic> toJson() =>
-      {'id': id, 'day': dateKey, 'sets': [for (final s in sets) s.toJson()]};
+  WorkoutSession copyWith({List<WorkoutSet>? sets, String? title, int? durationMins}) =>
+      WorkoutSession(
+        id: id, type: type, start: start,
+        title: title ?? this.title,
+        durationMins: durationMins ?? this.durationMins,
+        sets: sets ?? this.sets,
+        cardioLoad: cardioLoad, zoneMinutes: zoneMinutes,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id, 'type': type, if (title != null) 'title': title, 'start': start,
+        if (durationMins != null) 'dur': durationMins,
+        'sets': [for (final s in sets) s.toJson()],
+        if (cardioLoad != null) 'cl': cardioLoad,
+        if (zoneMinutes != null) 'zm': zoneMinutes,
+      };
+
   factory WorkoutSession.fromJson(Map<String, dynamic> j) => WorkoutSession(
         id: j['id'] as String,
-        dateKey: j['day'] as String,
-        sets: [for (final s in (j['sets'] as List)) WorkoutSet.fromJson(s as Map<String, dynamic>)],
+        type: j['type'] as String? ?? 'Weightlifting',
+        title: j['title'] as String?,
+        // legacy sessions stored 'day' (a date-key) instead of a start datetime.
+        start: (j['start'] ?? (j['day'] != null ? '${j['day']}T12:00:00' : DateTime.now().toIso8601String())) as String,
+        durationMins: (j['dur'] as num?)?.toInt(),
+        sets: [for (final s in (j['sets'] as List? ?? const [])) WorkoutSet.fromJson(s as Map<String, dynamic>)],
+        cardioLoad: (j['cl'] as num?)?.toDouble(),
+        zoneMinutes: (j['zm'] as num?)?.toInt(),
       );
 }
 
-/// Group sets under their exercise, preserving first-seen order — the workout-
-/// tracker view (Bench: 100×5, 110×3 …). Map keeps insertion order in Dart.
+/// Sessions most-recent first (by start datetime).
+List<WorkoutSession> sortedByRecent(List<WorkoutSession> sessions) =>
+    [...sessions]..sort((a, b) => b.start.compareTo(a.start));
+
+/// Group sets under their exercise name, preserving first-seen order.
 Map<String, List<WorkoutSet>> groupByExercise(List<WorkoutSet> sets) {
   final m = <String, List<WorkoutSet>>{};
   for (final s in sets) {
-    (m[s.exerciseId] ??= []).add(s);
+    (m[s.name] ??= []).add(s);
   }
   return m;
-}
-
-/// Best set per exercise — highest canonical strength value (1RM for compounds,
-/// rep-volume for isolations). This is the set that updates the lift's rank.
-Map<String, WorkoutSet> bestSets(WorkoutSession session) {
-  final best = <String, WorkoutSet>{};
-  for (final s in session.sets) {
-    final cur = best[s.exerciseId];
-    if (cur == null ||
-        strengthValue(s.exerciseId, s.weight, s.reps) >
-            strengthValue(cur.exerciseId, cur.weight, cur.reps)) {
-      best[s.exerciseId] = s;
-    }
-  }
-  return best;
 }
 
 /// Total training volume across sessions in the last [days] days.
 double volumeOverDays(List<WorkoutSession> sessions, {int days = 7, DateTime? today}) {
   final window = lastNDays(days, today: today).toSet();
-  return sessions
-      .where((s) => window.contains(s.dateKey))
-      .fold(0.0, (a, s) => a + s.volume);
+  return sessions.where((s) => window.contains(s.dateKey)).fold(0.0, (a, s) => a + s.volume);
 }
 
-/// Training volume per day across the last [days] days, oldest→newest (parallels
-/// `caloriesLastNDays`) — for the workout-volume trend bars.
+/// Training volume per day over the last [days] days, oldest→newest.
 List<double> volumePerDay(List<WorkoutSession> sessions, {int days = 7, DateTime? today}) {
   final byDay = <String, double>{};
   for (final s in sessions) {
@@ -80,13 +161,10 @@ List<double> volumePerDay(List<WorkoutSession> sessions, {int days = 7, DateTime
   return [for (final d in lastNDays(days, today: today)) byDay[d] ?? 0.0];
 }
 
-/// Distinct exercises trained in the last [days] days.
+/// Distinct exercise names trained in the last [days] days.
 Set<String> exercisesOverDays(List<WorkoutSession> sessions, {int days = 7, DateTime? today}) {
   final window = lastNDays(days, today: today).toSet();
-  return {
-    for (final s in sessions)
-      if (window.contains(s.dateKey)) ...s.exercises
-  };
+  return {for (final s in sessions) if (window.contains(s.dateKey)) ...s.exercises};
 }
 
 int sessionsOverDays(List<WorkoutSession> sessions, {int days = 7, DateTime? today}) {

@@ -8,7 +8,7 @@ import '../data/diet.dart' show todayDiet;
 import '../data/habits.dart' show currentStreak;
 import '../data/metrics.dart' show metricById, metrics, MetricTier;
 import '../data/sync.dart' show apiClientProvider;
-import '../data/workout.dart' show exercisesOverDays, sessionsOverDays, volumeOverDays;
+import '../data/workout.dart' show exercisesOverDays, sessionsOverDays, sortedByRecent, volumeOverDays;
 import '../state/habit_providers.dart';
 import '../state/log_providers.dart';
 import '../state/providers.dart' show currentBodyweightProvider, latestLogsProvider;
@@ -127,11 +127,13 @@ class _CoachTabState extends ConsumerState<CoachTab> {
 
   Map<String, dynamic> _trainingCtx() {
     final w = ref.read(workoutProvider);
-    final ids = exercisesOverDays(w);
+    final recent = sortedByRecent(w);
     return {
       'weekly_volume': volumeOverDays(w).round(),
       'sessions': sessionsOverDays(w),
-      'exercises': [for (final id in ids) metricById(id).label],
+      'exercises': exercisesOverDays(w).toList(), // free-text exercise names
+      'types': {for (final s in recent.take(15)) s.type}.toList(),
+      if (recent.isNotEmpty) 'last_type': recent.first.type,
     };
   }
 

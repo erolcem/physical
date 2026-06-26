@@ -98,16 +98,11 @@ const List<MetricDef> metrics = [
   MetricDef('voice', 'Voice Quality', 'aesthetics', MetricTier.tracked, '/100',
       exercise: 'Self-assessed score'),
 
-  // ── BACKGROUND · strength context ──
-  MetricDef('lifting_sets', 'Lifting Exercise Sets', 'strength', MetricTier.background, 'sets',
-      exercise: 'Logged per workout session'),
-
   // ── BACKGROUND · health (automatically logged via API) ──
   MetricDef('heart_rate', 'Heart Rate', 'health', MetricTier.background, 'bpm', autoSync: true),
   MetricDef('skin_temp', 'Skin Temp Variation', 'health', MetricTier.background, '°C', autoSync: true),
   MetricDef('cardio_load', 'Cardio Load', 'health', MetricTier.background, 'score', autoSync: true),
   MetricDef('daily_readiness', 'Daily Readiness', 'health', MetricTier.background, 'score', autoSync: true),
-  MetricDef('exercises', 'Exercises', 'health', MetricTier.background, 'count', autoSync: true),
   MetricDef('steps', 'Steps', 'health', MetricTier.background, 'count', autoSync: true),
   MetricDef('active_zone', 'Active Zone Mins', 'health', MetricTier.background, 'min', autoSync: true),
 

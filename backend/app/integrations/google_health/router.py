@@ -97,18 +97,25 @@ def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
                 out[metric_id] = {"status": status, "sample": str(body)[:300]}
         except Exception as e:
             out[metric_id] = {"error": str(e)[:300]}
-    # Extra probes for the features still pending — profile (height/DOB→age) and
-    # exercise sessions (for the workout dual-auth). Paths are best-guess; the raw
-    # status/body reveals what actually exists so we can wire them precisely.
-    for label, path in {
+    # Profile (height/DOB→age) + a hunt for an EXERCISE-SESSION endpoint (none found
+    # on /sessions yet). Several candidate paths are probed; whichever returns 200
+    # with data is the one to wire for porting Google workouts.
+    probes = {
         "_profile": "/users/me/profile",
         "_sessions": "/users/me/sessions?pageSize=3",
-    }.items():
+        "_sess_exercise": "/users/me/dataTypes/exercise-session/dataPoints?pageSize=3",
+        "_sess_activity": "/users/me/dataTypes/activity-session/dataPoints?pageSize=3",
+        "_sess_workout": "/users/me/dataTypes/workout/dataPoints?pageSize=3",
+        "_sess_activity_summary": "/users/me/dataTypes/activity-summary/dataPoints?pageSize=3",
+        "_sess_session": "/users/me/dataTypes/session/dataPoints?pageSize=3",
+    }
+    for label, path in probes.items():
         try:
             status, body = client.get_raw(path)
-            out[label] = {"status": status, "body": body}
+            # Show full body for success; just the error text for failures.
+            out[label] = {"status": status, "body": body if status < 400 else str(body)[:200]}
         except Exception as e:
-            out[label] = {"error": str(e)[:300]}
+            out[label] = {"error": str(e)[:200]}
     return out
 
 

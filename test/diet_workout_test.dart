@@ -69,55 +69,71 @@ void main() {
   });
 
   group('workout', () {
-    const session = WorkoutSession(id: 's1', dateKey: '2026-06-24', sets: [
-      WorkoutSet('bench', 100, 5),
-      WorkoutSet('bench', 110, 3),
-      WorkoutSet('curl', 10, 12),
-      WorkoutSet('curl', 12, 12),
+    const session = WorkoutSession(id: 's1', type: 'Weightlifting', start: '2026-06-24T18:00:00', sets: [
+      WorkoutSet(name: 'Bench Press', mode: SetMode.weightReps, weight: 100, reps: 5),
+      WorkoutSet(name: 'Bench Press', mode: SetMode.weightReps, weight: 110, reps: 3),
+      WorkoutSet(name: 'Bicep Curl', mode: SetMode.weightReps, weight: 10, reps: 12),
+      WorkoutSet(name: 'Run', mode: SetMode.time, seconds: 600),
     ]);
 
-    test('volume sums weight×reps across sets', () {
-      expect(session.volume, 100 * 5 + 110 * 3 + 10 * 12 + 12 * 12); // 1094
+    test('volume sums weight×reps; non-weight modes contribute 0', () {
+      expect(session.volume, 100 * 5 + 110 * 3 + 10 * 12); // 950 (run = 0)
     });
 
-    test('exercises set is distinct', () {
-      expect(session.exercises, {'bench', 'curl'});
+    test('exercises are the distinct set names', () {
+      expect(session.exercises, {'Bench Press', 'Bicep Curl', 'Run'});
     });
 
-    test('bestSets picks the heaviest 1RM (bench) and biggest volume (curl)', () {
-      final best = bestSets(session);
-      expect(best['bench']!.weight, 110); // higher est-1RM than 100×5
-      expect(best['curl']!.weight, 12); // 12×12 rep-volume > 10×12
+    test('dateKey derives from the start datetime', () {
+      expect(session.dateKey, '2026-06-24');
+    });
+
+    test('set detail formats per mode', () {
+      expect(const WorkoutSet(name: 'x', mode: SetMode.weightReps, weight: 100, reps: 5).detail, '100 kg × 5');
+      expect(const WorkoutSet(name: 'x', mode: SetMode.reps, reps: 12).detail, '12 reps');
+      expect(const WorkoutSet(name: 'x', mode: SetMode.distance, distance: 5).detail, '5 km');
     });
 
     test('rollups over the last 7 days', () {
       final today = DateTime(2026, 6, 24);
-      const old = WorkoutSession(id: 's0', dateKey: '2026-01-01', sets: [WorkoutSet('squat', 100, 5)]);
+      const old = WorkoutSession(id: 's0', type: 'Run', start: '2026-01-01T08:00:00',
+          sets: [WorkoutSet(name: 'Squat', mode: SetMode.weightReps, weight: 100, reps: 5)]);
       final all = [session, old];
-      expect(volumeOverDays(all, today: today), session.volume); // old one excluded
+      expect(volumeOverDays(all, today: today), session.volume);
       expect(sessionsOverDays(all, today: today), 1);
-      expect(exercisesOverDays(all, today: today), {'bench', 'curl'});
+      expect(exercisesOverDays(all, today: today), {'Bench Press', 'Bicep Curl', 'Run'});
     });
 
     test('volumePerDay bins by day, oldest→newest, zero-fills gaps', () {
       final today = DateTime(2026, 6, 24);
-      const earlier = WorkoutSession(id: 's2', dateKey: '2026-06-22', sets: [WorkoutSet('squat', 100, 5)]);
+      const earlier = WorkoutSession(id: 's2', type: 'Weightlifting', start: '2026-06-22T10:00:00',
+          sets: [WorkoutSet(name: 'Squat', mode: SetMode.weightReps, weight: 100, reps: 5)]);
       final series = volumePerDay([session, earlier], days: 3, today: today);
-      expect(series, [500.0, 0.0, 1094.0]); // 22nd, 23rd (gap), 24th
-      expect(series.length, 3);
+      expect(series, [500.0, 0.0, 950.0]); // 22nd, 23rd (gap), 24th
     });
 
-    test('groupByExercise groups sets under each exercise in order', () {
+    test('groupByExercise groups sets under each name in order', () {
       final g = groupByExercise(session.sets);
-      expect(g.keys.toList(), ['bench', 'curl']); // first-seen order
-      expect(g['bench']!.length, 2);
-      expect(g['curl']!.length, 2);
+      expect(g.keys.toList(), ['Bench Press', 'Bicep Curl', 'Run']);
+      expect(g['Bench Press']!.length, 2);
     });
 
-    test('WorkoutSession json round-trip', () {
+    test('json round-trip incl. type + set modes', () {
       final back = WorkoutSession.fromJson(session.toJson());
+      expect(back.type, 'Weightlifting');
       expect(back.sets.length, 4);
       expect(back.volume, session.volume);
+      expect(back.sets[3].mode, SetMode.time);
+    });
+
+    test('legacy json (day + e/w/r) still parses', () {
+      final back = WorkoutSession.fromJson({
+        'id': 'old', 'day': '2026-06-20',
+        'sets': [{'e': 'bench', 'w': 100, 'r': 5}]
+      });
+      expect(back.dateKey, '2026-06-20');
+      expect(back.sets.single.name, 'bench');
+      expect(back.volume, 500); // mode defaults to weightReps
     });
   });
 
@@ -130,11 +146,16 @@ void main() {
       expect(r.loadFood(), isEmpty);
     });
 
-    test('save/load/delete workouts; clear wipes both', () {
+    test('save/load/delete workouts (upsert by id); clear wipes both', () {
       final r = InMemoryRepository();
-      r.saveWorkout(const WorkoutSession(id: 'w', dateKey: '2026-06-24', sets: [WorkoutSet('bench', 100, 5)]));
+      r.saveWorkout(const WorkoutSession(id: 'w', type: 'Weightlifting', start: '2026-06-24T10:00:00',
+          sets: [WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 100, reps: 5)]));
       r.saveFood(const FoodEntry(id: 'a', dateKey: '2026-06-24', name: 'X'));
       expect(r.loadWorkouts().length, 1);
+      // Saving the same id again upserts (edits), not duplicates.
+      r.saveWorkout(const WorkoutSession(id: 'w', type: 'Run', start: '2026-06-24T10:00:00'));
+      expect(r.loadWorkouts().length, 1);
+      expect(r.loadWorkouts().single.type, 'Run');
       r.clear();
       expect(r.loadWorkouts(), isEmpty);
       expect(r.loadFood(), isEmpty);

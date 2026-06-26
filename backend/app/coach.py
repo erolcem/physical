@@ -111,9 +111,11 @@ def _training_line(training) -> str | None:
     if not training or not training.get("sessions"):
         return None
     ex = training.get("exercises") or []
+    types = training.get("types") or []
     vol = int(training.get("weekly_volume") or 0)
-    tail = f"; trained {', '.join(ex[:8])}" if ex else ""
-    return f"Training (last 7d): {int(training['sessions'])} sessions, {vol} volume{tail}"
+    type_str = f" ({', '.join(types[:5])})" if types else ""
+    tail = f"; exercises: {', '.join(ex[:8])}" if ex else ""
+    return f"Training (last 7d): {int(training['sessions'])} sessions{type_str}, {vol} volume{tail}"
 
 
 def _aesthetics_line(aesthetics) -> str | None:

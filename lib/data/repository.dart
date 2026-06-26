@@ -100,7 +100,14 @@ class InMemoryRepository implements Repository {
   List<WorkoutSession> loadWorkouts() => List.of(_workouts);
 
   @override
-  void saveWorkout(WorkoutSession session) => _workouts.add(session);
+  void saveWorkout(WorkoutSession session) {
+    final i = _workouts.indexWhere((w) => w.id == session.id);
+    if (i >= 0) {
+      _workouts[i] = session;
+    } else {
+      _workouts.add(session);
+    }
+  }
 
   @override
   void deleteWorkout(String id) => _workouts.removeWhere((w) => w.id == id);

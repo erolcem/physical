@@ -8,7 +8,7 @@ import 'diet_screen.dart';
 import 'habits_screen.dart';
 import 'home_screen.dart';
 import 'progress_screen.dart';
-import 'workout_screen.dart';
+import 'exercise_screen.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -125,8 +125,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
           ListTile(
             leading: const Icon(Icons.sports_gymnastics, color: Color(0xFF4CE0C3)),
             title: const Text('Log workout'),
-            subtitle: const Text('A session of sets → volume + ranks'),
-            onTap: () { Navigator.pop(ctx); openWorkoutScreen(context); },
+            subtitle: const Text('A session + sets of any exercise → volume'),
+            onTap: () { Navigator.pop(ctx); openExerciseScreen(context); },
           ),
           ListTile(
             leading: const Icon(Icons.restaurant, color: Color(0xFFF6CF3E)),
