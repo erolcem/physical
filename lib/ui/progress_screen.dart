@@ -367,10 +367,17 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
         barWidth: 3,
         shadow: Shadow(color: lineCol.withValues(alpha: 0.5), blurRadius: 10),
         dotData: FlDotData(
-          show: spots.length == 1,
-          getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
-            radius: 4, color: lineCol, strokeWidth: 2, strokeColor: _bg,
-          ),
+          // Single-metric view shows every point; ranked points are coloured by tier.
+          show: _selectedIds.length == 1 || spots.length == 1,
+          getDotPainter: (spot, percent, barData, index) {
+            var dotCol = lineCol;
+            if (_selectedIds.length == 1 && isRanked) {
+              dotCol = tierColor(_tierFull[(spot.y * 8).floor().clamp(0, 8)]);
+            }
+            return FlDotCirclePainter(
+                radius: _selectedIds.length == 1 ? 4.5 : 4,
+                color: dotCol, strokeWidth: 2, strokeColor: _bg);
+          },
         ),
         belowBarData: BarAreaData(
           show: true,
@@ -380,6 +387,24 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
           ),
         ),
       ));
+    }
+
+    // For a single ranked metric, the actual weight/score at each tier line — so the
+    // rank axis also reads as real numbers ("Gold = 100 kg").
+    List<String?>? tierVals;
+    if (_selectedIds.length == 1 && singleRanked) {
+      final bw = m.bodyweightScaled ? ref.read(currentBodyweightProvider) : null;
+      tierVals = [
+        for (var k = 0; k <= 8; k++)
+          () {
+            try {
+              final t = eng.threshold(m.id, _tierFull[k], bw);
+              return t.isFinite ? t.toStringAsFixed(t < 100 ? 1 : 0) : null;
+            } catch (_) {
+              return null;
+            }
+          }()
+      ];
     }
 
     final daySpan = timeSpanDays != null
@@ -530,22 +555,33 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
               leftTitles: AxisTitles(
                 sideTitles: SideTitles(
                   showTitles: true,
-                  reservedSize: 40,
+                  reservedSize: (_selectedIds.length == 1 && singleRanked) ? 50 : 40,
                   interval: (_selectedIds.length == 1 && singleRanked) ? 0.125 : 0.25,
                   getTitlesWidget: (v, _) {
-                    String text;
-                    if (_selectedIds.length > 1) {
-                      text = '${(v * 100).round()}%';
-                    } else if (singleRanked) {
+                    if (_selectedIds.length == 1 && singleRanked) {
                       final rank = (v * 8).round();
                       if ((v * 8 - rank).abs() > 0.02 || rank < 0 || rank > 8) {
                         return const SizedBox.shrink();
                       }
-                      text = _tierShort[rank];
-                    } else {
-                      final lo = singleMin ?? 0, hi = singleMax ?? 1;
-                      text = (lo + v * (hi - lo)).toStringAsFixed(0);
+                      final val = (tierVals != null && rank < tierVals.length) ? tierVals[rank] : null;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(_tierShort[rank],
+                                style: TextStyle(color: tierColor(_tierFull[rank]), fontSize: 9, fontWeight: FontWeight.w700)),
+                            if (val != null)
+                              Text(val, style: const TextStyle(color: _muted, fontSize: 7.5, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      );
                     }
+                    final lo = singleMin ?? 0, hi = singleMax ?? 1;
+                    final text = _selectedIds.length > 1
+                        ? '${(v * 100).round()}%'
+                        : (lo + v * (hi - lo)).toStringAsFixed(0);
                     return Padding(
                       padding: const EdgeInsets.only(right: 6),
                       child: Text(text, style: const TextStyle(color: _muted, fontSize: 9, fontWeight: FontWeight.w600)),

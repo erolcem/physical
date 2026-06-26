@@ -75,6 +75,30 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
     final bw = m.bodyweightScaled ? ref.watch(currentBodyweightProvider) : null;
     final curIdx = r != null ? r.rankValue.floor() : 0;
 
+    // Newest first by timestamp — logs can be stored out of order (e.g. after a
+    // Google sync), so sort by ts rather than insertion order. Keep the original
+    // index so delete still targets the right entry.
+    final ordered = [for (var i = 0; i < logs.length; i++) (i, logs[i])]
+      ..sort((a, b) => b.$2.ts.compareTo(a.$2.ts));
+
+    // How far to the next rank, in the metric's own units (sign = direction).
+    String? nextHint;
+    if (r != null && latest != null) {
+      if (curIdx + 1 < eng.tiers.length) {
+        final nt = eng.tiers[curIdx + 1];
+        try {
+          final thr = eng.threshold(m.id, nt, bw);
+          if (thr.isFinite) {
+            final gap = (thr - latest.value).abs();
+            final gapStr = gap < 10 ? gap.toStringAsFixed(1) : gap.toStringAsFixed(0);
+            nextHint = '${thr >= latest.value ? '▲' : '▼'} $gapStr ${m.unit} to $nt';
+          }
+        } catch (_) {/* threshold unavailable (e.g. no bodyweight) */}
+      } else {
+        nextHint = 'Top rank reached 🏆';
+      }
+    }
+
     return SafeArea(
       child: ConstrainedBox(
         // Leave a tappable strip of scrim at the top for reliable dismissal.
@@ -133,8 +157,16 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
                     style: TextStyle(color: Colors.amber.withValues(alpha: 0.8), fontSize: 11, fontWeight: FontWeight.w500)),
               ],
               const SizedBox(height: 8),
-              LinearProgressIndicator(
-                  value: r.rankValue - curIdx, color: c, backgroundColor: c.withValues(alpha: 0.15)),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(5),
+                child: LinearProgressIndicator(
+                    value: r.rankValue - curIdx, minHeight: 8,
+                    color: c, backgroundColor: c.withValues(alpha: 0.15)),
+              ),
+              if (nextHint != null) ...[
+                const SizedBox(height: 6),
+                Text(nextHint, style: TextStyle(color: c, fontWeight: FontWeight.w700, fontSize: 12.5)),
+              ],
             ] else if (latest != null)
               // Tracked (unranked) metric with data — show the value, no tier.
               Text('Latest: ${latest.value.toStringAsFixed(1)} ${m.unit}  ·  tracked, not ranked',
@@ -153,16 +185,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
                 _ladderRow(m, _ladderTiers[i], i + 1, curIdx, bw),
             ],
 
-            // ── History ──
-            if (logs.isNotEmpty) ...[
-              const SizedBox(height: 18),
-              Text('HISTORY · ${logs.length}',
-                  style: const TextStyle(fontSize: 10, letterSpacing: 2, color: Colors.grey)),
-              const SizedBox(height: 6),
-              for (var i = logs.length - 1; i >= 0; i--) _historyRow(m, logs[i], i),
-            ],
-
-            // ── Log form ──
+            // ── Log form (above the history, so logging is the first thing) ──
             const SizedBox(height: 18),
             Text('LOG ${m.exercise.isEmpty ? m.label : m.exercise}'.toUpperCase(),
                 style: const TextStyle(fontSize: 10, letterSpacing: 2, color: Colors.grey)),
@@ -180,6 +203,15 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
             const SizedBox(height: 12),
             SizedBox(width: double.infinity,
                 child: FilledButton(onPressed: _save, child: const Text('Save'))),
+
+            // ── History (newest first by date) ──
+            if (logs.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              Text('HISTORY · ${logs.length}',
+                  style: const TextStyle(fontSize: 10, letterSpacing: 2, color: Colors.grey)),
+              const SizedBox(height: 6),
+              for (final (idx, log) in ordered) _historyRow(m, log, idx),
+            ],
           ]),
         ),
       ),
