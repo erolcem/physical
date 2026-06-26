@@ -97,12 +97,29 @@ class _BodyPainter extends CustomPainter {
     final scale = size.width / 148.0;
     final center = Offset(size.width / 2, size.height * 0.4);
 
-    Path path(List<Offset> pts) {
-      final p = Path()..moveTo(pts[0].dx * scale, pts[0].dy * scale);
-      for (var i = 1; i < pts.length; i++) {
-        p.lineTo(pts[i].dx * scale, pts[i].dy * scale);
+    // Render each region as a smooth closed curve (Catmull-Rom) so muscles read as
+    // organic anatomy rather than hard-edged polygons. Hit-testing still uses the
+    // raw points, so taps stay accurate.
+    Path path(List<Offset> raw) {
+      final p = [for (final o in raw) Offset(o.dx * scale, o.dy * scale)];
+      final n = p.length;
+      final out = Path()..moveTo(p[0].dx, p[0].dy);
+      if (n < 3) {
+        for (var i = 1; i < n; i++) {
+          out.lineTo(p[i].dx, p[i].dy);
+        }
+        return out..close();
       }
-      return p..close();
+      for (var i = 0; i < n; i++) {
+        final p0 = p[(i - 1 + n) % n], p1 = p[i];
+        final p2 = p[(i + 1) % n], p3 = p[(i + 2) % n];
+        out.cubicTo(
+          p1.dx + (p2.dx - p0.dx) / 6, p1.dy + (p2.dy - p0.dy) / 6,
+          p2.dx - (p3.dx - p1.dx) / 6, p2.dy - (p3.dy - p1.dy) / 6,
+          p2.dx, p2.dy,
+        );
+      }
+      return out..close();
     }
 
     // ── Radial gradient background glow (from old .bodygraph-section::before)
