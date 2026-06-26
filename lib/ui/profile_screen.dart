@@ -125,7 +125,7 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(children: [
-          RankBadge(tier: overall.tier, sub: overall.sub, size: 84),
+          RankBadge(tier: overall.tier, sub: overall.sub, size: 84, animated: true),
           const SizedBox(height: 10),
           Text('${overall.tier} ${overall.sub}',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: c)),

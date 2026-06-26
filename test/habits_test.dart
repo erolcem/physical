@@ -87,6 +87,14 @@ void main() {
       final completions = {'1': {'2026-06-24', '2026-06-23'}, '2': {'2026-06-24'}};
       expect(dailyDoneCounts(habits, completions, today: today), [0, 0, 0, 0, 0, 1, 2]);
     });
+    test('valuesLastNDays: last value per day, null for gaps', () {
+      final logs = [
+        Log('sleep_score', 70, ts: '2026-06-22T08:00:00'),
+        Log('sleep_score', 80, ts: '2026-06-24T07:00:00'),
+        Log('sleep_score', 85, ts: '2026-06-24T09:00:00'), // later same day wins
+      ];
+      expect(valuesLastNDays(logs, n: 3, today: today), [70.0, null, 85.0]);
+    });
   });
 
   group('calendar recurrence', () {

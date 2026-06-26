@@ -65,6 +65,10 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen> {
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
         _builderCard(),
         const SizedBox(height: 16),
+        if (sessions.isNotEmpty) ...[
+          _trainingStats(sessions),
+          const SizedBox(height: 16),
+        ],
         const Text('RECENT SESSIONS', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
         const SizedBox(height: 6),
         if (recent.isEmpty)
@@ -76,6 +80,48 @@ class _WorkoutScreenState extends ConsumerState<WorkoutScreen> {
       ]),
     );
   }
+
+  // Per-domain training layout: a 7-day volume trend + this week's totals.
+  Widget _trainingStats(List<WorkoutSession> sessions) {
+    final perDay = volumePerDay(sessions, days: 7);
+    final maxV = perDay.fold<double>(1, (m, v) => v > m ? v : m);
+    return Card(
+      color: _card,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('LAST 7 DAYS · TRAINING', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (var i = 0; i < perDay.length; i++)
+                Container(
+                  width: 22,
+                  height: 4 + 40 * (perDay[i] / maxV),
+                  decoration: BoxDecoration(
+                      color: i == perDay.length - 1 ? _teal : _teal.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(4)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+            _stat('${volumeOverDays(sessions, days: 7).round()}', 'volume'),
+            _stat('${sessionsOverDays(sessions, days: 7)}', 'sessions'),
+            _stat('${exercisesOverDays(sessions, days: 7).length}', 'exercises'),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  Widget _stat(String v, String l) => Column(children: [
+        Text(v, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _teal)),
+        const SizedBox(height: 2),
+        Text(l, style: const TextStyle(fontSize: 10, color: _muted)),
+      ]);
 
   Widget _builderCard() => Card(
         color: _card,

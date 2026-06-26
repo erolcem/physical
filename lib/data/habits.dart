@@ -228,6 +228,16 @@ List<String> lastNDays(int n, {DateTime? today}) {
   ];
 }
 
+/// The last logged value on each of the last [n] days (oldest→newest), or null
+/// for days with no log — for per-domain metric trends (e.g. nightly sleep score).
+List<double?> valuesLastNDays(List<Log> logs, {int n = 7, DateTime? today}) {
+  final byDay = <String, double>{};
+  for (final l in logs) {
+    if (l.ts.length >= 10) byDay[l.ts.substring(0, 10)] = l.value; // last wins
+  }
+  return [for (final d in lastNDays(n, today: today)) byDay[d]];
+}
+
 /// For each of the last [n] days (oldest first), how many of [habits] were ticked.
 List<int> dailyDoneCounts(
     List<Habit> habits, Map<String, Set<String>> completions,

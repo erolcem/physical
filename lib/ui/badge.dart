@@ -18,7 +18,10 @@ class RankBadge extends StatelessWidget {
   final String tier;
   final String? sub; // kept for API compatibility; not drawn on the face
   final double size;
-  const RankBadge({required this.tier, this.sub, this.size = 64, super.key});
+  // Hero badges (the big overall medallion) set this for a slow shine sweep.
+  // Left off for list/inline badges so many-on-screen stays cheap.
+  final bool animated;
+  const RankBadge({required this.tier, this.sub, this.size = 64, this.animated = false, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +90,8 @@ class RankBadge extends StatelessWidget {
                   width: inner, height: inner, allowDrawingOutsideViewBox: true),
             ),
           ),
+          // 5. Optional shine sweep for hero badges.
+          if (animated) _Shimmer(svgString: svgString, size: inner),
         ],
       ),
     );
@@ -103,6 +108,61 @@ class RankBadge extends StatelessWidget {
     return '#${(c.r * 255).toInt().toRadixString(16).padLeft(2, '0')}'
            '${(c.g * 255).toInt().toRadixString(16).padLeft(2, '0')}'
            '${(c.b * 255).toInt().toRadixString(16).padLeft(2, '0')}';
+  }
+}
+
+// A diagonal white highlight that sweeps across the medallion (masked to its
+// silhouette), giving the hero badge a living, "epic" shine.
+class _Shimmer extends StatefulWidget {
+  final String svgString;
+  final double size;
+  const _Shimmer({required this.svgString, required this.size});
+  @override
+  State<_Shimmer> createState() => _ShimmerState();
+}
+
+class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 2600))..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) {
+          final t = _c.value; // band centre travels 0→1, then wraps
+          return ShaderMask(
+            blendMode: BlendMode.srcIn,
+            shaderCallback: (rect) => LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: 0.0),
+                Colors.white.withValues(alpha: 0.55),
+                Colors.white.withValues(alpha: 0.0),
+              ],
+              stops: [
+                (t - 0.18).clamp(0.0, 1.0),
+                t.clamp(0.0, 1.0),
+                (t + 0.18).clamp(0.0, 1.0),
+              ],
+            ).createShader(rect),
+            child: ColorFiltered(
+              colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+              child: SvgPicture.string(widget.svgString,
+                  width: widget.size, height: widget.size, allowDrawingOutsideViewBox: true),
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 

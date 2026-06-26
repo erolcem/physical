@@ -70,6 +70,16 @@ double volumeOverDays(List<WorkoutSession> sessions, {int days = 7, DateTime? to
       .fold(0.0, (a, s) => a + s.volume);
 }
 
+/// Training volume per day across the last [days] days, oldest→newest (parallels
+/// `caloriesLastNDays`) — for the workout-volume trend bars.
+List<double> volumePerDay(List<WorkoutSession> sessions, {int days = 7, DateTime? today}) {
+  final byDay = <String, double>{};
+  for (final s in sessions) {
+    byDay[s.dateKey] = (byDay[s.dateKey] ?? 0) + s.volume;
+  }
+  return [for (final d in lastNDays(days, today: today)) byDay[d] ?? 0.0];
+}
+
 /// Distinct exercises trained in the last [days] days.
 Set<String> exercisesOverDays(List<WorkoutSession> sessions, {int days = 7, DateTime? today}) {
   final window = lastNDays(days, today: today).toSet();

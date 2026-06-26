@@ -86,6 +86,14 @@ void main() {
       expect(exercisesOverDays(all, today: today), {'bench', 'curl'});
     });
 
+    test('volumePerDay bins by day, oldest→newest, zero-fills gaps', () {
+      final today = DateTime(2026, 6, 24);
+      const earlier = WorkoutSession(id: 's2', dateKey: '2026-06-22', sets: [WorkoutSet('squat', 100, 5)]);
+      final series = volumePerDay([session, earlier], days: 3, today: today);
+      expect(series, [500.0, 0.0, 1094.0]); // 22nd, 23rd (gap), 24th
+      expect(series.length, 3);
+    });
+
     test('groupByExercise groups sets under each exercise in order', () {
       final g = groupByExercise(session.sets);
       expect(g.keys.toList(), ['bench', 'curl']); // first-seen order
