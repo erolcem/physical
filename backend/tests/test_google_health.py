@@ -48,6 +48,31 @@ def test_bodyweight_nested_date_and_grams_to_kg():
     assert out[0]["value"] == 82.0 and out[0]["ts"] == "2026-04-30T00:00:00"
 
 
+def test_sleep_score_rhr_restoration_personalised():
+    night = [{"dataSource": {}, "sleep": {
+        "interval": {"startTime": "2026-06-25T16:00:00Z"},
+        "summary": {"minutesInSleepPeriod": "480", "minutesAsleep": "450",
+                    "stagesSummary": [{"type": "DEEP", "minutes": "90"},
+                                      {"type": "REM", "minutes": "90"}]}}}]
+    # A resting HR well below the user's baseline → strong restoration → higher score
+    # than the same night with a resting HR above baseline.
+    good = mapping.to_samples("sleep", night, rhr_by_day={"2026-06-25": 48}, baseline_rhr=58)
+    bad = mapping.to_samples("sleep", night, rhr_by_day={"2026-06-25": 68}, baseline_rhr=58)
+    gscore = next(s["value"] for s in good if s["metric_id"] == "sleep_score")
+    bscore = next(s["value"] for s in bad if s["metric_id"] == "sleep_score")
+    assert gscore > bscore
+
+
+def test_parse_intraday_daily_sums_per_day():
+    pts = [
+        {"steps": {"interval": {"civilStartTime": {"date": {"year": 2026, "month": 6, "day": 26}}}, "count": "6"}},
+        {"steps": {"interval": {"civilStartTime": {"date": {"year": 2026, "month": 6, "day": 26}}}, "count": "10"}},
+        {"steps": {"interval": {"civilStartTime": {"date": {"year": 2026, "month": 6, "day": 25}}}, "count": "4"}},
+    ]
+    out = {s["ts"][:10]: s["value"] for s in mapping.parse_intraday_daily("steps", pts, "steps", "count")}
+    assert out["2026-06-26"] == 16.0 and out["2026-06-25"] == 4.0
+
+
 def test_parse_exercise_sessions_real_shape():
     pts = [{
         "name": "users/x/dataTypes/exercise/dataPoints/5044284279678279720",

@@ -5,9 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/correlation.dart';
 import '../data/diet.dart';
 import '../data/habits.dart' show todayKey;
+import '../data/readiness.dart';
 import '../data/repository.dart';
 import '../data/workout.dart';
 import 'providers.dart';
+
+/// Daily Readiness (0–100) from recovery signals + recent training load. Null until
+/// there's recovery data. Recomputes when logs or workouts change.
+final dailyReadinessProvider = Provider<double?>((ref) {
+  return dailyReadiness(ref.watch(logsProvider), ref.watch(workoutProvider));
+});
 
 final dietProvider =
     StateNotifierProvider<DietNotifier, List<FoodEntry>>((ref) {

@@ -106,7 +106,7 @@ _EXTRACTORS = {
 
 
 def _sleep_score(container: dict, summary: dict, asleep_min, efficiency_pct,
-                 deep_min, rem_min):
+                 deep_min, rem_min, resting_hr=None, baseline_rhr=None):
     """A 0–100 nightly sleep score, ranked as a recovery metric.
 
     Prefers the vendor's own score (Fitbit/Google expose a 0–100 sleep score) if
@@ -121,14 +121,21 @@ def _sleep_score(container: dict, summary: dict, asleep_min, efficiency_pct,
                 f = _to_float(v)
                 if f is not None and 0 < f <= 100:
                     return round(f, 1)
-    # 2) Derived estimate.
+    # 2) Derived estimate — Fitbit's three pillars: duration (50%), composition
+    # (deep+REM, 25%), restoration (25%). Restoration uses the night's RESTING HR
+    # (lower = better recovery), personalised vs the user's rolling-average RHR when
+    # available, else an absolute scale, else falling back to sleep efficiency.
     if not asleep_min:
         return None
     dur = min(asleep_min / 480.0, 1.0)                                  # vs 8h
-    eff = min(max(((efficiency_pct or 0) / 100 - 0.75) / 0.20, 0.0), 1.0)  # 75%→0, 95%→1
-    restorative = ((deep_min or 0) + (rem_min or 0)) / asleep_min
-    comp = min(restorative / 0.40, 1.0)                                 # ~40% deep+REM ideal
-    return round(100 * (0.5 * dur + 0.25 * eff + 0.25 * comp), 1)
+    composition = min(((deep_min or 0) + (rem_min or 0)) / asleep_min / 0.40, 1.0)
+    if resting_hr is not None and baseline_rhr:
+        restoration = min(max(0.5 + (baseline_rhr - resting_hr) / 10.0, 0.0), 1.0)
+    elif resting_hr is not None:
+        restoration = min(max((68 - resting_hr) / 23.0, 0.0), 1.0)      # 45→1, 68→0
+    else:
+        restoration = min(max(((efficiency_pct or 0) / 100 - 0.75) / 0.20, 0.0), 1.0)
+    return round(100 * (0.5 * dur + 0.25 * composition + 0.25 * restoration), 1)
 
 
 def _sleep_day(c: dict) -> str | None:
@@ -148,9 +155,11 @@ def _sleep_day(c: dict) -> str | None:
         return start[:10]
 
 
-def _sleep_samples(datapoints: list[dict]) -> list[dict]:
+def _sleep_samples(datapoints: list[dict], rhr_by_day=None, baseline_rhr=None) -> list[dict]:
     """One night → sleep_score (0–100, ranked) + sleep_duration (hrs),
-    sleep_efficiency (%), deep/rem minutes, time-to-sleep, and full awakenings."""
+    sleep_efficiency (%), deep/rem minutes, time-to-sleep, and full awakenings.
+    [rhr_by_day]/[baseline_rhr] feed the score's resting-HR restoration term."""
+    rhr_by_day = rhr_by_day or {}
     out = []
     for p in datapoints:
         c = _container(p)
@@ -184,7 +193,8 @@ def _sleep_samples(datapoints: list[dict]) -> list[dict]:
                 cnt = _to_float(st.get("count"))
                 if cnt is not None:
                     out.append(_sample("full_awakenings", day, cnt, st))
-        score = _sleep_score(c, summary, asleep, eff, deep, rem)
+        score = _sleep_score(c, summary, asleep, eff, deep, rem,
+                             resting_hr=rhr_by_day.get(day), baseline_rhr=baseline_rhr)
         if score is not None:
             out.append(_sample("sleep_score", day, score, summary))
     return out
@@ -251,9 +261,31 @@ def parse_exercise_sessions(datapoints: list[dict]) -> list[dict]:
     return out
 
 
-def to_samples(metric_id: str, datapoints: list[dict]) -> list[dict]:
+def parse_intraday_daily(metric_id: str, datapoints: list[dict],
+                         container_key: str, value_key: str) -> list[dict]:
+    """Sum a continuous type's per-interval values into one daily total. `steps` and
+    `active-zone-minutes` are intraday (per-minute) and the list endpoint has no time
+    filter, so the latest day may be partial — fine for background context."""
+    by_day: dict[str, float] = {}
+    for p in datapoints:
+        c = p.get(container_key) or {}
+        interval = c.get("interval") or {}
+        civ = interval.get("civilStartTime") or {}
+        date = civ.get("date")
+        if date and {"year", "month", "day"} <= date.keys():
+            day = f"{int(date['year']):04d}-{int(date['month']):02d}-{int(date['day']):02d}"
+        else:
+            st = interval.get("startTime") or ""
+            day = st[:10] if len(st) >= 10 else None
+        v = _to_float(c.get(value_key))
+        if day and v is not None:
+            by_day[day] = by_day.get(day, 0.0) + v
+    return [_sample(metric_id, d, round(t, 1), {"intraday_sum": True}) for d, t in by_day.items()]
+
+
+def to_samples(metric_id: str, datapoints: list[dict], rhr_by_day=None, baseline_rhr=None) -> list[dict]:
     if metric_id == "sleep":
-        return _sleep_samples(datapoints)
+        return _sleep_samples(datapoints, rhr_by_day=rhr_by_day, baseline_rhr=baseline_rhr)
     out = []
     for p in datapoints:
         container = _container(p)

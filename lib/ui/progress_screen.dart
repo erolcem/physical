@@ -12,7 +12,8 @@ import 'diet_screen.dart';
 import 'sleep_screen.dart';
 import 'exercise_screen.dart' show openExerciseScreen;
 import '../data/workout.dart' show sortedByRecent, typeEmoji, sessionsOverDays;
-import '../state/log_providers.dart' show workoutProvider;
+import '../data/readiness.dart' show readinessLabel, readinessColorValue;
+import '../state/log_providers.dart' show workoutProvider, dailyReadinessProvider;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math' as math;
@@ -75,6 +76,8 @@ class ProgressTab extends ConsumerWidget {
               for (final (id, title, icon, ranked) in _sections)
                 if (id == 'exercise')
                   const _ExerciseCard()
+                else if (id == 'health')
+                  _HealthCard(title: title, icon: icon, logsMap: logsMap)
                 else
                   _CategoryCard(
                     id: id, title: title, icon: icon, ranked: ranked,
@@ -241,6 +244,78 @@ class _ExerciseCard extends ConsumerWidget {
                 ]),
               ),
               if (last != null) Text(typeEmoji(last.type), style: const TextStyle(fontSize: 22)),
+              const Icon(Icons.chevron_right, color: _muted),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Activity & Vitals card — leads with the computed Daily Readiness (its headline
+// "rank-equivalent"), score-coloured, then opens the metrics graph page.
+class _HealthCard extends ConsumerWidget {
+  final String title;
+  final IconData icon;
+  final Map<String, List<Log>> logsMap;
+  const _HealthCard({required this.title, required this.icon, required this.logsMap});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final readiness = ref.watch(dailyReadinessProvider);
+    final has = readiness != null;
+    final c = has ? Color(readinessColorValue(readiness)) : _accent;
+    final subtitle = has
+        ? 'Daily Readiness ${readiness.round()} · ${readinessLabel(readiness)}'
+        : 'Daily Readiness · sync HRV / sleep / resting HR';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => CategoryGraphPage(categoryId: 'health', title: title))),
+          child: Ink(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _bg3,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: has ? c.withValues(alpha: 0.3) : _border),
+            ),
+            child: Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: c.withValues(alpha: 0.12), shape: BoxShape.circle,
+                  border: Border.all(color: c.withValues(alpha: 0.35)),
+                ),
+                child: Icon(icon, color: c, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
+                  if (has) ...[
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                          value: (readiness / 100).clamp(0.0, 1.0), minHeight: 6,
+                          color: c, backgroundColor: c.withValues(alpha: 0.15)),
+                    ),
+                  ],
+                ]),
+              ),
+              if (has)
+                Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: Text('${readiness.round()}',
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: c)),
+                ),
               const Icon(Icons.chevron_right, color: _muted),
             ]),
           ),

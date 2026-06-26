@@ -172,11 +172,40 @@ def sync_user(db: Session, user_id: str, days: int = 7, replace: bool = False) -
 
     samples: list[dict] = []
     errors: dict[str, str] = {}
+
+    # Resting-HR by day + a rolling baseline — feeds the sleep-score restoration term.
+    rhr_by_day: dict[str, float] = {}
+    try:
+        for s in mapping.to_samples("resting_hr",
+                                    client.query("daily-resting-heart-rate", limit=days * 2)):
+            rhr_by_day[s["ts"][:10]] = s["value"]
+    except Exception:
+        pass
+    baseline_rhr = (sum(rhr_by_day.values()) / len(rhr_by_day)) if rhr_by_day else None
+
     for metric_id, data_type in DATA_TYPES.items():
         try:
-            samples += mapping.to_samples(metric_id, client.query(data_type, limit=days * 4))
+            pts = client.query(data_type, limit=days * 4)
+            if metric_id == "sleep":
+                samples += mapping.to_samples("sleep", pts,
+                                              rhr_by_day=rhr_by_day, baseline_rhr=baseline_rhr)
+            else:
+                samples += mapping.to_samples(metric_id, pts)
         except Exception as e:  # one bad data type shouldn't sink the whole sync
             errors[data_type] = str(e)[:400]
+
+    # Intraday → daily totals: steps + active-zone-minutes (continuous types, no daily
+    # rollup; the list endpoint takes no time filter so the latest day may be partial).
+    for metric_id, dtid, ckey, vkey in [
+        ("steps", "steps", "steps", "count"),
+        ("active_zone", "active-zone-minutes", "activeZoneMinutes", "activeZoneMinutes"),
+    ]:
+        try:
+            _, body = client.get_raw(f"/users/me/dataTypes/{dtid}/dataPoints?pageSize=2000")
+            pts = body.get("dataPoints", []) if isinstance(body, dict) else []
+            samples += mapping.parse_intraday_daily(metric_id, pts, ckey, vkey)
+        except Exception as e:
+            errors[dtid] = str(e)[:200]
 
     try:
         ingested, skipped = _ingest(db, user_id, samples)
