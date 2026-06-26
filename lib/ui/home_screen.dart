@@ -27,6 +27,28 @@ TextStyle _secTitle() => const TextStyle(
     fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 2.5,
     color: _muted);
 
+// A score-level colour (NOT a rank): red → amber → teal as a 0..1 score rises.
+// Used for tracked aesthetics, which have no defensible rank but deserve a cue.
+Color _scoreColor(double pct) {
+  pct = pct.clamp(0.0, 1.0);
+  const lo = Color(0xFFF85B5B), mid = Color(0xFFF6CF3E), hi = Color(0xFF4CE0C3);
+  return pct < 0.5
+      ? Color.lerp(lo, mid, pct * 2)!
+      : Color.lerp(mid, hi, (pct - 0.5) * 2)!;
+}
+
+/// Average of the latest 0–100 aesthetic scores (skin/oral/eye/grooming/voice),
+/// or null if none logged. Not a rank — just a tracked composite.
+double? aestheticsAverage(Map<String, Log> latest) {
+  final vals = [
+    for (final m in metrics)
+      if (m.category == 'aesthetics' && m.unit == '/100' && latest[m.id] != null)
+        latest[m.id]!.value
+  ];
+  if (vals.isEmpty) return null;
+  return vals.reduce((a, b) => a + b) / vals.length;
+}
+
 class HomeTab extends ConsumerWidget {
   const HomeTab({super.key});
 
@@ -340,13 +362,21 @@ class _OverallBreakdownSheet extends ConsumerWidget {
 
     return SafeArea(
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        // Cap below full height so a consistent strip of scrim stays at the top —
+        // tap it (or the handle) to dismiss, which is reliable on iPhone.
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Center(child: Container(width: 40, height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(color: _border2, borderRadius: BorderRadius.circular(2)))),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.of(context).maybePop(),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 14, top: 2),
+                child: Center(child: Container(width: 44, height: 5,
+                    decoration: BoxDecoration(color: _border2, borderRadius: BorderRadius.circular(3)))),
+              ),
+            ),
             Center(child: RankBadge(tier: overall.tier, sub: overall.sub, size: 92, animated: true)),
             const SizedBox(height: 10),
             Center(child: Text('${overall.tier} ${overall.sub}',
@@ -364,6 +394,7 @@ class _OverallBreakdownSheet extends ConsumerWidget {
             const SizedBox(height: 10),
             for (final (id, name) in _rankedCategories)
               _categoryRow(name, cats[id]),
+            _aestheticsRow(aestheticsAverage(latest)),
             const SizedBox(height: 12),
             Text('RANK DISTRIBUTION', style: _secTitle()),
             const SizedBox(height: 14),
@@ -416,6 +447,48 @@ class _OverallBreakdownSheet extends ConsumerWidget {
         ),
         const SizedBox(height: 3),
         Text(tier, style: TextStyle(fontSize: 9, color: on ? col : _muted, fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+
+  // Aesthetics: a composite SCORE (not a rank) — score-coloured, no sub-rank ticks.
+  Widget _aestheticsRow(double? avg) {
+    final has = avg != null;
+    final c = has ? _scoreColor(avg / 100) : _muted;
+    final frac = has ? (avg / 100).clamp(0.0, 1.0) : 0.0;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: has ? c.withValues(alpha: 0.3) : _border),
+      ),
+      child: Row(children: [
+        Container(
+          width: 46, height: 46, alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: c.withValues(alpha: 0.12),
+            border: Border.all(color: c.withValues(alpha: 0.45)),
+          ),
+          child: Icon(Icons.face_retouching_natural, size: 22, color: c),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Expanded(child: Text('Aesthetics', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15))),
+              Text(has ? '${avg.round()}/100' : 'No data',
+                  style: TextStyle(color: c, fontWeight: FontWeight.w800)),
+            ]),
+            const SizedBox(height: 9),
+            _RankBar(frac: frac, color: c, height: 9, showThirds: false),
+            const SizedBox(height: 5),
+            Text(has ? 'Composite score · not ranked' : 'Log skin, oral, grooming…',
+                style: const TextStyle(fontSize: 10, color: _muted)),
+          ]),
+        ),
       ]),
     );
   }
@@ -740,36 +813,37 @@ class _AestheticsStrip extends ConsumerWidget {
         final region = headRegions.firstWhere((r) => r.muscle == m.id, orElse: () => const BodyRegion('', []));
         final logs = logsMap[m.id] ?? [];
         final hasData = logs.isNotEmpty;
-        Color color = const Color(0xFF454964);
-        if (hasData) {
-          final isRanked = eng.standards.containsKey(m.id);
-          if (isRanked) {
-            color = tierColor(eng.scoreLog(logs.last).tier);
-          } else {
-            color = const Color(0xFF4CE0C3);
-          }
-        }
+        final score = hasData ? logs.last.value : null;
+        // Tracked aesthetic — coloured by SCORE level (not a rank).
+        final color = hasData ? _scoreColor(score! / 100) : const Color(0xFF454964);
 
-        return Material(
-          color: Colors.transparent,
-          child: Ink(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFF161830),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: hasData ? color.withValues(alpha: 0.5) : const Color(0x12FFFFFF)),
-              boxShadow: hasData ? [BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 8)] : [],
-            ),
-            child: InkWell(
-              onTap: () => openDetailSheet(parentContext, m.id),
-              borderRadius: BorderRadius.circular(12),
-              child: CustomPaint(
-                painter: _RegionIconPainter(region, color),
+        return Column(mainAxisSize: MainAxisSize.min, children: [
+          Material(
+            color: Colors.transparent,
+            child: Ink(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: const Color(0xFF161830),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: hasData ? color.withValues(alpha: 0.55) : const Color(0x12FFFFFF)),
+                boxShadow: hasData ? [BoxShadow(color: color.withValues(alpha: 0.25), blurRadius: 8)] : [],
+              ),
+              child: InkWell(
+                onTap: () => openDetailSheet(parentContext, m.id),
+                borderRadius: BorderRadius.circular(12),
+                child: CustomPaint(
+                  painter: _RegionIconPainter(region, color),
+                ),
               ),
             ),
           ),
-        );
+          const SizedBox(height: 4),
+          Text(hasData ? '${score!.round()}' : '—',
+              style: TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w800,
+                  color: hasData ? color : _muted)),
+        ]);
       }).toList(),
     );
   }

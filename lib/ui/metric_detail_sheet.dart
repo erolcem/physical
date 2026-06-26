@@ -77,12 +77,25 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
 
     return SafeArea(
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+        // Leave a tappable strip of scrim at the top for reliable dismissal.
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.82),
         child: SingleChildScrollView(
           padding: EdgeInsets.only(
-              left: 18, right: 18, top: 18,
+              left: 18, right: 18, top: 8,
               bottom: MediaQuery.of(context).viewInsets.bottom + 18),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.of(context).maybePop(),
+              child: const Padding(
+                padding: EdgeInsets.only(bottom: 12, top: 2),
+                child: Center(child: SizedBox(
+                  width: 44, height: 5,
+                  child: DecoratedBox(decoration: BoxDecoration(
+                      color: Color(0x21FFFFFF), borderRadius: BorderRadius.all(Radius.circular(3)))),
+                )),
+              ),
+            ),
             // ── Header ──
             Row(children: [
               if (r != null)
