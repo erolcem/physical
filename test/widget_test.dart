@@ -16,6 +16,18 @@ void main() {
     expect(find.text('Physical'), findsOneWidget);
   });
 
+  testWidgets('overall breakdown sheet builds without errors', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: PhysicalApp()));
+    await tester.pump(const Duration(milliseconds: 300));
+    // Tap the overall rank card → opens the category-breakdown sheet.
+    await tester.tap(find.text('OVERALL RANK'));
+    await tester.pump(); // start the sheet route
+    await tester.pump(const Duration(milliseconds: 400)); // let it build (not settle: badge shimmer loops)
+    expect(find.text('CATEGORY RANKINGS'), findsOneWidget);
+    expect(find.text('RANK DISTRIBUTION'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('every tab builds without runtime errors', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: PhysicalApp()));
     await tester.pump(const Duration(milliseconds: 300));

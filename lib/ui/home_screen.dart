@@ -174,6 +174,64 @@ class _SectionTitle extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════
 // OVERALL CARD — with progress bar + sub-rank ticks + weakest metric
 // ═══════════════════════════════════════════════════════════════════════════
+// A modern rank progress bar: a gradient fill with a tier-coloured glow, a thin
+// specular highlight, and the I/II/III sub-rank ticks at the thirds. [frac] is
+// progress WITHIN the current tier (0..1), so the ticks read as sub-ranks.
+class _RankBar extends StatelessWidget {
+  final double frac;
+  final Color color;
+  final double height;
+  final bool showThirds;
+  const _RankBar({required this.frac, required this.color, this.height = 12, this.showThirds = true});
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = height / 2;
+    final f = frac.clamp(0.0, 1.0);
+    return SizedBox(
+      height: height,
+      child: LayoutBuilder(builder: (context, cons) {
+        final w = cons.maxWidth;
+        return Stack(clipBehavior: Clip.none, children: [
+          // Track.
+          Container(decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          )),
+          // Glowing gradient fill.
+          FractionallySizedBox(
+            widthFactor: f,
+            child: Container(decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [color.withValues(alpha: 0.55), color]),
+              borderRadius: BorderRadius.circular(radius),
+              boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 9, spreadRadius: -2)],
+            )),
+          ),
+          // Thin specular highlight along the top of the fill (a Padding band so it
+          // spans the fill width — an Align'd width-less Container would collapse).
+          if (f > 0.02)
+            FractionallySizedBox(
+              widthFactor: f,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(radius * 0.7, height * 0.2, radius * 0.7, height * 0.55),
+                child: Container(decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(radius),
+                )),
+              ),
+            ),
+          // Sub-rank thirds.
+          if (showThirds)
+            for (final p in const [0.3333, 0.6666])
+              Positioned(left: p * w, top: 1.5, bottom: 1.5,
+                  child: Container(width: 1.5, color: Colors.black.withValues(alpha: 0.30))),
+        ]);
+      }),
+    );
+  }
+}
+
 class _OverallCard extends StatelessWidget {
   final RankResult r;
   final Map<String, Log> latest;
@@ -217,39 +275,7 @@ class _OverallCard extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c)),
         const SizedBox(height: 14),
-        // Progress bar with sub-rank ticks
-        SizedBox(
-          height: 10,
-          child: LayoutBuilder(builder: (context, constraints) {
-            final barWidth = constraints.maxWidth;
-            return Stack(children: [
-              // Track
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              // Fill
-              FractionallySizedBox(
-                widthFactor: frac.clamp(0, 1),
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [c.withValues(alpha: 0.8), c]),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              // Sub-rank tick marks at 33% and 66% of the actual bar width
-              for (final pct in [0.333, 0.666])
-                Positioned(
-                  left: pct * barWidth,
-                  top: 0, bottom: 0,
-                  child: Container(width: 2, color: Colors.white.withValues(alpha: 0.4)),
-                ),
-            ]);
-          }),
-        ),
+        _RankBar(frac: frac, color: c, height: 12),
         const SizedBox(height: 6),
         Text('Avg ${r.rankValue.toStringAsFixed(2)}/8',
             style: const TextStyle(fontSize: 10, color: _muted2)),
@@ -269,10 +295,10 @@ class _OverallCard extends StatelessWidget {
 // CATEGORY BREAKDOWN SHEET — opened by tapping the overall card. Shows the
 // overall rank plus Strength / Performance / Recovery sub-ranks with bars.
 // ═══════════════════════════════════════════════════════════════════════════
-const List<(String, String, IconData)> _rankedCategories = [
-  ('strength', 'Strength', Icons.fitness_center),
-  ('performance', 'Performance', Icons.bolt),
-  ('recovery', 'Recovery', Icons.favorite),
+const List<(String, String)> _rankedCategories = [
+  ('strength', 'Strength'),
+  ('performance', 'Performance'),
+  ('recovery', 'Recovery'),
 ];
 
 const List<String> _tierOrder = [
@@ -301,8 +327,7 @@ class _OverallBreakdownSheet extends ConsumerWidget {
     final c = tierColor(overall.tier);
     final totalLogs =
         ref.watch(logsProvider).values.fold<int>(0, (a, b) => a + b.length);
-    final metricsActive =
-        latest.keys.where((id) => eng.standards.containsKey(id)).length;
+    final overallFrac = overall.rankValue - overall.rankValue.floor();
     // Figure 3 "RANK BADGES" — how many ranked metrics sit at each tier.
     final dist = <String, int>{};
     for (final e in latest.entries) {
@@ -329,26 +354,27 @@ class _OverallBreakdownSheet extends ConsumerWidget {
             const SizedBox(height: 4),
             Center(child: Text('Top ${overall.topPct.toStringAsFixed(1)}% of young men',
                 style: TextStyle(color: c, fontWeight: FontWeight.w600))),
-            const SizedBox(height: 18),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-              _stat('$totalLogs', 'TOTAL LOGS'),
-              _stat('$metricsActive', 'METRICS RANKED'),
-              _stat(overall.rankValue.toStringAsFixed(2), 'AVG / 8'),
-            ]),
+            const SizedBox(height: 14),
+            _RankBar(frac: overallFrac, color: c, height: 12),
+            const SizedBox(height: 6),
+            Center(child: Text('Avg ${overall.rankValue.toStringAsFixed(2)}/8',
+                style: const TextStyle(fontSize: 10, color: _muted2))),
             const SizedBox(height: 22),
             Text('CATEGORY RANKINGS', style: _secTitle()),
             const SizedBox(height: 10),
-            for (final (id, name, icon) in _rankedCategories)
-              _categoryRow(name, icon, cats[id]),
+            for (final (id, name) in _rankedCategories)
+              _categoryRow(name, cats[id]),
             const SizedBox(height: 12),
             Text('RANK DISTRIBUTION', style: _secTitle()),
-            const SizedBox(height: 10),
+            const SizedBox(height: 14),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 10,
+              runSpacing: 14,
               alignment: WrapAlignment.center,
               children: [for (final t in _tierOrder) _distChip(t, dist[t] ?? 0)],
             ),
+            const SizedBox(height: 24),
+            Center(child: _stat('$totalLogs', 'TOTAL LOGS')),
           ]),
         ),
       ),
@@ -360,60 +386,79 @@ class _OverallBreakdownSheet extends ConsumerWidget {
         Text(label, style: const TextStyle(fontSize: 9, letterSpacing: 1.2, color: _muted, fontWeight: FontWeight.w700)),
       ]);
 
-  // One tier's badge + count (figure 3). Dimmed when no metric sits there.
+  // One tier's medallion + a count pill (figure 3). Dimmed when no metric sits there.
   Widget _distChip(String tier, int count) {
     final col = tierColor(tier);
     final on = count > 0;
-    return Container(
-      width: 64,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: on ? col.withValues(alpha: 0.12) : _surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: on ? col.withValues(alpha: 0.4) : _border),
-      ),
+    return SizedBox(
+      width: 58,
       child: Column(children: [
-        Text('$count',
-            style: TextStyle(
-                fontSize: 18, fontWeight: FontWeight.w900, color: on ? col : _muted)),
-        Text(tier,
-            style: TextStyle(fontSize: 9, color: on ? col : _muted, fontWeight: FontWeight.w600)),
+        SizedBox(
+          width: 48, height: 48,
+          child: Stack(clipBehavior: Clip.none, children: [
+            Center(child: Opacity(opacity: on ? 1.0 : 0.22, child: RankBadge(tier: tier, size: 44))),
+            if (on)
+              Positioned(
+                right: -4, top: -4,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                  padding: const EdgeInsets.all(3),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle, color: _bg2,
+                    border: Border.all(color: col, width: 1.5),
+                  ),
+                  child: Text('$count',
+                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: col)),
+                ),
+              ),
+          ]),
+        ),
+        const SizedBox(height: 3),
+        Text(tier, style: TextStyle(fontSize: 9, color: on ? col : _muted, fontWeight: FontWeight.w600)),
       ]),
     );
   }
 
-  Widget _categoryRow(String name, IconData icon, RankResult? r) {
+  Widget _categoryRow(String name, RankResult? r) {
     final ranked = r != null;
     final c = ranked ? tierColor(r.tier) : _muted;
-    final frac = ranked ? (r.rankValue / 8).clamp(0.0, 1.0) : 0.0;
+    final frac = ranked ? (r.rankValue - r.rankValue.floor()) : 0.0;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: ranked ? c.withValues(alpha: 0.3) : _border),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(icon, size: 18, color: c),
-          const SizedBox(width: 8),
-          Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15))),
-          Text(ranked ? '${r.tier} ${r.sub}' : 'No data',
-              style: TextStyle(color: c, fontWeight: FontWeight.w800)),
-        ]),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: LinearProgressIndicator(
-              value: frac, minHeight: 7, color: c,
-              backgroundColor: Colors.white.withValues(alpha: 0.06)),
+      child: Row(children: [
+        if (ranked)
+          RankBadge(tier: r.tier, sub: r.sub, size: 46)
+        else
+          Container(
+            width: 46, height: 46, alignment: Alignment.center,
+            decoration: BoxDecoration(
+                shape: BoxShape.circle, color: _surface, border: Border.all(color: _border)),
+            child: const Icon(Icons.lock_outline, size: 18, color: _muted),
+          ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15))),
+              Text(ranked ? '${r.tier} ${r.sub}' : 'No data',
+                  style: TextStyle(color: c, fontWeight: FontWeight.w800)),
+            ]),
+            const SizedBox(height: 9),
+            _RankBar(frac: frac, color: c, height: 9, showThirds: ranked),
+            if (ranked) ...[
+              const SizedBox(height: 5),
+              Text('Top ${r.topPct.toStringAsFixed(1)}%  ·  avg ${r.rankValue.toStringAsFixed(2)}/8',
+                  style: const TextStyle(fontSize: 10, color: _muted)),
+            ],
+          ]),
         ),
-        if (ranked) ...[
-          const SizedBox(height: 4),
-          Text('Top ${r.topPct.toStringAsFixed(1)}%  ·  avg ${r.rankValue.toStringAsFixed(2)}/8',
-              style: const TextStyle(fontSize: 10, color: _muted)),
-        ],
       ]),
     );
   }
