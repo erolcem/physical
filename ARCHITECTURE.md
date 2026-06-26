@@ -13,10 +13,10 @@ the plan PDF, `STANDARDS_METHODOLOGY.md`, `STATUS.md`).
 implemented — including the two complex data types (exercise + diet) flowing into
 both the ranks and the AI, and the coach's advanced behaviours (agentic actions,
 dynamic volume auto-regulation, context transparency, strategic-correlation
-pinning). **127 Flutter tests + 57 backend tests pass, 0 analyzer issues**, the
+pinning). **121 Flutter tests + 52 backend tests pass, 0 analyzer issues**, the
 Python⇄Dart engine is parity-tested to ~1e-5, hosted on Railway, shipped to iPhone
 via TestFlight. The coach runs on **Gemini** so the whole stack lives in the user's
-Google account (sign-in, Health, Calendar, friends, AI).
+Google account (sign-in, Health, Calendar, AI).
 
 Code size: ~6,500 lines of Dart (app + engine), ~1,800 of Python (backend),
 ~1,300 of tests.
@@ -62,15 +62,15 @@ graph, hold the user accountable with a habits + planner layer, log the hard stu
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
 │  CLIENT — Flutter app (local-first; iOS device, Linux/Android/web for dev)   │
-│  Tabs: Home · Progress · Habits · Coach · Profile        (Riverpod state)    │
+│  Tabs: Home · Progress · Habits · Coach                  (Riverpod state)    │
 │  • Rank engine runs ON-DEVICE → instant ranks from local logs                │
 │  • Opt-in cloud sync over HTTPS with a Bearer JWT                            │
-│  • Logs: metrics, workouts (sets), food (macros); habits; profile; pins      │
+│  • Logs: metrics, workouts (sets), food (macros+micros); habits; pins        │
 └───────────────┬──────────────────────────────────────────────────────────────┘
                 │ HTTPS (JWT)
 ┌───────────────▼──────────────────────────────────────────────────────────────┐
 │  BACKEND — FastAPI, always-on on Railway                                      │
-│  /auth · /me/samples · /me/ranks · /me/profile · /me/friends · /me/coach      │
+│  /auth · /me/samples · /me/ranks · /me/coach · /me/nutrition                  │
 │  /integrations/google · /privacy /terms · /health                            │
 │  • Imports the SAME rank engine → server ranks == client ranks               │
 │  • Scheduled job refreshes Google data even with no device open              │
@@ -79,13 +79,13 @@ graph, hold the user accountable with a habits + planner layer, log the hard stu
 ┌───────▼─────────────┐   ┌─────────────▼──────────┐  ┌─────────▼──────────────┐
 │ Postgres (canonical  │   │ Google Health API      │  │ Gemini (Generative     │
 │ sample store + users │   │ (per-user OAuth):      │  │ Language API):         │
-│ + friendships + …)   │   │ Fitbit → samples       │  │ the AI coach           │
+│ + Google tokens)     │   │ Fitbit → samples       │  │ coach + nutrition      │
 └──────────────────────┘   └────────────────────────┘  └────────────────────────┘
 ```
 
-**The nine layers** (detailed below): `A` rank engine · `B` Flutter app ·
+**The eight layers** (detailed below): `A` rank engine · `B` Flutter app ·
 `C` backend store+API · `D` auth/accounts · `E` Google Health integration ·
-`F` habits · `F2` exercise+diet logging · `G` friends/social · `H` AI coach.
+`F` habits · `F2` exercise+diet logging · `H` AI coach.
 
 ---
 
@@ -188,23 +188,26 @@ they never drift.
 
 - **State:** Riverpod. **Storage seam:** the `Repository` interface — `InMemory`
   (tests/default + demo seed) and `PersistentRepository` (shared_preferences, one
-  key per type: logs/habits/completions/profile/food/workouts/pins). The whole app
+  key per type: logs/habits/completions/food/workouts/pins). The whole app
   reads/writes through this seam; nothing touches storage directly.
 - **Local-first:** ranks recompute reactively from `logsProvider`; cloud sync is the
   opt-in `cloud_sheet`.
 
-**The five tabs:**
+**The four tabs:**
 - **Home** (`home_screen.dart`) — the overall rank card (tap → breakdown sheet with
   **category bars**, **stats** (figure 4), and the **rank-distribution badges**
   (figure 3)); **coach-pinned correlation insights**; the front/inner/back **body
   graph** (tap a muscle → detail); per-category metric grids; aesthetics strip.
 - **Progress** (`progress_screen.dart`) — Google-Health-style **category cards** →
   each opens its own **graph page** (timeframe chips; y-axis in rank/native/% space)
-  + a **multi-metric comparison with a Pearson correlation** readout.
+  + a **multi-metric comparison with a Pearson correlation** readout. Diet, Sleep,
+  and Training cards open bespoke per-domain layouts.
 - **Habits** (`habits_screen.dart`) — Layer F.
 - **Coach** (`coach_screen.dart`) — Layer H.
-- **Profile** (`profile_screen.dart`) — identity form + BMI + **Share my rank** +
-  the **Friends** section (Layer G).
+
+(There is no Profile tab: all identity stats are auto-sourced — age from the Google
+profile, height/weight/body-fat from synced logs — and surfaced via the coach, not a
+manual form. Friends/social was removed.)
 
 **Logging entry points** — the **Log** FAB offers *Metric* (a lift/field-test/vital),
 *Workout* (`workout_screen`), *Food* (`diet_screen`).
@@ -226,19 +229,18 @@ canonical engine via `app/engine.py` (no copy, no drift).
 | `POST /auth/google` | native id_token sign-in |
 | `POST /auth/dev` | dev-only passwordless sign-in (disabled in prod) |
 | `GET /auth/me` | the signed-in account's email |
-| `GET/PUT /me/profile` | profile upsert/read |
 | `POST /me/samples` · `GET /me/samples` | bulk idempotent ingest (server-side `strength_value`) · list |
 | `GET /me/ranks` | overall + per-category + per-metric ranks |
-| `POST /me/friends` · `GET /me/friends` · `GET /me/friends/requests` · `POST /me/friends/{id}/accept` · `DELETE /me/friends/{id}` | social: request → accept → compare ranks |
+| `GET /me/nutrition/status` · `POST /me/nutrition` | Gemini nutrition auto-fill availability · infer macros+micros |
 | `GET /me/coach/status` · `POST /me/coach/chat` · `POST /me/coach/context` | coach availability · chat (+ actions) · transparency context |
-| `…/integrations/google/authorize|exchange|status|sync|debug` | per-user Google Health linking + sync + raw debug |
+| `…/integrations/google/authorize|exchange|status|sync|debug|profile` | per-user Google Health linking + sync + raw debug + profile age |
 
 All `/me/*` and `/integrations/*` routes are gated by `current_user` (JWT).
 
 ### 6.2 Ranking & sync
 - `ranking.compute_ranks(samples)` → `(overall, categories, metrics)` — latest
-  sample per ranked metric, scored at its bodyweight-at-time; reused by `/me/ranks`,
-  the coach context, and friends' rank lookups.
+  sample per ranked metric, scored at its bodyweight-at-time; reused by `/me/ranks`
+  and the coach context.
 - `jobs.py` (`python -m app.jobs`) — a scheduled job that refreshes every connected
   user's Google data so it's fresh before any device opens.
 
@@ -252,8 +254,8 @@ All `/me/*` and `/integrations/*` routes are gated by `current_user` (JWT).
   `sub`) and links the data source.
 - The backend issues an **HS256 JWT**; the app persists it (remembered across
   launches). `current_user` resolves it on every protected route.
-- **Per-user isolation**: tokens, samples, profile, friendships are all keyed by
-  user id; no user can read another's raw data (friends see only an *overall rank*).
+- **Per-user isolation**: tokens and samples are all keyed by user id; no user can
+  read another's data.
 
 ---
 
@@ -305,7 +307,7 @@ Never raises into the app — errors become a clean message.
 
 ---
 
-## 10. Layers F & F2 — habits, exercise, diet, friends
+## 10. Layers F & F2 — habits, exercise, diet
 
 ### 10.1 Habits (`data/habits.dart`) — scaffolded
 A habit is **scaffolded**, not free-text: it lives in a **section**
@@ -343,11 +345,6 @@ defensive parser coerces/clamps and rejects junk). Keys are unit-suffixed
 (`sodium_mg`, `vitamin_d_ug`, …) so they sum cleanly. Falls back to manual entry when
 the AI key is unset (503).
 
-### 10.4 Friends (`backend/.../friends.py` + Profile section)
-Add by email → pending → accept → a **mini leaderboard** of friends' overall ranks
-(tier/sub/top% only — never raw samples). Privacy by mutual consent. Plus the
-**Share my rank** clipboard slice.
-
 ---
 
 ## 11. End-to-end data flows
@@ -383,13 +380,13 @@ Add by email → pending → accept → a **mini leaderboard** of friends' overa
 ---
 
 ## 13. Testing (167 total)
-- **Flutter (120):** engine parity vs golden vectors; system-verification
+- **Flutter (121):** engine parity vs golden vectors; system-verification
   (registry↔engine, PDF categories, every lift ranks, directions, overall/category);
-  habits (streaks/verification/planner/weekly/calendar); profile; diet/workout;
+  habits (streaks/verification/planner/weekly/calendar); diet (macros/micros)/workout;
   correlation; notifications; sync; and an **all-tabs runtime smoke test**.
-- **Backend (47):** engine load + coverage; auth; samples (isolation rep-volume +
+- **Backend (52):** engine load + coverage; auth; samples (isolation rep-volume +
   raw 1RM); ranks; Google Health mapping (every dataType shape + derived sleep score
-  + background metrics); friends (request/accept/rank/privacy); coach (PII-free
+  + sub-metrics); nutrition inference (parser + endpoint); coach (PII-free
   context incl. diet/training/aesthetics, agentic + pin parsing, Gemini mocked,
   guards); legal pages.
 
@@ -398,14 +395,16 @@ Add by email → pending → accept → a **mini leaderboard** of friends' overa
 ## 14. PDF plan → implementation map (every detail)
 | PDF | Status |
 |---|---|
-| **Part 1 — Logs** (12 strength, performance, recovery, aesthetics, background) | ✅ all metrics; strength yields volume (workout) + 1RM/rep-volume (rank); profile tab |
-| Part 1 — background auto-Google (steps/zone/energy) | 🟡 wired, type-names need a live `/debug` confirm |
-| Part 1 — 5k auto-from-running, auto "exercises", deeper sleep sub-metrics, aesthetic vision/audio models | 🟡 need live Google data / 3rd-party models (manual fallbacks built) |
+| **Part 1 — Logs** (12 strength, performance, recovery, aesthetics, background) | ✅ all metrics; strength yields volume (workout) + 1RM/rep-volume (rank); stats auto-sourced (no profile form) |
+| Part 1 — diet macros **+ micronutrients** | ✅ Gemini-inferred at log time (`/me/nutrition`) |
+| Part 1 — background auto-Google (steps/zone/energy) | ❌ no daily-rollup type in the API (confirmed via live `/debug`) |
+| Part 1 — auto height/age + deeper sleep sub-metrics | ✅ age (Google profile) + sleep time-to-sleep/awakenings/local-day wired; height via a `height` dataType (confirming shape) |
+| Part 1 — 5k auto-from-running, auto "exercises", aesthetic vision/audio models | 🟡 need a Google exercise-session endpoint (absent) / 3rd-party models (manual fallbacks built) |
 | **Part 2 — Graphs** (category cards → custom graph; comparison + correlation) | ✅ |
 | **Part 3 — Body graph & Ranks** (clickable body graph; card w/ progress+log+milestones; 8 tiers + I/II/III + Glory; category+overall; **rank-badge distribution fig 3**; **overall stats fig 4**; **correlation engine fig 5**) | ✅ all |
 | **Part 4 — Habits** (check-off, verification, planner, density bar, weekly, calendar) | ✅ |
 | **Part 5 — AI coach** (sleep/diet/exercise/aesthetics review; goals; milestones; notifications; habit-aware; structured context; agentic actions; dynamic volume auto-regulation; strategic correlations) | ✅ (voice logging intentionally skipped) |
-| **Part 6 — Friends / sharing / QoL** | ✅ add→accept→compare + share |
+| **Part 6 — Friends / sharing / QoL** | ✖ removed by design (not wanted for distribution) |
 | **Part 7 — Underlying mathematics** | ✅ exceeds the doc; parity-tested |
 
 ---
@@ -427,8 +426,7 @@ Add by email → pending → accept → a **mini leaderboard** of friends' overa
 - `sync.dart` — cloud sync + `kBackendUrl` + `apiClientProvider`.
 - `api_client.dart` — every backend HTTP call. *Centralise error→message mapping.*
 - `habits.dart` — Habit model + streaks + verification + planner + density + weekly
-  + calendar URL.
-- `profile.dart` — ProfileData + BMI.
+  + calendar URL + per-day metric series (`valuesLastNDays`).
 - `diet.dart` — FoodEntry (macros + micros map) + daily totals (summed micros).
   Micros are Gemini-inferred via `app/nutrition.py` + `POST /me/nutrition`.
 - `workout.dart` — WorkoutSession/Set → volume + best-set. *Add two-step verification
@@ -439,29 +437,27 @@ Add by email → pending → accept → a **mini leaderboard** of friends' overa
 - `body_figure_data.dart` — front/back/inner SVG muscle polygons.
 
 **App · state (`lib/state/`):** `providers.dart` (logs/ranks/overall/category),
-`habit_providers.dart`, `profile_providers.dart`, `log_providers.dart` (diet/
-workout/pins).
+`habit_providers.dart`, `log_providers.dart` (diet/workout/pins).
 
 **App · UI (`lib/ui/`):**
-- `main_screen.dart` — 5 tabs + Log FAB chooser + reminder re-sync.
+- `main_screen.dart` — 4 tabs + Log FAB chooser + reminder re-sync.
 - `home_screen.dart` (largest, ~800 lines) — overall card, breakdown sheet (figs
   3/4), pinned insights, body-graph section, metric grids. *Candidate to split.*
 - `progress_screen.dart` (~590) — category cards → graph page + correlation.
   *Candidate to extract the chart widget.*
-- `habits_screen.dart`, `coach_screen.dart`, `profile_screen.dart`,
-  `metric_detail_sheet.dart`, `diet_screen.dart`, `workout_screen.dart`,
+- `habits_screen.dart`, `coach_screen.dart`, `metric_detail_sheet.dart`,
+  `diet_screen.dart`, `sleep_screen.dart`, `workout_screen.dart`,
   `body_graph.dart` (CustomPainter + hit-test), `badge.dart` (SVG medallions),
-  `cloud_sheet.dart` (sign-in + sync).
+  `cloud_sheet.dart` (sign-in + sync + Google-data inspector).
 - `main.dart` — entry; loads repo, fires notification setup, runs app.
 
 **Backend (`backend/app/`):** `main.py`, `config.py`, `db.py`, `models.py`,
 `schemas.py`, `engine.py`, `ranking.py`, `registry.py`, `jobs.py`, `auth.py`,
-`coach.py`; `routers/` (auth/health/legal/profile/ranks/samples/friends/coach);
-`integrations/google_health/` (oauth/client/mapping/router — *confirm background
-type-names + deeper sleep fields via `/debug`; add auto exercises/energy*);
+`coach.py`, `nutrition.py`; `routers/` (auth/health/legal/ranks/samples/coach/
+nutrition); `integrations/google_health/` (oauth/client/mapping/router);
 `integrations/gemini/client.py` (*add streaming + true function-calling*).
 
-**Tests:** `test/` (9 Dart) + `backend/tests/` (8 Python).
+**Tests:** `test/` (Dart) + `backend/tests/` (Python).
 
 **Config / docs:** `pubspec.yaml`, `analysis_options.yaml`, `codemagic.yaml`,
 `railway.json`, `backend/Dockerfile`, `backend/DEPLOY.md`, `backend/VERIFICATION.md`,
@@ -494,11 +490,11 @@ current state → target → priority. (Setup for any user is in `AI_SETUP.md`.)
 **Guiding correction — auto over manual (seamlessness).** If a metric *can* be
 auto-logged, it should be, not typed.
 
-**✅ DONE (as far as Google allows) · Profile ported from Google Health.** Shipped:
-the Profile tab auto-fills **weight + body-fat from logs** and **age from the Google
-Health profile** (`/users/me/profile` → `age`, via `/integrations/google/profile`).
-Live `/debug` confirmed Google **does not expose** height / DOB / gender, so those
-stay manual. Auto-over-manual achieved for everything Google provides.
+**✅ DONE · Profile removed; stats fully auto-sourced.** The manual Profile tab (and
+Friends/share) were removed for distribution. Identity stats now flow without a form:
+**age** from the Google profile (`/integrations/google/profile`), **weight + body-fat
++ height** from synced logs (`height` dataType added), **gender** defaults to the
+young-male cohort. The coach reads all of these; nothing is typed.
 
 **🟡 MOSTLY DONE · Workout logging = a real tracker.** Shipped: sets grouped under
 each exercise (add exercise → log its sets), per-exercise + total load/volume,
@@ -539,8 +535,8 @@ daily-readiness drop). Voice = out of scope.
 **Build order:** (1) ✅ **Habits redesign** → (2) 🟡 **Workout tracker** (grouped sets +
 per-domain analytics done; Google-session dual-auth unavailable via the API) →
 (3) ✅ **Per-domain layouts** (Diet + Sleep + Training) **+ Gemini-inferred micros** →
-(4) ✅ **Profile auto-port** (weight/body-fat + age auto; height/gender manual — Google
-doesn't expose them) → (5) ✅ **Rank-badge/graph polish** (sheen + hero shine) →
+(4) ✅ **Profile removed; stats auto-sourced** (age/height/weight/body-fat auto;
+gender defaults to cohort) → (5) ✅ **Rank-badge/graph polish** (sheen + hero shine) →
 (6) ✅ **Coach fixed-response selection**. Each shipped behind its own tests. **The
 roadmap is complete.** The one remaining external-data item — workout↔Google
 exercise-session dual-auth — is blocked by Google not exposing a sessions endpoint.

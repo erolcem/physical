@@ -23,7 +23,7 @@ You only need this once.
    flags or code needed. The Physical window opens.
 
 *(Tip: `r` hot-reloads, `q` quits. Tabs along the top: Home · Progress · Habits ·
-Coach · Profile.)*
+Coach.)*
 
 ---
 
@@ -92,7 +92,7 @@ clears it):
 4. In the app: **☁ → Sign in with Google → Sync**, then use the **Coach** tab.
 
 Because the coach key lives on the *server*, the iPhone needs **no extra setup** — it
-just works once you're signed in. Same for friends, calendar, and notifications
+just works once you're signed in. Same for calendar and notifications
 (the iPhone will ask for notification permission the first time).
 
 ---
