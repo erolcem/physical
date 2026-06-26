@@ -13,7 +13,7 @@ the plan PDF, `STANDARDS_METHODOLOGY.md`, `STATUS.md`).
 implemented — including the two complex data types (exercise + diet) flowing into
 both the ranks and the AI, and the coach's advanced behaviours (agentic actions,
 dynamic volume auto-regulation, context transparency, strategic-correlation
-pinning). **120 Flutter tests + 47 backend tests pass, 0 analyzer issues**, the
+pinning). **126 Flutter tests + 48 backend tests pass, 0 analyzer issues**, the
 Python⇄Dart engine is parity-tested to ~1e-5, hosted on Railway, shipped to iPhone
 via TestFlight. The coach runs on **Gemini** so the whole stack lives in the user's
 Google account (sign-in, Health, Calendar, friends, AI).
@@ -332,8 +332,9 @@ session (needs the auto-exercises sync).
 A **holistic diet page**: food entries with macros (kcal + P/C/F + **fibre**) →
 **daily totals** with a **macro-kcal breakdown bar** and a **7-day calorie trend**
 (`caloriesLastNDays`), fed to the coach. The Progress "Diet" subpage routes here
-(its own domain layout). *Remaining:* full micronutrients (needs a food database)
-and tailored graph layouts for the exercise + sleep subpages.
+(its own domain layout); **Sleep** (`ui/sleep_screen.dart`) and **Training** (the
+workout screen's analytics header) likewise have bespoke per-domain layouts.
+*Remaining:* full micronutrients (needs a food database).
 
 ### 10.4 Friends (`backend/.../friends.py` + Profile section)
 Add by email → pending → accept → a **mini leaderboard** of friends' overall ranks
@@ -498,11 +499,12 @@ best-set updates the rank; an exercise habit verifies off a same-day manual sess
 live `/debug` showed `/users/me/sessions` returns **404** (this API doesn't expose
 exercise sessions at that path), so the Google half isn't available yet.
 
-**🟡 MOSTLY DONE · Diet = holistic.** Shipped: kcal + P/C/F + **fibre**, a macro-kcal
-breakdown bar, a 7-day calorie trend, and the Diet graph subpage routing to this
-holistic layout. *Remaining:* full **micronutrients** (needs a food database, maybe
-a Gemini-assisted lookup) and tailored graph layouts for the **exercise + sleep**
-subpages too.
+**✅ DONE · Per-domain graph layouts (Diet · Sleep · Training).** Each domain has its
+own bespoke subpage, not the generic metric chart: **Diet** (kcal + P/C/F + **fibre**,
+macro-kcal bar, 7-day calorie trend), **Sleep** (last-night deep/REM/light stage
+breakdown, 7-night score + hours-asleep trends, efficiency/time-to-sleep/awakenings
+stats), **Training** (7-day volume trend + week totals on the workout screen).
+*Remaining:* full **micronutrients** (needs a food database / Gemini-assisted lookup).
 
 **✅ DONE · Habits = structured & data-aligned, not free-text.** Shipped: sections +
 in-realm presets + bounded custom; verify modes (metric/workout/diet/manual)
@@ -511,9 +513,11 @@ cadence; today's roster + weekly schedule; monthly-cost dropped. *Next refinemen
 per-habit explicit numeric targets (e.g. "protein ≥ 150 g") checked against the day's
 totals, and goal-emphasis the coach remembers.
 
-**P2 · Graphs & ranks — accessibility + "epic" polish.** Fixed the **"All" timeframe**
-label crowding (this round). Further: make the ranks/graph layouts more credible and
-striking, especially **upgrading the rank-badge assets**.
+**✅ DONE · Graphs & ranks — accessibility + "epic" polish.** Fixed the **"All"
+timeframe** label crowding; added a **specular light-catch sheen** to every medallion
+(lustier by tier) and an **animated shine sweep** on the big hero badges. *Further
+(optional):* commission custom raster badge art if the SVG medallions ever feel
+limiting.
 
 **✅ DONE · AI coach — fixed context + fixed response selection.** Shipped: a fixed
 menu of coach functions (Sleep/Diet/Training/Aesthetics review, Set a goal, My
@@ -524,10 +528,14 @@ discussion; Notifications; Habit-update-aware; deletable structured context;
 autonomous strategic-correlation pinning; dynamic volume auto-regulation on a
 daily-readiness drop). Voice = out of scope.
 
-**Build order:** (1) ✅ **Habits redesign** → (2) 🟡 **Workout tracker** (grouped sets
-done; Google-session dual-auth pending live data) → (3) 🟡 **Diet** (holistic page +
-fibre + trend done; micros + exercise/sleep tailored layouts pending) → (4) ✅ **Profile auto-port** (weight/body-fat + age auto; height/gender manual — Google doesn't expose them) →
-(5) Rank-badge/graph visual polish (Liftoff-style) → (6) ✅ **Coach fixed-response selection** (done). Each shipped behind its own tests.
+**Build order:** (1) ✅ **Habits redesign** → (2) 🟡 **Workout tracker** (grouped sets +
+per-domain analytics done; Google-session dual-auth unavailable via the API) →
+(3) ✅ **Per-domain layouts** (Diet + Sleep + Training; micros pending a food DB) →
+(4) ✅ **Profile auto-port** (weight/body-fat + age auto; height/gender manual — Google
+doesn't expose them) → (5) ✅ **Rank-badge/graph polish** (sheen + hero shine) →
+(6) ✅ **Coach fixed-response selection**. Each shipped behind its own tests. The
+roadmap is complete bar items gated on external data sources (micros DB; a Google
+exercise-session endpoint).
 
 **Next unblock:** an in-app **Cloud → Inspect Google data** button now copies the raw
 Google field shapes — paste that to wire the live-data items (workout dual-auth,
