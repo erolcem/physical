@@ -122,9 +122,24 @@ class _BodyPainter extends CustomPainter {
       ));
     canvas.drawRect(Offset.zero & size, bgGlowPaint);
 
-    // ── Silhouette + neck
-    canvas.drawPath(path(parsePoly(silhouette)),
-        Paint()..color = const Color(0xFF1C1E3A));
+    // ── Silhouette + neck (subtle vertical gradient + faint rim for definition)
+    final silPath = path(parsePoly(silhouette));
+    canvas.drawPath(
+      silPath,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [Color(0xFF272C52), Color(0xFF141631)],
+        ).createShader(silPath.getBounds()),
+    );
+    canvas.drawPath(
+      silPath,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.08)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0
+        ..strokeJoin = StrokeJoin.round,
+    );
     canvas.drawPath(path(parsePoly(neck)),
         Paint()..color = const Color(0xFF3A3F58));
 
@@ -152,11 +167,19 @@ class _BodyPainter extends CustomPainter {
           );
         }
 
-        // Fill
-        canvas.drawPath(
-          pth,
-          Paint()..color = c.withValues(alpha: isRanked ? 0.88 : 0.15),
-        );
+        // Fill — glossy top-lit gradient for lit muscles; faint for the rest.
+        if (isRanked) {
+          canvas.drawPath(
+            pth,
+            Paint()
+              ..shader = LinearGradient(
+                begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                colors: [Color.lerp(c, Colors.white, 0.42)!, c],
+              ).createShader(pth.getBounds()),
+          );
+        } else {
+          canvas.drawPath(pth, Paint()..color = c.withValues(alpha: 0.15));
+        }
 
         // Stroke — brighter and slightly thicker for ranked muscles
         canvas.drawPath(
