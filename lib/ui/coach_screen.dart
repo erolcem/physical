@@ -110,6 +110,7 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     return {
       'calories': t.calories, 'protein': t.protein,
       'carbs': t.carbs, 'fat': t.fat, 'fibre': t.fibre, 'items': t.items,
+      if (t.micros.values.any((v) => v > 0)) 'micros': t.micros,
     };
   }
 

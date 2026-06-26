@@ -25,11 +25,24 @@ void main() {
       expect(entriesFor(entries, '2026-06-23').single.name, 'Old');
     });
 
-    test('FoodEntry json round-trip incl. fibre', () {
-      const e = FoodEntry(id: '1', dateKey: '2026-06-24', name: 'Oats', calories: 300, fibre: 8);
+    test('FoodEntry json round-trip incl. fibre + micros', () {
+      const e = FoodEntry(id: '1', dateKey: '2026-06-24', name: 'Oats', calories: 300,
+          fibre: 8, micros: {'iron_mg': 2.5, 'magnesium_mg': 60});
       final back = FoodEntry.fromJson(e.toJson());
       expect(back.name, 'Oats');
       expect(back.fibre, 8);
+      expect(back.micros['iron_mg'], 2.5);
+      expect(back.micros['magnesium_mg'], 60);
+    });
+
+    test('dietTotals sums micros per key across the day', () {
+      const day = [
+        FoodEntry(id: '1', dateKey: 'd', name: 'a', micros: {'iron_mg': 2, 'zinc_mg': 1}),
+        FoodEntry(id: '2', dateKey: 'd', name: 'b', micros: {'iron_mg': 3}),
+      ];
+      final t = dietTotals(day, 'd');
+      expect(t.micros['iron_mg'], 5); // 2 + 3
+      expect(t.micros['zinc_mg'], 1);
     });
 
     test('totals sum fibre; macro kcal split', () {

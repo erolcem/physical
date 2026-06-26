@@ -3,8 +3,10 @@
 // 7-day calorie trend, and the day's food entries. Feeds the coach.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/api_client.dart';
 import '../data/diet.dart';
 import '../data/habits.dart' show todayKey;
+import '../data/sync.dart' show apiClientProvider;
 import '../state/log_providers.dart';
 
 const _bg = Color(0xFF08091A);
@@ -87,10 +89,30 @@ class DietScreen extends ConsumerWidget {
             _macro('Fat', t.fat, _pink),
             _macro('Fibre', t.fibre, _gold),
           ]),
+          if (t.micros.values.any((v) => v > 0)) ...[
+            const SizedBox(height: 16),
+            const Text('MICRONUTRIENTS', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final k in microLabels.keys)
+                if ((t.micros[k] ?? 0) > 0) _microChip(k, t.micros[k]!),
+            ]),
+          ],
         ]),
       ),
     );
   }
+
+  Widget _microChip(String key, double v) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: _accent.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _accent.withValues(alpha: 0.3)),
+        ),
+        child: Text('${microLabels[key]} ${v.round()}${microUnit(key)}',
+            style: const TextStyle(fontSize: 11, color: _accent, fontWeight: FontWeight.w600)),
+      );
 
   Widget _macro(String label, double g, Color c) => Column(children: [
         Text('${g.round()}g', style: TextStyle(fontWeight: FontWeight.w800, color: c)),
@@ -154,6 +176,9 @@ class DietScreen extends ConsumerWidget {
     final c = TextEditingController();
     final f = TextEditingController();
     final fib = TextEditingController();
+    var micros = <String, double>{};
+    var busy = false;
+
     Widget num(TextEditingController ctrl, String label) => Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 3),
@@ -164,40 +189,105 @@ class DietScreen extends ConsumerWidget {
             ),
           ),
         );
+
     await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _card,
-        title: const Text('Log food'),
-        content: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(
-              controller: name, autofocus: true,
-              decoration: const InputDecoration(hintText: 'e.g. Chicken & rice', border: OutlineInputBorder()),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          // Estimate macros + micros from the typed description via Gemini.
+          Future<void> autofill() async {
+            final desc = name.text.trim();
+            if (desc.isEmpty) {
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Type a food first, e.g. "2 eggs and toast"')));
+              return;
+            }
+            setLocal(() => busy = true);
+            try {
+              final n = await ref.read(apiClientProvider).inferNutrition(desc);
+              kcal.text = n.calories.round().toString();
+              p.text = n.protein.round().toString();
+              c.text = n.carbs.round().toString();
+              f.text = n.fat.round().toString();
+              fib.text = n.fibre.round().toString();
+              micros = n.micros;
+              setLocal(() => busy = false);
+            } catch (e) {
+              setLocal(() => busy = false);
+              final msg = (e is ApiException && e.status == 503)
+                  ? 'Auto-fill needs the AI key set up — enter values manually.'
+                  : "Couldn't estimate that — enter values manually.";
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
+              }
+            }
+          }
+
+          return AlertDialog(
+            backgroundColor: _card,
+            title: const Text('Log food'),
+            content: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextField(
+                  controller: name, autofocus: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => autofill(),
+                  decoration: const InputDecoration(
+                      hintText: 'e.g. Chicken & rice', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: busy ? null : autofill,
+                    icon: busy
+                        ? const SizedBox(
+                            width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.auto_awesome, size: 18),
+                    label: Text(busy ? 'Estimating…' : 'Auto-fill nutrition with AI'),
+                    style: OutlinedButton.styleFrom(foregroundColor: _teal),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(children: [num(kcal, 'kcal'), num(fib, 'Fibre')]),
+                const SizedBox(height: 10),
+                Row(children: [num(p, 'Protein'), num(c, 'Carbs'), num(f, 'Fat')]),
+                if (micros.values.any((v) => v > 0)) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Micros: ${[
+                        for (final k in microLabels.keys)
+                          if ((micros[k] ?? 0) > 0)
+                            '${microLabels[k]} ${micros[k]!.round()}${microUnit(k)}'
+                      ].join(' · ')}',
+                      style: const TextStyle(fontSize: 11, color: _muted),
+                    ),
+                  ),
+                ],
+              ]),
             ),
-            const SizedBox(height: 10),
-            Row(children: [num(kcal, 'kcal'), num(fib, 'Fibre')]),
-            const SizedBox(height: 10),
-            Row(children: [num(p, 'Protein'), num(c, 'Carbs'), num(f, 'Fat')]),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              ref.read(dietProvider.notifier).add(
-                    name: name.text,
-                    calories: double.tryParse(kcal.text) ?? 0,
-                    protein: double.tryParse(p.text) ?? 0,
-                    carbs: double.tryParse(c.text) ?? 0,
-                    fat: double.tryParse(f.text) ?? 0,
-                    fibre: double.tryParse(fib.text) ?? 0,
-                  );
-              Navigator.pop(ctx);
-            },
-            child: const Text('Add'),
-          ),
-        ],
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              FilledButton(
+                onPressed: () {
+                  ref.read(dietProvider.notifier).add(
+                        name: name.text,
+                        calories: double.tryParse(kcal.text) ?? 0,
+                        protein: double.tryParse(p.text) ?? 0,
+                        carbs: double.tryParse(c.text) ?? 0,
+                        fat: double.tryParse(f.text) ?? 0,
+                        fibre: double.tryParse(fib.text) ?? 0,
+                        micros: micros,
+                      );
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Add'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

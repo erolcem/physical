@@ -118,3 +118,16 @@ class CoachContextIn(BaseModel):
     diet: dict | None = None
     training: dict | None = None
     aesthetics: dict | None = None
+
+
+class NutritionIn(BaseModel):
+    description: str  # a food/meal, e.g. "2 eggs and a slice of toast"
+
+
+class NutritionOut(BaseModel):
+    calories: float
+    protein: float
+    carbs: float
+    fat: float
+    fibre: float
+    micros: dict[str, float] = {}  # canonical keys (sodium_mg, vitamin_c_mg, …)

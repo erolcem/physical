@@ -97,7 +97,14 @@ def _diet_line(diet) -> str | None:
     extra = ""
     if diet.get("carbs") or diet.get("fat"):
         extra = f", {int(diet.get('carbs') or 0)}g carbs, {int(diet.get('fat') or 0)}g fat"
-    return f"Today's diet: {int(cal or 0)} kcal, {int(pro or 0)}g protein{extra}"
+    if diet.get("fibre"):
+        extra += f", {int(diet['fibre'])}g fibre"
+    micros = diet.get("micros") or {}
+    mic = ", ".join(
+        f"{k.rsplit('_', 1)[0].replace('_', ' ')} {int(v)}{'µg' if k.endswith('_ug') else 'mg'}"
+        for k, v in micros.items() if v)
+    tail = f"; micros: {mic}" if mic else ""
+    return f"Today's diet: {int(cal or 0)} kcal, {int(pro or 0)}g protein{extra}{tail}"
 
 
 def _training_line(training) -> str | None:

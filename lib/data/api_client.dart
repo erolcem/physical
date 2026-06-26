@@ -16,6 +16,20 @@ class ApiException implements Exception {
   String toString() => 'ApiException($status): $message';
 }
 
+/// Gemini-inferred nutrition for a food description (macros + canonical micros).
+class InferredNutrition {
+  final double calories, protein, carbs, fat, fibre;
+  final Map<String, double> micros;
+  const InferredNutrition({
+    required this.calories,
+    required this.protein,
+    required this.carbs,
+    required this.fat,
+    required this.fibre,
+    this.micros = const {},
+  });
+}
+
 class ApiClient {
   final String baseUrl;
   final http.Client _client;
@@ -301,6 +315,40 @@ class ApiClient {
         .timeout(const Duration(seconds: 60));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
     return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
+  /// Whether nutrition auto-fill is available (Gemini configured server-side).
+  Future<bool> nutritionConfigured() async {
+    try {
+      final r = await _client
+          .get(Uri.parse('$baseUrl/me/nutrition/status'), headers: _headers())
+          .timeout(const Duration(seconds: 10));
+      return r.statusCode == 200 && (jsonDecode(r.body) as Map)['configured'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Gemini-inferred nutrition for a food description (macros + micros); throws on error.
+  Future<InferredNutrition> inferNutrition(String description) async {
+    final r = await _client
+        .post(Uri.parse('$baseUrl/me/nutrition'),
+            headers: _headers({'Content-Type': 'application/json'}),
+            body: jsonEncode({'description': description}))
+        .timeout(const Duration(seconds: 60));
+    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
+    final j = jsonDecode(r.body) as Map<String, dynamic>;
+    return InferredNutrition(
+      calories: (j['calories'] as num).toDouble(),
+      protein: (j['protein'] as num).toDouble(),
+      carbs: (j['carbs'] as num).toDouble(),
+      fat: (j['fat'] as num).toDouble(),
+      fibre: (j['fibre'] as num).toDouble(),
+      micros: {
+        for (final e in ((j['micros'] as Map?) ?? const {}).entries)
+          e.key as String: (e.value as num).toDouble()
+      },
+    );
   }
 
   /// Exactly what the coach sees — for the transparency view.
