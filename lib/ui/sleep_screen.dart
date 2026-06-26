@@ -174,10 +174,14 @@ class SleepScreen extends ConsumerWidget {
             ),
           ),
         );
-    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      tile('Efficiency', eff != null ? '${eff.round()}%' : '—'),
-      tile('To sleep', tts != null ? '${tts.round()}m' : '—'),
-      tile('Awakenings', awak != null ? awak.round().toString() : '—'),
-    ]);
+    // IntrinsicHeight bounds the Row's height so `stretch` (equal-height cards) works
+    // inside the scrolling ListView — without it the Row gets infinite height.
+    return IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        tile('Efficiency', eff != null ? '${eff.round()}%' : '—'),
+        tile('To sleep', tts != null ? '${tts.round()}m' : '—'),
+        tile('Awakenings', awak != null ? awak.round().toString() : '—'),
+      ]),
+    );
   }
 }

@@ -261,23 +261,35 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
 
     final cutoff = timeSpanDays == null ? null : now.subtract(Duration(days: timeSpanDays));
 
-    int globalFirstTs = todayStart;
+    int rawFirstTs = todayStart, dataMaxTs = todayStart;
     if (timeSpanDays != null) {
-      globalFirstTs = todayStart - (timeSpanDays * 86400000);
+      rawFirstTs = todayStart - (timeSpanDays * 86400000);
     } else {
+      // ALL: scan EVERY entry for the true earliest/latest day — logs may be stored
+      // unsorted (e.g. after a sync), so entries.first isn't necessarily the oldest.
       bool found = false;
       for (final mid in _selectedIds) {
-        final entries = logsMap[mid] ?? [];
-        if (entries.isNotEmpty) {
-          final dt = DateTime.parse(entries.first.ts);
+        for (final e in (logsMap[mid] ?? const [])) {
+          final dt = DateTime.parse(e.ts);
           final dTs = DateTime(dt.year, dt.month, dt.day).millisecondsSinceEpoch;
-          if (!found || dTs < globalFirstTs) {
-            globalFirstTs = dTs;
+          if (!found) {
+            rawFirstTs = dTs;
+            dataMaxTs = dTs;
             found = true;
+          } else {
+            if (dTs < rawFirstTs) rawFirstTs = dTs;
+            if (dTs > dataMaxTs) dataMaxTs = dTs;
           }
         }
       }
     }
+
+    // Bucket points by a sensible interval so long ranges clump (weekly past ~6 weeks,
+    // monthly past ~7 months) instead of crowding hundreds of daily points off-chart.
+    final spanDays = timeSpanDays ?? ((dataMaxTs - rawFirstTs) / 86400000).round();
+    final granDays = spanDays > 200 ? 30 : (spanDays > 45 ? 7 : 1);
+    int globalFirstTs =
+        _bucketStart(DateTime.fromMillisecondsSinceEpoch(rawFirstTs), granDays);
 
     int globalLastTs = globalFirstTs;
     final lineBars = <LineChartBarData>[];
@@ -308,7 +320,7 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
       final dailyActual = <int, double>{}; // the real metric value (kg, etc.) for tooltips
       for (final e in filtered) {
         final dt = DateTime.parse(e.ts);
-        final dayStart = DateTime(dt.year, dt.month, dt.day).millisecondsSinceEpoch;
+        final dayStart = _bucketStart(dt, granDays);
         final val = isRanked ? eng.scoreLog(e).rankValue : e.value;
         if (!dailyMax.containsKey(dayStart) || val > dailyMax[dayStart]!) {
           dailyMax[dayStart] = val;
@@ -617,6 +629,18 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
 
 /// Pearson correlation over the days both metrics share. Null if fewer than 3
 /// overlapping points (nearest-date alignment is by calendar day).
+/// The bucket-start epoch (ms) a date falls in, given a granularity: day, ISO week
+/// (Monday), or month. Points sharing a bucket are aggregated, so long timeframes
+/// clump into readable intervals instead of crowding daily points off the chart.
+int _bucketStart(DateTime dt, int granDays) {
+  if (granDays >= 28) return DateTime(dt.year, dt.month, 1).millisecondsSinceEpoch;
+  if (granDays >= 7) {
+    final d = DateTime(dt.year, dt.month, dt.day);
+    return d.subtract(Duration(days: d.weekday - 1)).millisecondsSinceEpoch;
+  }
+  return DateTime(dt.year, dt.month, dt.day).millisecondsSinceEpoch;
+}
+
 double? _pearson(Map<int, double> a, Map<int, double> b) {
   final days = a.keys.where(b.containsKey).toList();
   if (days.length < 3) return null;
