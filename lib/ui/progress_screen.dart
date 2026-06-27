@@ -47,7 +47,7 @@ const List<(String, String, IconData, bool)> _sections = [
   ('sleep', 'Sleep', Icons.bedtime, false),
   ('diet', 'Diet & Nutrition', Icons.restaurant, false),
   ('health', 'Activity & Vitals', Icons.monitor_heart, false),
-  ('general', 'Body', Icons.straighten, false),
+  ('general', 'Profile', Icons.straighten, false),
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
