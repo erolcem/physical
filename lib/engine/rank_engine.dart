@@ -206,8 +206,9 @@ final Map<String, Standard> standards = {
       'Fitbit/Google Health sleep score — most users 72–83 (IQR), provisional'),
   'deadhang': Standard('deadhang', 1, false, Dist('lognormal', math.log(60), 0.5), 'provisional'),
   'hamstring_mobility': const Standard('hamstring_mobility', 1, false, Dist('normal', 15.0, 5.0), 'provisional'),
-  'eye': const Standard('eye', -1, false, Dist('normal', 0.0, 0.12),
-      'visual acuity logMAR (lower better); 20/20≈median young adult, provisional'),
+  'eye': const Standard('eye', -1, false, Dist('normal', 0.05, 0.15),
+      'visual acuity logMAR (lower better); general young-male presenting acuity '
+      '(median just below 20/20 from uncorrected error); best-corrected ≈ -0.14, provisional'),
   'pushups': const Standard('pushups', 1, false, Dist('normal', 35.0, 13.0),
       'push-ups in 60s, young-male norms, provisional'),
   'sprint_100m': const Standard('sprint_100m', -1, false, Dist('normal', 15.5, 2.0),

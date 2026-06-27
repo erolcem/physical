@@ -159,8 +159,9 @@ STANDARDS = {
                            "deadhang hold sec — provisional"),
     "hamstring_mobility": Standard("hamstring_mobility", +1, False, Dist("normal", 15.0, 5.0),
                            "sit-and-reach cm — provisional, mobility unmodelled"),
-    "eye":        Standard("eye", -1, False, Dist("normal", 0.0, 0.12),
-                           "visual acuity logMAR (lower better); 20/20=median young adult, provisional"),
+    "eye":        Standard("eye", -1, False, Dist("normal", 0.05, 0.15),
+                           "visual acuity logMAR (lower better); general young-male presenting acuity "
+                           "(median just below 20/20 from uncorrected error); best-corrected ~-0.14, provisional"),
     "pushups":    Standard("pushups", +1, False, Dist("normal", 35.0, 13.0),
                            "push-ups in 60s, young-male norms, provisional"),
     "sprint_100m": Standard("sprint_100m", -1, False, Dist("normal", 15.5, 2.0),

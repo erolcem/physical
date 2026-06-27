@@ -21,8 +21,8 @@ const Map<String, AestheticGuide> aestheticGuides = {
   ),
   'eye': AestheticGuide(
     what: 'Visual acuity — the sharpness of your sight.',
-    how: 'Tap “Measure acuity”: calibrate with a card, set your distance, then read tumbling-E lines → logMAR.',
-    anchor: '20/20 ≈ median young adult; 20/16+ is elite. Ranked (excluded from overall).',
+    how: 'Tap “Measure acuity”: calibrate with a card, set your distance, then read tumbling-E lines → logMAR. Test with your usual glasses/contacts.',
+    anchor: 'Ranked vs general young men: 20/20 ≈ Gold, 20/16 ≈ Platinum, 20/10 ≈ Titan. Provisional; excluded from overall.',
     status: MeasureStatus.ready,
   ),
   'hair': AestheticGuide(
