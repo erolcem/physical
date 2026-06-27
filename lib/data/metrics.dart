@@ -111,8 +111,6 @@ const List<MetricDef> metrics = [
   MetricDef('deep_sleep', 'Deep Sleep', 'sleep', MetricTier.background, 'min', autoSync: true),
   MetricDef('sleep_efficiency', 'Sleep Efficiency', 'sleep', MetricTier.background, '%', autoSync: true),
   MetricDef('time_to_sleep', 'Time to Sound Sleep', 'sleep', MetricTier.background, 'min', autoSync: true),
-  MetricDef('sound_sleep', 'Sound Sleep', 'sleep', MetricTier.background, 'min', autoSync: true),
-  MetricDef('restlessness', 'Restlessness', 'sleep', MetricTier.background, 'count', autoSync: true),
   MetricDef('full_awakenings', 'Full Awakenings', 'sleep', MetricTier.background, 'count', autoSync: true),
   MetricDef('sleep_interruptions', 'Interruptions', 'sleep', MetricTier.background, 'count', autoSync: true),
 

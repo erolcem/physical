@@ -155,10 +155,44 @@ def _sleep_day(c: dict) -> str | None:
         return start[:10]
 
 
+def _local_hour(interval: dict):
+    """Local bedtime as a decimal hour (e.g. 22.5 = 10:30pm) — startTime + UTC offset."""
+    start = interval.get("startTime")
+    if not isinstance(start, str):
+        return None
+    try:
+        dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        off = int(str(interval.get("startUtcOffset", "0s")).rstrip("s") or 0)
+        local = dt + timedelta(seconds=off)
+        return round(local.hour + local.minute / 60.0, 2)
+    except Exception:
+        return None
+
+
+def _count_long_awake(stages: list, min_secs: int) -> int:
+    """Number of AWAKE blocks lasting ≥ [min_secs] — a 'full awakening' vs a micro one."""
+    n = 0
+    for s in stages:
+        if s.get("type") != "AWAKE":
+            continue
+        a, b = s.get("startTime"), s.get("endTime")
+        if not (isinstance(a, str) and isinstance(b, str)):
+            continue
+        try:
+            ad = datetime.fromisoformat(a.replace("Z", "+00:00"))
+            bd = datetime.fromisoformat(b.replace("Z", "+00:00"))
+            if (bd - ad).total_seconds() >= min_secs:
+                n += 1
+        except Exception:
+            pass
+    return n
+
+
 def _sleep_samples(datapoints: list[dict], rhr_by_day=None, baseline_rhr=None) -> list[dict]:
-    """One night → sleep_score (0–100, ranked) + sleep_duration (hrs),
-    sleep_efficiency (%), deep/rem minutes, time-to-sleep, and full awakenings.
-    [rhr_by_day]/[baseline_rhr] feed the score's resting-HR restoration term."""
+    """One night → sleep_score (ranked) + duration, efficiency, deep/REM, time-to-sleep,
+    schedule (bedtime), interruptions (all AWAKE events) and full awakenings (long AWAKE
+    blocks). [rhr_by_day]/[baseline_rhr] feed the score's resting-HR restoration term.
+    (restlessness + sound-sleep aren't exposed by the API — proprietary accelerometer.)"""
     rhr_by_day = rhr_by_day or {}
     out = []
     for p in datapoints:
@@ -191,8 +225,14 @@ def _sleep_samples(datapoints: list[dict], rhr_by_day=None, baseline_rhr=None) -
                 out.append(_sample("rem_sleep", day, mins, st))
             elif t == "AWAKE":
                 cnt = _to_float(st.get("count"))
-                if cnt is not None:
-                    out.append(_sample("full_awakenings", day, cnt, st))
+                if cnt is not None:  # every AWAKE event = an interruption
+                    out.append(_sample("sleep_interruptions", day, cnt, st))
+        # Schedule (bedtime) + full awakenings (AWAKE blocks ≥ 5 min) from the stages.
+        sched = _local_hour(c.get("interval") or {})
+        if sched is not None:
+            out.append(_sample("sleep_schedule", day, sched, c.get("interval") or {}))
+        out.append(_sample("full_awakenings", day,
+                           _count_long_awake(c.get("stages") or [], 300), {"min_seconds": 300}))
         score = _sleep_score(c, summary, asleep, eff, deep, rem,
                              resting_hr=rhr_by_day.get(day), baseline_rhr=baseline_rhr)
         if score is not None:
