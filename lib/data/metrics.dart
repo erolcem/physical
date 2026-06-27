@@ -90,17 +90,17 @@ const List<MetricDef> metrics = [
   // ── TRACKED · Aesthetics (unranked by design — no defensible population
   //    distribution; ranking appearance is a wellbeing risk. Graphs only.) ──
   MetricDef('skin', 'Skin Health', 'aesthetics', MetricTier.tracked, '/100',
-      exercise: 'Self-assessed score'),
+      exercise: 'Selfie skin analysis'),
   MetricDef('oral', 'Oral Health', 'aesthetics', MetricTier.tracked, '/100',
-      exercise: 'Self-assessed score'),
+      exercise: 'Smile photo analysis'),
   MetricDef('eye', 'Eye Health', 'aesthetics', MetricTier.tracked, '/100',
-      exercise: 'Self-assessed score'),
+      exercise: 'In-app acuity test'),
   MetricDef('hair', 'Hair Density', 'aesthetics', MetricTier.tracked, '/cm²',
-      exercise: 'Self-assessed score'),
+      exercise: 'Macro-lens scalp photo'),
   MetricDef('grooming', 'Grooming', 'aesthetics', MetricTier.tracked, '/100',
-      exercise: 'Self-assessed score'),
+      exercise: 'Self-checklist'),
   MetricDef('voice', 'Voice Quality', 'aesthetics', MetricTier.tracked, '/100',
-      exercise: 'Self-assessed score'),
+      exercise: 'Mic recording (Praat)'),
 
   // ── BACKGROUND · health (automatically logged via API) ──
   MetricDef('heart_rate', 'Heart Rate', 'health', MetricTier.background, 'bpm', autoSync: true),

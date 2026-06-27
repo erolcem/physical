@@ -3,6 +3,7 @@
 // inline log form. Showcases the engine's derived thresholds.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/aesthetic_guides.dart';
 import '../data/metrics.dart';
 import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log, strengthValue, isolationLifts;
@@ -189,6 +190,9 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
               const Text('No logs yet — add one below.',
                   style: TextStyle(color: Colors.grey)),
 
+            // ── Measurement guide (aesthetics — what/how/scale + readiness) ──
+            if (aestheticGuides[m.id] != null) _guideCard(aestheticGuides[m.id]!),
+
             // ── Milestone ladder (derived thresholds) ──
             if (ranked) ...[
               const SizedBox(height: 18),
@@ -245,6 +249,44 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
       ),
     );
   }
+
+  Widget _guideCard(AestheticGuide g) {
+    final (label, color) = switch (g.status) {
+      MeasureStatus.ready => ('● Measurable in-app', const Color(0xFF4CE0C3)),
+      MeasureStatus.manual => ('● Manual entry', const Color(0xFFF6CF3E)),
+      MeasureStatus.planned => ('● Coming soon', const Color(0xFFF8A55B)),
+    };
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E1124),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x14FFFFFF)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Text('HOW IT’S MEASURED',
+              style: TextStyle(fontSize: 10, letterSpacing: 2, color: Colors.grey)),
+          const Spacer(),
+          Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: color)),
+        ]),
+        const SizedBox(height: 8),
+        _guideRow('What', g.what),
+        _guideRow('How', g.how),
+        _guideRow('Scale', g.anchor),
+      ]),
+    );
+  }
+
+  Widget _guideRow(String k, String v) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 42,
+              child: Text(k, style: const TextStyle(fontSize: 11.5, color: Colors.grey, fontWeight: FontWeight.w700))),
+          Expanded(child: Text(v, style: const TextStyle(fontSize: 12.5, height: 1.3))),
+        ]),
+      );
 
   Widget _ladderRow(MetricDef m, String tier, int tierIdx, int curIdx, double? bw) {
     final thr = eng.threshold(m.id, tier, bw);
