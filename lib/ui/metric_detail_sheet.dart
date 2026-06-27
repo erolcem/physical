@@ -11,6 +11,7 @@ import '../state/providers.dart';
 import 'acuity_test.dart';
 import 'badge.dart';
 import 'grooming_checklist.dart';
+import 'photo_measure.dart';
 import 'voice_measure.dart';
 
 const List<String> _ladderTiers = [
@@ -99,6 +100,24 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
     setState(() {}); // refresh latest/history
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Grooming logged: ${score.toStringAsFixed(0)}/100')));
+  }
+
+  // Photo-based aesthetics + their capture tip.
+  static const Map<String, String> _photoTips = {
+    'skin': 'Face the camera, fill the frame, no makeup or harsh shadows.',
+    'oral': 'A clear, well-lit photo of your smile showing teeth and gums.',
+    'hair': 'A close-up of the scalp area you want to track (part the hair).',
+  };
+
+  Future<void> _measurePhoto(String id, String label) async {
+    final score = await measurePhotoFlow(context, ref,
+        metric: id, title: label, tip: _photoTips[id] ?? '');
+    if (score == null || !mounted) return;
+    ref.read(logsProvider.notifier)
+        .add(id, Log(id, score, ts: DateTime.now().toIso8601String()));
+    setState(() {}); // refresh latest/history
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('$label logged: ${score.toStringAsFixed(0)}/100')));
   }
 
   @override
@@ -256,6 +275,14 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
               ],
               if (m.id == 'grooming') ...[
                 _grandButton('✂  Grooming check', const Color(0xFF4CE0C3), _measureGrooming),
+                const SizedBox(height: 8),
+                const Text('— or enter a score manually —',
+                    style: TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 8),
+              ],
+              if (_photoTips[m.id] != null) ...[
+                _grandButton('📷  Measure from photo', const Color(0xFF4CE0C3),
+                    () => _measurePhoto(m.id, m.label)),
                 const SizedBox(height: 8),
                 const Text('— or enter a score manually —',
                     style: TextStyle(fontSize: 11, color: Colors.grey)),

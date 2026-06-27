@@ -20,6 +20,7 @@ dependencies:
   flutter_timezone: ^3.0.1
   record: ^6.0.0          # mic capture for the Voice aesthetic measurement
   path_provider: ^2.1.4   # temp file path for the recorded clip
+  image_picker: ^1.1.2    # camera capture for skin/oral/hair photo measurements
 
 dev_dependencies:
   flutter_test:

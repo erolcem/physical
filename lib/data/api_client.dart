@@ -254,6 +254,27 @@ class ApiClient {
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
+  /// Upload a photo for an aesthetic CV measurement (metric ∈ skin|oral|hair).
+  /// Returns the backend result (score + components). Throws on failure.
+  Future<Map<String, dynamic>> measurePhoto(String metric, String filePath) async {
+    final req = http.MultipartRequest(
+        'POST', Uri.parse('$baseUrl/me/aesthetics/photo/$metric'))
+      ..headers.addAll(_headers())
+      ..files.add(await http.MultipartFile.fromPath('file', filePath));
+    final streamed = await _client.send(req).timeout(const Duration(seconds: 45));
+    final r = await http.Response.fromStream(streamed);
+    if (r.statusCode != 200) {
+      String msg;
+      try {
+        msg = (jsonDecode(r.body) as Map)['detail']?.toString() ?? r.body;
+      } catch (_) {
+        msg = r.body;
+      }
+      throw ApiException(msg, r.statusCode);
+    }
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
   /// Raw Google Health debug output (status + a real sample per data type, plus
   /// profile/session probes) — returned verbatim for the in-app inspector to copy.
   Future<String> googleDebug() async {
