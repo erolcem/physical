@@ -4,11 +4,9 @@ import '../data/notifications.dart';
 import '../state/habit_providers.dart';
 import 'cloud_sheet.dart';
 import 'coach_screen.dart';
-import 'diet_screen.dart';
 import 'habits_screen.dart';
 import 'home_screen.dart';
 import 'progress_screen.dart';
-import 'exercise_screen.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -75,68 +73,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
           CoachTab(),
         ],
       ),
-      // A grand gradient pill (FAB can't take a gradient natively) with a glow.
-      floatingActionButton: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(30),
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [Color(0xFF7C8BFF), Color(0xFF5B6AF8)],
-          ),
-          boxShadow: [
-            BoxShadow(color: const Color(0xFF5B6AF8).withValues(alpha: 0.55),
-                blurRadius: 20, spreadRadius: -2, offset: const Offset(0, 6)),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => _showLogChooser(context),
-            borderRadius: BorderRadius.circular(30),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 22, vertical: 15),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.add, color: Colors.white, size: 22),
-                SizedBox(width: 8),
-                Text('Log', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
-              ]),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showLogChooser(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF12152E),
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 8),
-          ListTile(
-            leading: const Icon(Icons.fitness_center, color: Color(0xFF5B6AF8)),
-            title: const Text('Log metric'),
-            subtitle: const Text('A lift, field test, or vital'),
-            onTap: () { Navigator.pop(ctx); openLogSheet(context); },
-          ),
-          ListTile(
-            leading: const Icon(Icons.sports_gymnastics, color: Color(0xFF4CE0C3)),
-            title: const Text('Log workout'),
-            subtitle: const Text('A session + sets of any exercise → volume'),
-            onTap: () { Navigator.pop(ctx); openExerciseScreen(context); },
-          ),
-          ListTile(
-            leading: const Icon(Icons.restaurant, color: Color(0xFFF6CF3E)),
-            title: const Text('Log food'),
-            subtitle: const Text('Calories + macros for today'),
-            onTap: () { Navigator.pop(ctx); openDietScreen(context); },
-          ),
-          const SizedBox(height: 8),
-        ]),
-      ),
+      // No global "Log" FAB: metrics are logged from their front-page cards, and
+      // exercise + diet are reached from the Progress tab (auto-imported where possible).
     );
   }
 }

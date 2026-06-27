@@ -27,9 +27,9 @@ def test_ranks_overall_categories_metrics(client):
     assert 0 <= r["metrics"]["sleep_score"]["percentile"] <= 100
 
 
-def test_overall_is_category_equal_not_strength_heavy(client):
-    # Many weak strength lifts + one elite aesthetic. Because overall averages the four
-    # CATEGORIES equally (not per-metric), the single aesthetic pulls the overall up
+def test_overall_is_category_weighted_not_strength_heavy(client):
+    # Many weak strength lifts + one elite aesthetic. Because overall blends the four
+    # CATEGORIES by weight (not per-metric), the single aesthetic pulls the overall up
     # between the two category ranks — strength's metric count doesn't dominate.
     client.post("/me/samples", json=[
         {"metric_id": "bench", "ts": "2026-06-01T08:00:00", "value": 40, "bodyweight_at_ts": 80},

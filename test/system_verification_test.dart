@@ -187,9 +187,9 @@ void main() {
           closeTo(cats['aesthetics']!.rankValue, 1e-9));
     });
 
-    test('overall is category-equal, not strength-heavy', () {
-      // Same single strong aesthetic; adding many strength lifts must NOT swamp it —
-      // each category still counts once. Overall stays between the two category ranks.
+    test('overall is category-weighted, not strength-heavy', () {
+      // Adding many strength lifts must NOT swamp a single strong aesthetic — categories
+      // blend by weight, not metric count. Overall stays between the two category ranks.
       final repo = InMemoryRepository();
       repo.saveLog('eye', Log('eye', -0.25, ts: '2026-06-27T12:00:00')); // elite vision
       for (final id in ['bench', 'squat', 'ohp', 'pullup']) {

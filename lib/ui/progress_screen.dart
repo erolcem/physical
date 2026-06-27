@@ -42,8 +42,8 @@ const List<(String, String, IconData, bool)> _sections = [
   ('strength', 'Strength', Icons.fitness_center, true),
   ('performance', 'Performance', Icons.bolt, true),
   ('recovery', 'Recovery', Icons.favorite, true),
+  ('aesthetics', 'Aesthetics', Icons.face_retouching_natural, true), // ranked, right under the 3
   ('exercise', 'Exercise', Icons.sports_gymnastics, false), // workout sessions (not metric-backed)
-  ('aesthetics', 'Aesthetics', Icons.face_retouching_natural, false),
   ('sleep', 'Sleep', Icons.bedtime, false),
   ('diet', 'Diet & Nutrition', Icons.restaurant, false),
   ('health', 'Activity & Vitals', Icons.monitor_heart, false),

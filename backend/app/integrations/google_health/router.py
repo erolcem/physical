@@ -126,6 +126,22 @@ def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
         out["_profile"] = {"status": status, "body": body}
     except Exception as e:
         out["_profile"] = {"error": str(e)[:200]}
+    # Probe whether DIET/nutrition is exposed by this API (Health Connect has a Nutrition
+    # record, but this v4 REST API may not). Try the likely type IDs; a 200 with dataPoints
+    # means we can auto-import food like we do exercise. (Reported under _nutrition_probe.)
+    for cand in ("nutrition", "hydration", "daily-nutrition", "active-calories-burned",
+                 "total-calories-burned", "basal-metabolic-rate"):
+        try:
+            status, body = client.get_raw(
+                f"/users/me/dataTypes/{cand}/dataPoints?pageSize=3")
+            if status >= 400:
+                out[f"_probe:{cand}"] = {"status": status, "error": str(body)[:200]}
+            elif isinstance(body, dict):
+                pts = body.get("dataPoints") or []
+                out[f"_probe:{cand}"] = {"status": status, "count": len(pts),
+                                         "sample": pts[0] if pts else None}
+        except Exception as e:
+            out[f"_probe:{cand}"] = {"error": str(e)[:200]}
     # Confirmed working type IDs: exercise (sessions), steps, heart-rate,
     # active-zone-minutes (all ported by /sync). skin-temperature + cardio-load aren't
     # exposed — cardio load is reconstructed per exercise via Edwards' TRIMP.

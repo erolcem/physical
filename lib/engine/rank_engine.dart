@@ -328,26 +328,44 @@ RankResult overall(List<Log> logs) {
   return _resultFromZs(zs);
 }
 
-/// Overall rank that averages CATEGORIES equally, not metrics. Each category's mean
-/// z-score counts once, so a category with many metrics (strength) doesn't dominate one
-/// with few (aesthetics) — a more balanced, robust view of the whole person.
+// Overall weights each category by how much it represents whole-person health — not by
+// metric count. Performance (VO₂max/cardio) and recovery (sleep/HRV/RHR/body-fat) are the
+// strongest longevity signals, strength close behind, aesthetics least health-determining.
+// Tunable. Keep in sync with the Python engine.
+const Map<String, double> categoryWeights = {
+  'performance': 0.30,
+  'strength': 0.27,
+  'recovery': 0.27,
+  'aesthetics': 0.16,
+};
+
+/// Overall rank that blends CATEGORIES by [categoryWeights] (not per-metric), so a
+/// category with many metrics (strength) doesn't dominate one with few (aesthetics), and
+/// each category counts toward whole-person health by its importance. Weights are
+/// re-normalised over whichever categories have data.
 RankResult overallByCategory(Map<String, List<Log>> logsByCategory) {
-  final catZs = <double>[];
-  for (final logs in logsByCategory.values) {
+  var acc = 0.0, wsum = 0.0;
+  logsByCategory.forEach((cat, logs) {
     final zs = <double>[];
     for (final log in logs) {
       if (!standards.containsKey(log.metricId)) continue;
       final p = percentile(log.metricId, log.value, log.bodyweight).clamp(1e-6, 1 - 1e-6);
       zs.add(_normInv(p, 0, 1));
     }
-    if (zs.isNotEmpty) catZs.add(zs.reduce((a, b) => a + b) / zs.length);
-  }
-  return _resultFromZs(catZs);
+    if (zs.isEmpty) return;
+    final catZ = zs.reduce((a, b) => a + b) / zs.length;
+    final w = categoryWeights[cat] ?? 1.0;
+    acc += w * catZ;
+    wsum += w;
+  });
+  return wsum == 0 ? RankResult('Wood', 'I', 99.9, 0.1, 0.0) : _resultFromZbar(acc / wsum);
 }
 
-RankResult _resultFromZs(List<double> zs) {
-  if (zs.isEmpty) return RankResult('Wood', 'I', 99.9, 0.1, 0.0);
-  final zbar = zs.reduce((a, b) => a + b) / zs.length;
+RankResult _resultFromZs(List<double> zs) => zs.isEmpty
+    ? RankResult('Wood', 'I', 99.9, 0.1, 0.0)
+    : _resultFromZbar(zs.reduce((a, b) => a + b) / zs.length);
+
+RankResult _resultFromZbar(double zbar) {
   final pbar = _normCdf(zbar, 0, 1);
   final rv = _rankValueFromP(pbar);
   final idx = rv.floor().clamp(0, tiers.length - 1);

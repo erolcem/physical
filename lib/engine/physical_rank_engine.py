@@ -293,26 +293,46 @@ def overall(logs):
     return _result_from_zs(zs)
 
 
+# Overall weights each category by whole-person health importance (not metric count).
+# Keep in sync with rank_engine.dart `categoryWeights`.
+CATEGORY_WEIGHTS = {
+    "performance": 0.30,
+    "strength": 0.27,
+    "recovery": 0.27,
+    "aesthetics": 0.16,
+}
+
+
 def overall_by_category(logs_by_category):
-    """Overall rank that averages CATEGORIES equally, not metrics. Each category's mean
-    z counts once, so strength (many metrics) doesn't dominate aesthetics (few)."""
-    cat_zs = []
-    for logs in logs_by_category.values():
+    """Overall rank blending CATEGORIES by CATEGORY_WEIGHTS (not per-metric), re-normalised
+    over whichever categories have data — so metric count doesn't bias the headline."""
+    acc = wsum = 0.0
+    for cat, logs in logs_by_category.items():
         zs = []
         for log in logs:
             if log.metric_id not in STANDARDS:
                 continue
             P = min(max(percentile(log.metric_id, log.value, log.bodyweight), 1e-6), 1 - 1e-6)
             zs.append(_Z.inv_cdf(P))
-        if zs:
-            cat_zs.append(sum(zs) / len(zs))
-    return _result_from_zs(cat_zs)
+        if not zs:
+            continue
+        cat_z = sum(zs) / len(zs)
+        w = CATEGORY_WEIGHTS.get(cat, 1.0)
+        acc += w * cat_z
+        wsum += w
+    if wsum == 0:
+        return {"tier": "Wood", "sub": "I", "top_pct": 99.9, "rank_value": 0.0}
+    return _result_from_zbar(acc / wsum)
 
 
 def _result_from_zs(zs):
     if not zs:
         return {"tier": "Wood", "sub": "I", "top_pct": 99.9, "rank_value": 0.0}
-    Pbar = _Z.cdf(sum(zs) / len(zs))
+    return _result_from_zbar(sum(zs) / len(zs))
+
+
+def _result_from_zbar(zbar):
+    Pbar = _Z.cdf(zbar)
     rv = _rank_value_from_P(Pbar)
     idx = min(int(rv), len(TIERS) - 1)
     return {"tier": TIERS[idx], "sub": SUB[min(int((rv - idx) * 3), 2)],

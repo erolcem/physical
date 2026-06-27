@@ -394,8 +394,14 @@ class _OverallBreakdownSheet extends ConsumerWidget {
             Text('CATEGORY RANKINGS', style: _secTitle()),
             const SizedBox(height: 10),
             for (final (id, name) in _rankedCategories)
-              _categoryRow(name, cats[id]),
-            const SizedBox(height: 12),
+              _categoryRow(id, name, cats[id]),
+            const SizedBox(height: 6),
+            const Center(
+              child: Text('Overall weights each category by health impact, not metric count.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 10.5, color: _muted, fontStyle: FontStyle.italic)),
+            ),
+            const SizedBox(height: 14),
             Text('RANK DISTRIBUTION', style: _secTitle()),
             const SizedBox(height: 14),
             Wrap(
@@ -451,8 +457,9 @@ class _OverallBreakdownSheet extends ConsumerWidget {
     );
   }
 
-  Widget _categoryRow(String name, RankResult? r) {
+  Widget _categoryRow(String id, String name, RankResult? r) {
     final ranked = r != null;
+    final weightPct = ((eng.categoryWeights[id] ?? 0) * 100).round();
     final c = ranked ? tierColor(r.tier) : _muted;
     final frac = ranked ? (r.rankValue - r.rankValue.floor()) : 0.0;
     return Container(
@@ -477,7 +484,13 @@ class _OverallBreakdownSheet extends ConsumerWidget {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15))),
+              Expanded(
+                child: Text.rich(TextSpan(children: [
+                  TextSpan(text: name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  TextSpan(text: '  ·  $weightPct%',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: _muted2)),
+                ])),
+              ),
               Text(ranked ? '${r.tier} ${r.sub}' : 'No data',
                   style: TextStyle(color: c, fontWeight: FontWeight.w800)),
             ]),

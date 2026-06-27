@@ -1333,9 +1333,9 @@
       },
       "expected": {
         "tier": "Gold",
-        "sub": "II",
-        "rank_value": 3.476168,
-        "top_pct": 30.476631
+        "sub": "I",
+        "rank_value": 3.250483,
+        "top_pct": 34.990337
       }
     },
     {
@@ -1372,8 +1372,8 @@
       "expected": {
         "tier": "Platinum",
         "sub": "II",
-        "rank_value": 4.494768,
-        "top_pct": 15.052321
+        "rank_value": 4.461976,
+        "top_pct": 15.380242
       }
     },
     {
