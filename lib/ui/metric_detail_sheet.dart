@@ -106,10 +106,11 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
   static const Map<String, String> _photoTips = {
     'skin': 'Face the camera, fill the frame, no makeup or harsh shadows.',
     'oral': 'A clear, well-lit photo of your smile showing teeth and gums.',
-    'hair': 'A close-up of the scalp area you want to track (part the hair).',
+    'hair': 'A macro-lens close-up of the scalp (part the hair). Set the lens field-of-view below.',
   };
 
   Future<void> _measurePhoto(String id, String label) async {
+    final m = metricById(id);
     final score = await measurePhotoFlow(context, ref,
         metric: id, title: label, tip: _photoTips[id] ?? '');
     if (score == null || !mounted) return;
@@ -117,7 +118,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
         .add(id, Log(id, score, ts: DateTime.now().toIso8601String()));
     setState(() {}); // refresh latest/history
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('$label logged: ${score.toStringAsFixed(0)}/100')));
+        content: Text('$label logged: ${score.toStringAsFixed(score < 10 ? 1 : 0)} ${m.unit}')));
   }
 
   @override

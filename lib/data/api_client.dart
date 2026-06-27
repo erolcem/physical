@@ -255,11 +255,13 @@ class ApiClient {
   }
 
   /// Upload a photo for an aesthetic CV measurement (metric ∈ skin|oral|hair).
-  /// Returns the backend result (score + components). Throws on failure.
-  Future<Map<String, dynamic>> measurePhoto(String metric, String filePath) async {
+  /// [fovMm] is the macro lens' field-of-view width (hair → hairs/cm²). Throws on failure.
+  Future<Map<String, dynamic>> measurePhoto(String metric, String filePath,
+      {double? fovMm}) async {
     final req = http.MultipartRequest(
         'POST', Uri.parse('$baseUrl/me/aesthetics/photo/$metric'))
       ..headers.addAll(_headers())
+      ..fields['fov_mm'] = (fovMm ?? 20.0).toString()
       ..files.add(await http.MultipartFile.fromPath('file', filePath));
     final streamed = await _client.send(req).timeout(const Duration(seconds: 45));
     final r = await http.Response.fromStream(streamed);

@@ -42,16 +42,25 @@ def test_skin_requires_skin_pixels(tmp_path):
         pass
 
 
-def test_score_hair_coverage_endpoints():
-    assert photo.score_hair(0.0)["score"] == 0.0
-    assert photo.score_hair(1.0)["score"] == 100.0
+def test_hair_density_counts_strands(tmp_path):
+    arr = np.full((300, 300, 3), 200.0)  # light scalp
+    for x in range(20, 300, 28):  # ~11 dark vertical "strands"
+        arr[:, x:x + 3] = 20
+    out = photo.analyze_hair(_save(arr, tmp_path, "hair.jpg"), fov_mm=20)
+    assert out["count"] >= 8  # ~11 strands detected via connected components
+    assert out["hairs_per_cm2"] > 0 and out["score"] == out["hairs_per_cm2"]
+    assert "coverage" in out
 
 
-def test_hair_coverage_estimate(tmp_path):
-    arr = np.full((200, 200, 3), 200.0)  # light scalp
-    arr[:100] = 20  # top half dark "hair"
-    out = photo.analyze_hair(_save(arr, tmp_path, "hair.jpg"))
-    assert 0.3 < out["coverage"] < 0.7  # ~half covered
+def test_hair_density_scales_with_fov(tmp_path):
+    # Same photo, a wider field-of-view → larger area → fewer hairs/cm².
+    arr = np.full((300, 300, 3), 200.0)
+    for x in range(20, 300, 28):
+        arr[:, x:x + 3] = 20
+    p = _save(arr, tmp_path, "hair2.jpg")
+    narrow = photo.analyze_hair(p, fov_mm=10)["hairs_per_cm2"]
+    wide = photo.analyze_hair(p, fov_mm=20)["hairs_per_cm2"]
+    assert narrow > wide
 
 
 def test_score_oral_weighting():

@@ -8,6 +8,7 @@ python-multipart>=0.0.9       # multipart file uploads (aesthetics voice/photo c
 praat-parselmouth>=0.4.3      # voice-quality acoustic analysis (jitter/shimmer/HNR)
 numpy>=1.26                   # parselmouth dep + WAV synthesis + photo CV
 Pillow>=10.0                  # photo decode + colour-space analysis (skin/oral/hair)
+scipy>=1.11                   # connected-component hair-strand counting (hairs/cm²)
 pytest>=8.0
 # Production datastore driver (Postgres/TimescaleDB). Not needed for SQLite
 # dev/tests, so it's safe to skip when developing locally.

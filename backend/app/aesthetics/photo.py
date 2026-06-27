@@ -14,10 +14,10 @@ import numpy as np
 _MAX = 512  # downscale longest side to this for speed + denoise
 
 
-def _load_rgb(path: str) -> np.ndarray:
+def _load_rgb(path: str, max_side: int = _MAX) -> np.ndarray:
     from PIL import Image
     img = Image.open(path).convert("RGB")
-    img.thumbnail((_MAX, _MAX))
+    img.thumbnail((max_side, max_side))
     return np.asarray(img, dtype=np.float64)
 
 
@@ -111,19 +111,32 @@ def analyze_oral(path: str) -> dict:
 
 
 # ── Hair ──────────────────────────────────────────────────────────────────
-def score_hair(coverage: float) -> dict:
-    """Scalp hair COVERAGE (0–1 of the patch) → 0–100. A coverage proxy, not true
-    hairs/cm² (that needs a macro lens + scale reference)."""
-    return {"coverage": round(coverage, 4), "score": round(100 * _clip01(coverage), 1)}
-
-
-def analyze_hair(path: str) -> dict:
-    rgb = _load_rgb(path)
+def analyze_hair(path: str, fov_mm: float = 20.0) -> dict:
+    """Estimate scalp hair density (hairs/cm²) from a MACRO-LENS scalp photo whose
+    field-of-view width is [fov_mm]. Dark strands → binary mask → connected components
+    (≈ strand count) ÷ the photographed area. Provisional: counts merge where hairs
+    overlap (undercounts dense scalps), and accuracy depends on a true macro lens."""
+    from scipy import ndimage
+    rgb = _load_rgb(path, max_side=1024)  # higher res so thin strands stay separable
+    h, w = rgb.shape[0], rgb.shape[1]
     lum = 0.299 * rgb[..., 0] + 0.587 * rgb[..., 1] + 0.114 * rgb[..., 2]
-    # Hair strands are darker than scalp; coverage = fraction below the midtone split.
-    thresh = (np.percentile(lum, 90) + np.percentile(lum, 10)) / 2
-    coverage = float(np.mean(lum < thresh))
-    return analyze_result(score_hair(coverage), None)
+    thresh = (np.percentile(lum, 88) + np.percentile(lum, 12)) / 2
+    mask = lum < thresh  # hair = darker than scalp
+    coverage = float(mask.mean())
+    if coverage < 0.005:
+        raise ValueError("No hair detected — take a close macro photo of the scalp.")
+    labeled, n = ndimage.label(mask)
+    if n == 0:
+        raise ValueError("No hair detected — take a close macro photo of the scalp.")
+    sizes = ndimage.sum(mask, labeled, range(1, n + 1))
+    min_size = max(10.0, mask.size * 0.0002)  # drop specks/noise
+    count = int((sizes >= min_size).sum())
+    fov_cm = max(fov_mm, 1.0) / 10.0
+    area_cm2 = fov_cm * (fov_cm * h / w)  # photographed area (mm-FOV across the width)
+    hairs_per_cm2 = count / area_cm2 if area_cm2 > 0 else 0.0
+    return {"count": count, "coverage": round(coverage, 4), "fov_mm": round(fov_mm, 1),
+            "area_cm2": round(area_cm2, 3), "hairs_per_cm2": round(hairs_per_cm2, 1),
+            "score": round(hairs_per_cm2, 1)}  # score = hairs/cm² (the ranked value)
 
 
 def analyze_result(scored: dict, region_frac) -> dict:

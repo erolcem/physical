@@ -7,7 +7,7 @@ the server runs the analysis (keeping any keys/heavy deps server-side) and retur
 import os
 import tempfile
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from ..aesthetics import photo, voice
 from ..auth import current_user
@@ -41,11 +41,11 @@ async def measure_voice(file: UploadFile = File(...),
 
 @router.post("/photo/{metric}")
 async def measure_photo(metric: str, file: UploadFile = File(...),
+                        fov_mm: float = Form(20.0),
                         user_id: str = Depends(current_user)):
-    """Analyze an uploaded photo into a 0–100 aesthetic score (metric ∈ skin|oral|hair)
-    via classical CV — a screening estimate, not a clinical instrument."""
-    analyzer = photo.ANALYZERS.get(metric)
-    if analyzer is None:
+    """Analyze an uploaded photo (metric ∈ skin|oral|hair). skin/oral → 0–100 screening
+    score; hair → hairs/cm² (needs [fov_mm], the macro lens' field-of-view width)."""
+    if metric not in photo.ANALYZERS:
         raise HTTPException(404, f"No photo analyzer for '{metric}'")
     data = await file.read()
     if not data:
@@ -55,7 +55,8 @@ async def measure_photo(metric: str, file: UploadFile = File(...),
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
             tmp.write(data)
             tmp_path = tmp.name
-        return analyzer(tmp_path)
+        return (photo.analyze_hair(tmp_path, fov_mm) if metric == "hair"
+                else photo.ANALYZERS[metric](tmp_path))
     except ValueError as e:  # bad framing / lighting → user can re-shoot
         raise HTTPException(422, str(e))
     except HTTPException:

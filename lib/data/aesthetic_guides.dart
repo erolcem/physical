@@ -26,9 +26,9 @@ const Map<String, AestheticGuide> aestheticGuides = {
     status: MeasureStatus.ready,
   ),
   'hair': AestheticGuide(
-    what: 'Scalp hair coverage (a density proxy).',
-    how: 'Tap “Measure from photo” and take a close-up of the scalp; CV measures dark-strand coverage of the patch.',
-    anchor: '⚠ Ranked on an ASSUMED distribution (true norm is hairs/cm² via macro lens). Provisional; excluded from overall.',
+    what: 'Scalp hair density (hairs/cm²).',
+    how: 'Tap “Measure from photo”, set your macro lens’ field-of-view (mm), and shoot a scalp close-up; CV counts strands ÷ area.',
+    anchor: 'Ranked vs trichoscopy norm ~230 ± 45 hairs/cm² (young men). Provisional (counts merge where hair overlaps); excluded from overall.',
     status: MeasureStatus.ready,
   ),
   'skin': AestheticGuide(

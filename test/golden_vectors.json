@@ -914,66 +914,6 @@
       }
     },
     {
-      "metric": "hair",
-      "value": 30,
-      "bodyweight": null,
-      "expected": {
-        "percentile": 0.255513,
-        "rank_value": 0.012776,
-        "tier": "Wood",
-        "sub": "I",
-        "top_pct": 99.744487
-      }
-    },
-    {
-      "metric": "hair",
-      "value": 50,
-      "bodyweight": null,
-      "expected": {
-        "percentile": 7.123338,
-        "rank_value": 0.356167,
-        "tier": "Wood",
-        "sub": "II",
-        "top_pct": 92.876662
-      }
-    },
-    {
-      "metric": "hair",
-      "value": 65,
-      "bodyweight": null,
-      "expected": {
-        "percentile": 32.036919,
-        "rank_value": 1.601846,
-        "tier": "Bronze",
-        "sub": "II",
-        "top_pct": 67.963081
-      }
-    },
-    {
-      "metric": "hair",
-      "value": 85,
-      "bodyweight": null,
-      "expected": {
-        "percentile": 80.693766,
-        "rank_value": 4.069377,
-        "tier": "Platinum",
-        "sub": "I",
-        "top_pct": 19.306234
-      }
-    },
-    {
-      "metric": "hair",
-      "value": 95,
-      "bodyweight": null,
-      "expected": {
-        "percentile": 93.740313,
-        "rank_value": 5.53433,
-        "tier": "Diamond",
-        "sub": "II",
-        "top_pct": 6.259687
-      }
-    },
-    {
       "metric": "grooming",
       "value": 30,
       "bodyweight": null,
@@ -1151,6 +1091,66 @@
         "tier": "Titan",
         "sub": "II",
         "top_pct": 0.620967
+      }
+    },
+    {
+      "metric": "hair",
+      "value": 120,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 0.725377,
+        "rank_value": 0.036269,
+        "tier": "Wood",
+        "sub": "I",
+        "top_pct": 99.274623
+      }
+    },
+    {
+      "metric": "hair",
+      "value": 180,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 13.326026,
+        "rank_value": 0.666301,
+        "tier": "Wood",
+        "sub": "II",
+        "top_pct": 86.673974
+      }
+    },
+    {
+      "metric": "hair",
+      "value": 230,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 50.0,
+        "rank_value": 2.5,
+        "tier": "Silver",
+        "sub": "II",
+        "top_pct": 50.0
+      }
+    },
+    {
+      "metric": "hair",
+      "value": 290,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 90.878878,
+        "rank_value": 5.125554,
+        "tier": "Diamond",
+        "sub": "I",
+        "top_pct": 9.121122
+      }
+    },
+    {
+      "metric": "hair",
+      "value": 340,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 99.274623,
+        "rank_value": 7.305137,
+        "tier": "Titan",
+        "sub": "I",
+        "top_pct": 0.725377
       }
     }
   ],
@@ -1336,18 +1336,6 @@
       "expected_kg": 46.53406
     },
     {
-      "metric": "hair",
-      "tier": "Gold",
-      "bodyweight": null,
-      "expected_kg": 75.800207
-    },
-    {
-      "metric": "hair",
-      "tier": "Bronze",
-      "bodyweight": null,
-      "expected_kg": 59.375681
-    },
-    {
       "metric": "grooming",
       "tier": "Gold",
       "bodyweight": null,
@@ -1394,6 +1382,24 @@
       "tier": "Bronze",
       "bodyweight": null,
       "expected_kg": 16.583788
+    },
+    {
+      "metric": "hair",
+      "tier": "Diamond",
+      "bodyweight": null,
+      "expected_kg": 287.66982
+    },
+    {
+      "metric": "hair",
+      "tier": "Gold",
+      "bodyweight": null,
+      "expected_kg": 241.40062
+    },
+    {
+      "metric": "hair",
+      "tier": "Bronze",
+      "bodyweight": null,
+      "expected_kg": 192.127044
     }
   ],
   "overall_cases": [

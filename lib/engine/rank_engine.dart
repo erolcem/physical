@@ -221,8 +221,9 @@ final Map<String, Standard> standards = {
       'CV skin composite /100 — ASSUMED distribution, uncalibrated, provisional'),
   'oral': const Standard('oral', 1, false, Dist('normal', 60.0, 16.0),
       'CV oral composite /100 — ASSUMED distribution (shade norms exist but uncalibrated here), provisional'),
-  'hair': const Standard('hair', 1, false, Dist('normal', 72.0, 15.0),
-      'scalp hair coverage /100 — ASSUMED distribution (true norm is hairs/cm²), provisional'),
+  'hair': const Standard('hair', 1, false, Dist('normal', 230.0, 45.0),
+      'scalp hair density hairs/cm² (higher better); young-male norm ~230±45 (trichoscopy) '
+      '— measured from a macro photo, provisional'),
   'grooming': const Standard('grooming', 1, false, Dist('normal', 62.0, 18.0),
       'grooming self-rating /100 — ASSUMED distribution (informed by ~5/10 crowd ratings), provisional'),
   'eye': const Standard('eye', -1, false, Dist('normal', 0.05, 0.15),
