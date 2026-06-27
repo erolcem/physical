@@ -69,7 +69,7 @@ const List<MetricDef> metrics = [
       exercise: 'Max deadhang time'),
   MetricDef('hamstring_mobility', 'Hamstring Mobility', 'performance', MetricTier.ranked, 'cm',
       exercise: 'Sit and reach'),
-  MetricDef('body_fat_pct', 'Body Fat %', 'performance', MetricTier.ranked, '%',
+  MetricDef('body_fat_pct', 'Body Fat %', 'recovery', MetricTier.ranked, '%',
       exercise: 'Caliper / DEXA / smart scale'),
 
   // ── RANKED · recovery (per PDF Table 1: Sleep score, HRV, Resting HR) ──
