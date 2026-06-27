@@ -27,8 +27,16 @@ dev_dependencies:
     sdk: flutter
   test: ^1.25.0
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1   # generates the iOS app icon from app_icon.png
+
+# Run: dart run flutter_launcher_icons   (regenerates ios/Runner AppIcon set)
+flutter_launcher_icons:
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/brand/app_icon.png"
 
 flutter:
   uses-material-design: true
   assets:
     - assets/badges/
+    - assets/brand/
