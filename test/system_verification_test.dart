@@ -44,18 +44,20 @@ void main() {
       }
     });
 
-    test('aesthetics are tracked, except eye acuity (real logMAR distribution)', () {
-      for (final id in ['skin', 'oral', 'hair', 'grooming', 'voice']) {
+    test('ranked aesthetics (eye, voice) have standards; both excluded from overall', () {
+      // Eye (logMAR) and Voice (AVQI) have defensible distributions → ranked with a
+      // real tier + percentile, but stay in 'aesthetics' and are excluded from the
+      // overall score (see overallProvider) so appearance/sensory never drag the headline.
+      for (final id in ['eye', 'voice']) {
+        expect(metricById(id).tier, MetricTier.ranked, reason: '$id should be ranked');
+        expect(eng.standards.containsKey(id), isTrue, reason: '$id should have a standard');
+        expect(metricById(id).category, 'aesthetics');
+      }
+      // The rest stay tracked (no defensible population distribution yet).
+      for (final id in ['skin', 'oral', 'hair', 'grooming']) {
         expect(metricById(id).tier, MetricTier.tracked, reason: '$id should be tracked');
         expect(eng.standards.containsKey(id), isFalse, reason: '$id should have no standard');
       }
-      // Eye acuity is the deliberate exception: visual acuity has a defensible
-      // clinical distribution (logMAR), so it's ranked with a real tier + percentile.
-      // It stays in the 'aesthetics' category and is excluded from the overall score
-      // (see overallProvider) so appearance/sensory metrics never drag the headline.
-      expect(metricById('eye').tier, MetricTier.ranked);
-      expect(eng.standards.containsKey('eye'), isTrue);
-      expect(metricById('eye').category, 'aesthetics');
     });
 
     test('PDF categories: vo2max is performance, recovery = sleep/hrv/resting_hr', () {

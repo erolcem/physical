@@ -14,9 +14,9 @@ class AestheticGuide {
 
 const Map<String, AestheticGuide> aestheticGuides = {
   'voice': AestheticGuide(
-    what: 'Vocal clarity + pitch stability.',
-    how: 'Tap “Measure with mic” and sustain an “aaah” for ~3s — Praat extracts jitter, shimmer and harmonics-to-noise.',
-    anchor: 'Clinical norms: jitter <1%, shimmer <3.8%, HNR >20 dB.',
+    what: 'Vocal clarity + pitch stability (AVQI).',
+    how: 'Tap “Measure with mic” and sustain an “aaah” for ~3s — Praat computes the Acoustic Voice Quality Index (CPPS, HNR, shimmer, spectral tilt).',
+    anchor: 'Ranked vs AVQI norm (healthy 2.3 ± 0.8, lower better). Vowel-only approximation — provisional; excluded from overall.',
     status: MeasureStatus.ready,
   ),
   'eye': AestheticGuide(

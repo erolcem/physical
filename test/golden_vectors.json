@@ -732,6 +732,66 @@
         "sub": "I",
         "top_pct": 95.220965
       }
+    },
+    {
+      "metric": "voice",
+      "value": 0.8,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 96.960364,
+        "rank_value": 5.994338,
+        "tier": "Diamond",
+        "sub": "III",
+        "top_pct": 3.039636
+      }
+    },
+    {
+      "metric": "voice",
+      "value": 1.5,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 84.134475,
+        "rank_value": 4.413447,
+        "tier": "Platinum",
+        "sub": "II",
+        "top_pct": 15.865525
+      }
+    },
+    {
+      "metric": "voice",
+      "value": 2.3,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 50.0,
+        "rank_value": 2.5,
+        "tier": "Silver",
+        "sub": "II",
+        "top_pct": 50.0
+      }
+    },
+    {
+      "metric": "voice",
+      "value": 3.3,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 10.564977,
+        "rank_value": 0.528249,
+        "tier": "Wood",
+        "sub": "II",
+        "top_pct": 89.435023
+      }
+    },
+    {
+      "metric": "voice",
+      "value": 5.0,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 0.036908,
+        "rank_value": 0.001845,
+        "tier": "Wood",
+        "sub": "I",
+        "top_pct": 99.963092
+      }
     }
   ],
   "threshold_cases": [
@@ -872,6 +932,24 @@
       "tier": "Bronze",
       "bodyweight": null,
       "expected_kg": 0.176243
+    },
+    {
+      "metric": "voice",
+      "tier": "Diamond",
+      "bodyweight": null,
+      "expected_kg": 1.274759
+    },
+    {
+      "metric": "voice",
+      "tier": "Gold",
+      "bodyweight": null,
+      "expected_kg": 2.097322
+    },
+    {
+      "metric": "voice",
+      "tier": "Bronze",
+      "bodyweight": null,
+      "expected_kg": 2.973297
     }
   ],
   "overall_cases": [

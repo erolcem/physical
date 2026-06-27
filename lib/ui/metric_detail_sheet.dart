@@ -73,13 +73,13 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
   }
 
   Future<void> _measureVoice() async {
-    final score = await measureVoiceFlow(context, ref);
-    if (score == null || !mounted) return;
+    final avqi = await measureVoiceFlow(context, ref);
+    if (avqi == null || !mounted) return;
     ref.read(logsProvider.notifier)
-        .add('voice', Log('voice', score, ts: DateTime.now().toIso8601String()));
+        .add('voice', Log('voice', avqi, ts: DateTime.now().toIso8601String()));
     setState(() {}); // refresh latest/history
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Voice quality logged: ${score.toStringAsFixed(0)}/100')));
+        content: Text('Voice logged: AVQI ${avqi.toStringAsFixed(1)}')));
   }
 
   Future<void> _measureAcuity() async {

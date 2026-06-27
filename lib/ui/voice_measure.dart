@@ -136,8 +136,7 @@ class _VoiceMeasureSheetState extends ConsumerState<_VoiceMeasureSheet> {
 
   List<Widget> _resultBody() {
     final r = _result!;
-    final score = (r['score'] as num).toDouble();
-    final comp = (r['components'] as Map?) ?? const {};
+    final avqi = (r['avqi'] as num?)?.toDouble();
     Widget row(String label, String value) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 3),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -145,18 +144,27 @@ class _VoiceMeasureSheetState extends ConsumerState<_VoiceMeasureSheet> {
             Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
           ]),
         );
+    if (avqi == null) {
+      return [
+        const Text('Couldn’t compute the voice index from that clip — record a longer, steady "aaah" in a quiet room.',
+            style: TextStyle(color: Color(0xFFF8A55B), fontSize: 13)),
+        const SizedBox(height: 16),
+        _btn('Try again', _accent, () => setState(() => _phase = _Phase.idle)),
+      ];
+    }
     return [
-      Center(child: Text(score.toStringAsFixed(0),
+      Center(child: Text(avqi.toStringAsFixed(1),
           style: const TextStyle(fontSize: 52, fontWeight: FontWeight.w900, color: _accent, height: 1))),
-      const Center(child: Text('VOICE QUALITY / 100',
-          style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted, fontWeight: FontWeight.w700))),
+      const Center(child: Text('AVQI · lower is better (healthy ≈ 2.3)',
+          style: TextStyle(fontSize: 10, letterSpacing: 1.5, color: _muted, fontWeight: FontWeight.w700))),
       const SizedBox(height: 16),
+      if (r['cpps'] != null) row('Clarity (CPPS)', '${(r['cpps'] as num).toStringAsFixed(1)} dB'),
       if (r['pitch_hz'] != null) row('Pitch', '${(r['pitch_hz'] as num).toStringAsFixed(0)} Hz'),
-      row('Jitter', '${(r['jitter_pct'] as num).toStringAsFixed(2)} %  (${(comp['jitter'] as num?)?.toStringAsFixed(0) ?? '–'}/100)'),
-      row('Shimmer', '${(r['shimmer_pct'] as num).toStringAsFixed(2)} %  (${(comp['shimmer'] as num?)?.toStringAsFixed(0) ?? '–'}/100)'),
-      row('Clarity (HNR)', '${(r['hnr_db'] as num).toStringAsFixed(1)} dB  (${(comp['hnr'] as num?)?.toStringAsFixed(0) ?? '–'}/100)'),
+      row('Jitter', '${(r['jitter_pct'] as num).toStringAsFixed(2)} %'),
+      row('Shimmer', '${(r['shimmer_pct'] as num).toStringAsFixed(2)} %'),
+      row('HNR', '${(r['hnr_db'] as num).toStringAsFixed(1)} dB'),
       const SizedBox(height: 18),
-      _btn('Use this score', _accent, () => Navigator.of(context).pop(score)),
+      _btn('Use this result', _accent, () => Navigator.of(context).pop(avqi)),
       const SizedBox(height: 8),
       _btn('Re-record', const Color(0xFF2A2F4A), () => setState(() => _phase = _Phase.idle)),
     ];

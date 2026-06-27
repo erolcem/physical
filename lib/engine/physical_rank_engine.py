@@ -159,6 +159,9 @@ STANDARDS = {
                            "deadhang hold sec — provisional"),
     "hamstring_mobility": Standard("hamstring_mobility", +1, False, Dist("normal", 15.0, 5.0),
                            "sit-and-reach cm — provisional, mobility unmodelled"),
+    "voice":      Standard("voice", -1, False, Dist("normal", 2.3, 0.8),
+                           "Acoustic Voice Quality Index (lower better); healthy mean 2.3+-0.8 (Maryn), "
+                           "vowel-only approximation - provisional"),
     "eye":        Standard("eye", -1, False, Dist("normal", 0.05, 0.15),
                            "visual acuity logMAR (lower better); general young-male presenting acuity "
                            "(median just below 20/20 from uncorrected error); best-corrected ~-0.14, provisional"),

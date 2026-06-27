@@ -19,13 +19,13 @@ def test_score_voice_clinical_anchors():
     assert mid["components"] == {"jitter": 50.0, "shimmer": 50.0, "hnr": 50.0}
 
 
-def _voice_like_wav(f0=150.0, secs=3.0, sr=44100) -> bytes:
-    """A steady harmonic tone (fundamental + harmonics, minimal noise) — quasi-periodic
+def _voice_like_wav(f0=150.0, secs=3.0, sr=44100, noise=0.002) -> bytes:
+    """A steady harmonic tone (fundamental + harmonics + a little noise) — quasi-periodic
     like a sustained vowel, so Praat finds clean pitch periods."""
     t = np.arange(int(secs * sr)) / sr
     sig = sum((1.0 / k) * np.sin(2 * np.pi * f0 * k * t) for k in range(1, 6))
     sig = sig / np.max(np.abs(sig))
-    sig = sig + 0.002 * np.random.RandomState(0).standard_normal(len(t))
+    sig = sig + noise * np.random.RandomState(0).standard_normal(len(t))
     pcm = np.int16(np.clip(sig, -1, 1) * 32767)
     buf = io.BytesIO()
     with wave.open(buf, "w") as w:
@@ -44,6 +44,18 @@ def test_analyze_clean_tone(tmp_path):
     assert out["score"] > 70  # a clean steady tone scores high
     assert out["jitter_pct"] < 1.0 and out["shimmer_pct"] < 5.0
     assert abs(out["pitch_hz"] - 150.0) < 12  # detected fundamental ≈ 150 Hz
+    # AVQI computed + low (clean signal → excellent voice quality)
+    assert out["avqi"] is not None and out["avqi"] < 4.0
+
+
+def test_avqi_rises_with_noise(tmp_path):
+    cp = tmp_path / "c.wav"
+    cp.write_bytes(_voice_like_wav(f0=150.0, noise=0.002))
+    npth = tmp_path / "n.wav"
+    npth.write_bytes(_voice_like_wav(f0=150.0, noise=0.15))
+    clean = voice.analyze(str(cp))
+    noisy = voice.analyze(str(npth))
+    assert noisy["avqi"] > clean["avqi"]  # a noisier voice → worse (higher) AVQI
 
 
 def test_analyze_rejects_silence(tmp_path):

@@ -99,8 +99,8 @@ const List<MetricDef> metrics = [
       exercise: 'Scalp photo (coverage)'),
   MetricDef('grooming', 'Grooming', 'aesthetics', MetricTier.tracked, '/100',
       exercise: 'Self-checklist'),
-  MetricDef('voice', 'Voice Quality', 'aesthetics', MetricTier.tracked, '/100',
-      exercise: 'Mic recording (Praat)'),
+  MetricDef('voice', 'Voice Quality', 'aesthetics', MetricTier.ranked, 'AVQI',
+      exercise: 'Mic recording (Praat)', provisional: true),
 
   // ── BACKGROUND · health (automatically logged via API) ──
   MetricDef('heart_rate', 'Heart Rate', 'health', MetricTier.background, 'bpm', autoSync: true),

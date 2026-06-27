@@ -42,6 +42,28 @@ def score_voice(jitter_pct: float, shimmer_pct: float, hnr_db: float) -> dict:
     }
 
 
+def _avqi(snd) -> tuple:
+    """Acoustic Voice Quality Index v03.01 (Maryn et al.) + CPPS, from the sustained
+    vowel. The validated AVQI concatenates vowel + read speech; vowel-only here is an
+    approximation (flagged provisional). Lower = healthier; population norm 2.3 ± 0.8."""
+    from parselmouth.praat import call
+    pc = call(snd, "To PowerCepstrogram", 60, 0.002, 5000, 50)
+    cpps = call(pc, "Get CPPS", False, 0.01, 0.001, 60, 330, 0.05,
+                "Parabolic", 0.001, 0.05, "Straight", "Robust")
+    harm = call(snd, "To Harmonicity (cc)", 0.01, 75, 0.1, 1.0)
+    hnr = call(harm, "Get mean", 0, 0)
+    pp = call(snd, "To PointProcess (periodic, cc)", 75, 500)
+    shim = call([snd, pp], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6) * 100
+    shim_db = call([snd, pp], "Get shimmer (local_dB)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    ltas = call(snd, "To Ltas", 1)
+    slope = call(ltas, "Get slope", 0, 1000, 1000, 10000, "energy")
+    trend = call(ltas, "Compute trend line", 1, 10000)
+    tilt = call(trend, "Get slope", 0, 1000, 1000, 10000, "energy")
+    avqi = (4.152 - 0.177 * cpps - 0.006 * hnr - 0.037 * shim + 0.941 * shim_db
+            + 0.01 * slope + 0.093 * tilt) * 2.8902
+    return max(0.0, round(avqi, 2)), round(cpps, 2)
+
+
 def analyze(path: str, f0min: float = 75.0, f0max: float = 500.0) -> dict:
     """Praat analysis of a WAV file → score_voice(...) plus mean pitch (Hz).
 
@@ -70,4 +92,12 @@ def analyze(path: str, f0min: float = 75.0, f0max: float = 500.0) -> dict:
 
     out = score_voice(jitter, shimmer, hnr)
     out["pitch_hz"] = round(f0, 1) if (f0 is not None and not math.isnan(f0)) else None
+    # AVQI is the ranked quantity (has a population norm); the /100 above is for display.
+    try:
+        avqi, cpps = _avqi(snd)
+        if not math.isnan(avqi):
+            out["avqi"] = avqi
+            out["cpps"] = cpps
+    except Exception:
+        out["avqi"] = None  # degrade gracefully; app falls back to the /100 score
     return out
