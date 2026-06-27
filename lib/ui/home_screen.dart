@@ -671,7 +671,9 @@ class _MetricGrid extends ConsumerWidget {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2, mainAxisSpacing: 8, crossAxisSpacing: 8,
-        childAspectRatio: 2.5, // shorter cells — less dead space above/below the text
+        // FIXED height (not width-relative) so cells stay compact on wide screens
+        // instead of growing tall. Fits the 2-line label + value with a little slack.
+        mainAxisExtent: 72,
       ),
       itemCount: ids.length,
       itemBuilder: (ctx, i) => _MetricCell(ids[i], latest[ids[i]], onTap),
