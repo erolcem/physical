@@ -189,6 +189,20 @@ def sync_user(db: Session, user_id: str, days: int = 7, replace: bool = False) -
         except Exception as e:
             errors[dtid] = str(e)[:200]
 
+    # Profile age (one value/day) → ported like everything else so the body-stats
+    # card has it. Google exposes age but NOT gender/DOB — gender stays the app's
+    # reference population (young male).
+    try:
+        _, pbody = client.get_raw("/users/me/profile")
+        age = pbody.get("age") if isinstance(pbody, dict) else None
+        if age is not None:
+            today = dt.date.today().isoformat()
+            samples.append({"metric_id": "age", "ts": f"{today}T12:00:00",
+                            "value": float(age), "source": "google_health",
+                            "source_id": f"age@{today}"})
+    except Exception as e:
+        errors["profile"] = str(e)[:200]
+
     try:
         ingested, skipped = _ingest(db, user_id, samples)
     except Exception as e:

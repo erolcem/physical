@@ -582,6 +582,7 @@ class _BodyGraphSection extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(child: _figure('Back', backRegions)),
           ]),
+          const _BodyStatsStrip(),
         ],
       ),
     );
@@ -605,6 +606,52 @@ class _BodyGraphSection extends StatelessWidget {
   }
 }
 
+// Bio strip at the foot of the body section: Age · Sex · Height · Weight.
+// Age/height/weight auto-port from Google Health; gender isn't exposed by the API,
+// so Sex shows the app's reference population (young male).
+class _BodyStatsStrip extends ConsumerWidget {
+  const _BodyStatsStrip();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final logs = ref.watch(logsProvider);
+    double? v(String id) {
+      final l = logs[id];
+      return (l == null || l.isEmpty) ? null : l.last.value;
+    }
+    final age = v('age'), h = v('height'), w = v('bodyweight');
+    final items = <(String, String)>[
+      ('AGE', age == null ? '—' : age.toStringAsFixed(0)),
+      ('SEX', 'Male'),
+      ('HEIGHT', h == null ? '—' : '${h.toStringAsFixed(0)} cm'),
+      ('WEIGHT', w == null ? '—' : '${w.toStringAsFixed(1)} kg'),
+    ];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(6, 14, 6, 2),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+      ),
+      child: Row(children: [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0) Container(width: 1, height: 26, color: _border),
+          Expanded(
+            child: Column(children: [
+              Text(items[i].$2,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 2),
+              Text(items[i].$1,
+                  style: const TextStyle(fontSize: 9.5, letterSpacing: 1.5,
+                      color: _muted, fontWeight: FontWeight.w700)),
+            ]),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // METRIC GRID — 2-column grid of compact metric cards
 // ═══════════════════════════════════════════════════════════════════════════
@@ -624,7 +671,7 @@ class _MetricGrid extends ConsumerWidget {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2, mainAxisSpacing: 8, crossAxisSpacing: 8,
-        childAspectRatio: 2.3,
+        childAspectRatio: 2.5, // shorter cells — less dead space above/below the text
       ),
       itemCount: ids.length,
       itemBuilder: (ctx, i) => _MetricCell(ids[i], latest[ids[i]], onTap),
@@ -667,7 +714,7 @@ class _MetricCell extends StatelessWidget {
             onTap: () => onTap(metricId),
             borderRadius: BorderRadius.circular(12),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
               child: Row(children: [
                 Container(width: 11, height: 11,
                     decoration: BoxDecoration(

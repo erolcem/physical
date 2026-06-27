@@ -126,6 +126,7 @@ const List<MetricDef> metrics = [
   MetricDef('bodyweight', 'Bodyweight', 'general', MetricTier.background, 'kg',
       exercise: 'Scales every strength rank'),
   MetricDef('height', 'Height', 'general', MetricTier.background, 'cm', autoSync: true),
+  MetricDef('age', 'Age', 'general', MetricTier.background, 'yr', autoSync: true),
 ];
 
 MetricDef metricById(String id) => metrics.firstWhere((m) => m.id == id);
