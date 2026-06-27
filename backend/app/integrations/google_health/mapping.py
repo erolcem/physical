@@ -262,25 +262,33 @@ def parse_exercise_sessions(datapoints: list[dict]) -> list[dict]:
 
 
 def parse_intraday_daily(metric_id: str, datapoints: list[dict],
-                         container_key: str, value_key: str) -> list[dict]:
-    """Sum a continuous type's per-interval values into one daily total. `steps` and
-    `active-zone-minutes` are intraday (per-minute) and the list endpoint has no time
-    filter, so the latest day may be partial — fine for background context."""
-    by_day: dict[str, float] = {}
+                         container_key: str, value_key: str, agg: str = "sum") -> list[dict]:
+    """Roll a continuous type's per-interval values into one value per day — `sum`
+    (steps, active-zone-minutes) or `avg` (heart-rate). These are intraday and the list
+    endpoint takes no time filter, so the latest day may be partial — fine for context.
+    Day comes from interval.civilStartTime / interval.startTime, or sampleTime (HR)."""
+    sums: dict[str, float] = {}
+    counts: dict[str, int] = {}
     for p in datapoints:
         c = p.get(container_key) or {}
         interval = c.get("interval") or {}
-        civ = interval.get("civilStartTime") or {}
+        sample_time = c.get("sampleTime") or {}
+        civ = interval.get("civilStartTime") or sample_time.get("civilTime") or {}
         date = civ.get("date")
         if date and {"year", "month", "day"} <= date.keys():
             day = f"{int(date['year']):04d}-{int(date['month']):02d}-{int(date['day']):02d}"
         else:
-            st = interval.get("startTime") or ""
-            day = st[:10] if len(st) >= 10 else None
+            t = interval.get("startTime") or sample_time.get("physicalTime") or ""
+            day = t[:10] if len(t) >= 10 else None
         v = _to_float(c.get(value_key))
         if day and v is not None:
-            by_day[day] = by_day.get(day, 0.0) + v
-    return [_sample(metric_id, d, round(t, 1), {"intraday_sum": True}) for d, t in by_day.items()]
+            sums[day] = sums.get(day, 0.0) + v
+            counts[day] = counts.get(day, 0) + 1
+    out = []
+    for d, total in sums.items():
+        val = (total / counts[d]) if agg == "avg" else total
+        out.append(_sample(metric_id, d, round(val, 1), {"intraday": agg}))
+    return out
 
 
 def to_samples(metric_id: str, datapoints: list[dict], rhr_by_day=None, baseline_rhr=None) -> list[dict]:

@@ -101,6 +101,27 @@ def test_parse_exercise_sessions_real_shape():
     assert s["zone_minutes"] == 2  # 120s moderate
 
 
+def test_intraday_heart_rate_averages_per_day():
+    pts = [
+        {"heartRate": {"sampleTime": {"physicalTime": "2026-06-26T12:00:00Z"}, "beatsPerMinute": "60"}},
+        {"heartRate": {"sampleTime": {"physicalTime": "2026-06-26T18:00:00Z"}, "beatsPerMinute": "80"}},
+        {"heartRate": {"sampleTime": {"physicalTime": "2026-06-25T10:00:00Z"}, "beatsPerMinute": "50"}},
+    ]
+    out = {s["ts"][:10]: s["value"]
+           for s in mapping.parse_intraday_daily("heart_rate", pts, "heartRate", "beatsPerMinute", agg="avg")}
+    assert out["2026-06-26"] == 70.0  # (60+80)/2
+    assert out["2026-06-25"] == 50.0
+
+
+def test_intraday_steps_sum_per_day():
+    pts = [
+        {"steps": {"interval": {"civilStartTime": {"date": {"year": 2026, "month": 6, "day": 26}}}, "count": "6"}},
+        {"steps": {"interval": {"civilStartTime": {"date": {"year": 2026, "month": 6, "day": 26}}}, "count": "10"}},
+    ]
+    out = mapping.parse_intraday_daily("steps", pts, "steps", "count")
+    assert out[0]["value"] == 16.0 and out[0]["ts"] == "2026-06-26T00:00:00"
+
+
 def test_height_real_shape_mm_to_cm():
     pts = [{"name": "x", "dataSource": {}, "height": {
         "sampleTime": {"civilTime": {"date": {"year": 2026, "month": 4, "day": 30}}},

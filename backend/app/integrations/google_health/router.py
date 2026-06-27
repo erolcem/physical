@@ -196,14 +196,15 @@ def sync_user(db: Session, user_id: str, days: int = 7, replace: bool = False) -
 
     # Intraday → daily totals: steps + active-zone-minutes (continuous types, no daily
     # rollup; the list endpoint takes no time filter so the latest day may be partial).
-    for metric_id, dtid, ckey, vkey in [
-        ("steps", "steps", "steps", "count"),
-        ("active_zone", "active-zone-minutes", "activeZoneMinutes", "activeZoneMinutes"),
+    for metric_id, dtid, ckey, vkey, agg in [
+        ("steps", "steps", "steps", "count", "sum"),
+        ("active_zone", "active-zone-minutes", "activeZoneMinutes", "activeZoneMinutes", "sum"),
+        ("heart_rate", "heart-rate", "heartRate", "beatsPerMinute", "avg"),
     ]:
         try:
             _, body = client.get_raw(f"/users/me/dataTypes/{dtid}/dataPoints?pageSize=2000")
             pts = body.get("dataPoints", []) if isinstance(body, dict) else []
-            samples += mapping.parse_intraday_daily(metric_id, pts, ckey, vkey)
+            samples += mapping.parse_intraday_daily(metric_id, pts, ckey, vkey, agg=agg)
         except Exception as e:
             errors[dtid] = str(e)[:200]
 
