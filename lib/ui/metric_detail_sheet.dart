@@ -8,6 +8,7 @@ import '../data/metrics.dart';
 import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log, strengthValue, isolationLifts;
 import '../state/providers.dart';
+import 'acuity_test.dart';
 import 'badge.dart';
 import 'voice_measure.dart';
 
@@ -77,6 +78,16 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
     setState(() {}); // refresh latest/history
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Voice quality logged: ${score.toStringAsFixed(0)}/100')));
+  }
+
+  Future<void> _measureAcuity() async {
+    final logMar = await measureAcuityFlow(context, ref);
+    if (logMar == null || !mounted) return;
+    ref.read(logsProvider.notifier)
+        .add('eye', Log('eye', logMar, ts: DateTime.now().toIso8601String()));
+    setState(() {}); // refresh latest/history
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Acuity logged: ${snellen(logMar)} (${logMar.toStringAsFixed(2)} logMAR)')));
   }
 
   @override
@@ -222,6 +233,13 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
                 _grandButton('🎙  Measure with mic', const Color(0xFF4CE0C3), _measureVoice),
                 const SizedBox(height: 8),
                 const Text('— or enter a score manually —',
+                    style: TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 8),
+              ],
+              if (m.id == 'eye') ...[
+                _grandButton('👁  Measure acuity', const Color(0xFF4CE0C3), _measureAcuity),
+                const SizedBox(height: 8),
+                const Text('— or enter logMAR manually —',
                     style: TextStyle(fontSize: 11, color: Colors.grey)),
                 const SizedBox(height: 8),
               ],

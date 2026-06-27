@@ -21,9 +21,9 @@ const Map<String, AestheticGuide> aestheticGuides = {
   ),
   'eye': AestheticGuide(
     what: 'Visual acuity — the sharpness of your sight.',
-    how: 'An in-app eye-chart self-test read at a fixed distance → logMAR.',
-    anchor: '20/20 is the reference; 20/16 or better is elite.',
-    status: MeasureStatus.planned,
+    how: 'Tap “Measure acuity”: calibrate with a card, set your distance, then read tumbling-E lines → logMAR.',
+    anchor: '20/20 ≈ median young adult; 20/16+ is elite. Ranked (excluded from overall).',
+    status: MeasureStatus.ready,
   ),
   'hair': AestheticGuide(
     what: 'Scalp hair density.',
