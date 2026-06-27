@@ -13,7 +13,9 @@ void main() {
 
   testWidgets('App boots', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: PhysicalApp()));
-    expect(find.text('Physical'), findsOneWidget);
+    // Header is now the brand banner image; tabs confirm the shell built.
+    expect(find.image(const AssetImage('assets/brand/header.png')), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
   });
 
   testWidgets('overall breakdown sheet builds without errors', (tester) async {
