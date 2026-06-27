@@ -1292,5 +1292,111 @@
         "rank_value": 2.439744
       }
     }
+  ],
+  "category_overall_cases": [
+    {
+      "logs_by_cat": {
+        "strength": [
+          {
+            "metric": "bench",
+            "value": 100,
+            "bodyweight": 80
+          },
+          {
+            "metric": "squat",
+            "value": 140,
+            "bodyweight": 80
+          },
+          {
+            "metric": "ohp",
+            "value": 60,
+            "bodyweight": 80
+          },
+          {
+            "metric": "pullup",
+            "value": 20,
+            "bodyweight": 80
+          },
+          {
+            "metric": "curl",
+            "value": 200,
+            "bodyweight": 80
+          }
+        ],
+        "aesthetics": [
+          {
+            "metric": "eye",
+            "value": -0.1,
+            "bodyweight": null
+          }
+        ]
+      },
+      "expected": {
+        "tier": "Gold",
+        "sub": "II",
+        "rank_value": 3.476168,
+        "top_pct": 30.476631
+      }
+    },
+    {
+      "logs_by_cat": {
+        "strength": [
+          {
+            "metric": "bench",
+            "value": 90,
+            "bodyweight": 80
+          }
+        ],
+        "performance": [
+          {
+            "metric": "vo2max",
+            "value": 52,
+            "bodyweight": null
+          }
+        ],
+        "recovery": [
+          {
+            "metric": "resting_hr",
+            "value": 55,
+            "bodyweight": null
+          }
+        ],
+        "aesthetics": [
+          {
+            "metric": "voice",
+            "value": 1.5,
+            "bodyweight": null
+          }
+        ]
+      },
+      "expected": {
+        "tier": "Platinum",
+        "sub": "II",
+        "rank_value": 4.494768,
+        "top_pct": 15.052321
+      }
+    },
+    {
+      "logs_by_cat": {
+        "aesthetics": [
+          {
+            "metric": "eye",
+            "value": -0.2,
+            "bodyweight": null
+          },
+          {
+            "metric": "voice",
+            "value": 2.3,
+            "bodyweight": null
+          }
+        ]
+      },
+      "expected": {
+        "tier": "Gold",
+        "sub": "III",
+        "rank_value": 3.988358,
+        "top_pct": 20.232838
+      }
+    }
   ]
 }

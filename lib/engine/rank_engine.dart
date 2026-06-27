@@ -325,6 +325,27 @@ RankResult overall(List<Log> logs) {
     final p = percentile(log.metricId, log.value, log.bodyweight).clamp(1e-6, 1 - 1e-6);
     zs.add(_normInv(p, 0, 1));
   }
+  return _resultFromZs(zs);
+}
+
+/// Overall rank that averages CATEGORIES equally, not metrics. Each category's mean
+/// z-score counts once, so a category with many metrics (strength) doesn't dominate one
+/// with few (aesthetics) — a more balanced, robust view of the whole person.
+RankResult overallByCategory(Map<String, List<Log>> logsByCategory) {
+  final catZs = <double>[];
+  for (final logs in logsByCategory.values) {
+    final zs = <double>[];
+    for (final log in logs) {
+      if (!standards.containsKey(log.metricId)) continue;
+      final p = percentile(log.metricId, log.value, log.bodyweight).clamp(1e-6, 1 - 1e-6);
+      zs.add(_normInv(p, 0, 1));
+    }
+    if (zs.isNotEmpty) catZs.add(zs.reduce((a, b) => a + b) / zs.length);
+  }
+  return _resultFromZs(catZs);
+}
+
+RankResult _resultFromZs(List<double> zs) {
   if (zs.isEmpty) return RankResult('Wood', 'I', 99.9, 0.1, 0.0);
   final zbar = zs.reduce((a, b) => a + b) / zs.length;
   final pbar = _normCdf(zbar, 0, 1);

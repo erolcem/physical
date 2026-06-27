@@ -75,6 +75,28 @@ void main() {
     });
   });
 
+  group('overall by category (equal-weight blend)', () {
+    var i = 0;
+    for (final raw in (golden['category_overall_cases'] as List? ?? const [])) {
+      final c = raw as Map<String, dynamic>;
+      final exp = c['expected'] as Map<String, dynamic>;
+      test('category overall #${i++}', () {
+        final byCat = <String, List<Log>>{};
+        (c['logs_by_cat'] as Map<String, dynamic>).forEach((cat, list) {
+          byCat[cat] = [
+            for (final d in (list as List))
+              Log((d as Map)['metric'] as String, _d(d['value'])!, bodyweight: _d(d['bodyweight']))
+          ];
+        });
+        final r = overallByCategory(byCat);
+        expect(r.tier, exp['tier']);
+        expect(r.sub, exp['sub']);
+        expect(r.topPct, closeTo(exp['top_pct'] as num, pTol));
+        expect(r.rankValue, closeTo(exp['rank_value'] as num, rvTol));
+      });
+    }
+  });
+
   group('overall (z-space blend)', () {
     var i = 0;
     for (final raw in golden['overall_cases'] as List) {

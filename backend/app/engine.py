@@ -26,6 +26,7 @@ Log = rank_engine.Log
 tier_of = rank_engine.tier_of
 percentile = rank_engine.percentile
 overall = rank_engine.overall
+overall_by_category = rank_engine.overall_by_category
 threshold = rank_engine.threshold
 est_1rm = rank_engine.est_1rm
 strength_value = rank_engine.strength_value

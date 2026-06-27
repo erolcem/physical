@@ -290,6 +290,26 @@ def overall(logs):
             continue
         P = min(max(percentile(log.metric_id, log.value, log.bodyweight), 1e-6), 1 - 1e-6)
         zs.append(_Z.inv_cdf(P))
+    return _result_from_zs(zs)
+
+
+def overall_by_category(logs_by_category):
+    """Overall rank that averages CATEGORIES equally, not metrics. Each category's mean
+    z counts once, so strength (many metrics) doesn't dominate aesthetics (few)."""
+    cat_zs = []
+    for logs in logs_by_category.values():
+        zs = []
+        for log in logs:
+            if log.metric_id not in STANDARDS:
+                continue
+            P = min(max(percentile(log.metric_id, log.value, log.bodyweight), 1e-6), 1 - 1e-6)
+            zs.append(_Z.inv_cdf(P))
+        if zs:
+            cat_zs.append(sum(zs) / len(zs))
+    return _result_from_zs(cat_zs)
+
+
+def _result_from_zs(zs):
     if not zs:
         return {"tier": "Wood", "sub": "I", "top_pct": 99.9, "rank_value": 0.0}
     Pbar = _Z.cdf(sum(zs) / len(zs))

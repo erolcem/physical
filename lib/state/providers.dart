@@ -51,15 +51,18 @@ final latestLogsProvider = Provider<Map<String, Log>>((ref) {
   };
 });
 
-/// Overall rank — latest ranked lifts, each scored at its own snapshot weight.
-/// Aesthetics are excluded even when ranked (e.g. eye acuity): appearance/sensory
-/// metrics get their own tier + percentile, but never drag the headline rank.
+/// Overall rank — averages the four ranked CATEGORIES equally (strength, performance,
+/// recovery, aesthetics), not per-metric, so the result isn't strength-heavy just
+/// because strength has more metrics. Each category's latest logged metrics are scored
+/// at their own snapshot bodyweight.
 final overallProvider = Provider<eng.RankResult>((ref) {
   final latest = ref.watch(latestLogsProvider);
-  final logs = latest.values.where((l) =>
-      eng.standards.containsKey(l.metricId) &&
-      metricById(l.metricId).category != 'aesthetics');
-  return eng.overall(logs.toList());
+  final byCat = <String, List<Log>>{};
+  for (final l in latest.values) {
+    if (!eng.standards.containsKey(l.metricId)) continue;
+    (byCat[metricById(l.metricId).category] ??= <Log>[]).add(l);
+  }
+  return eng.overallByCategory(byCat);
 });
 
 /// Per-category rank (z-space average of the latest logged ranked metric in

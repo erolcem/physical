@@ -36,18 +36,6 @@ Color scoreColor(double score) {
   return Color.lerp(tierColor(_tierOrder[lo]), tierColor(_tierOrder[hi]), t - lo)!;
 }
 
-/// Average of the latest 0–100 aesthetic scores (skin/oral/eye/grooming/voice),
-/// or null if none logged. Not a rank — just a tracked composite.
-double? aestheticsAverage(Map<String, Log> latest) {
-  final vals = [
-    for (final m in metrics)
-      if (m.category == 'aesthetics' && m.unit == '/100' && latest[m.id] != null)
-        latest[m.id]!.value
-  ];
-  if (vals.isEmpty) return null;
-  return vals.reduce((a, b) => a + b) / vals.length;
-}
-
 class HomeTab extends ConsumerWidget {
   const HomeTab({super.key});
 
@@ -333,6 +321,7 @@ const List<(String, String)> _rankedCategories = [
   ('strength', 'Strength'),
   ('performance', 'Performance'),
   ('recovery', 'Recovery'),
+  ('aesthetics', 'Aesthetics'),
 ];
 
 const List<String> _tierOrder = [
@@ -406,7 +395,6 @@ class _OverallBreakdownSheet extends ConsumerWidget {
             const SizedBox(height: 10),
             for (final (id, name) in _rankedCategories)
               _categoryRow(name, cats[id]),
-            _aestheticsRow(aestheticsAverage(latest)),
             const SizedBox(height: 12),
             Text('RANK DISTRIBUTION', style: _secTitle()),
             const SizedBox(height: 14),
@@ -459,48 +447,6 @@ class _OverallBreakdownSheet extends ConsumerWidget {
         ),
         const SizedBox(height: 3),
         Text(tier, style: TextStyle(fontSize: 10.5, color: on ? col : _muted, fontWeight: FontWeight.w600)),
-      ]),
-    );
-  }
-
-  // Aesthetics: a composite SCORE (not a rank) — score-coloured, no sub-rank ticks.
-  Widget _aestheticsRow(double? avg) {
-    final has = avg != null;
-    final c = has ? scoreColor(avg) : _muted;
-    final frac = has ? (avg / 100).clamp(0.0, 1.0) : 0.0;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: has ? c.withValues(alpha: 0.3) : _border),
-      ),
-      child: Row(children: [
-        Container(
-          width: 46, height: 46, alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: c.withValues(alpha: 0.12),
-            border: Border.all(color: c.withValues(alpha: 0.45)),
-          ),
-          child: Icon(Icons.face_retouching_natural, size: 22, color: c),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              const Expanded(child: Text('Aesthetics', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15))),
-              Text(has ? '${avg.round()}/100' : 'No data',
-                  style: TextStyle(color: c, fontWeight: FontWeight.w800)),
-            ]),
-            const SizedBox(height: 9),
-            _RankBar(frac: frac, color: c, height: 9, showThirds: false),
-            const SizedBox(height: 5),
-            Text(has ? 'Composite score · not ranked' : 'Log skin, oral, grooming…',
-                style: const TextStyle(fontSize: 11, color: _muted)),
-          ]),
-        ),
       ]),
     );
   }
@@ -894,9 +840,18 @@ class _AestheticsStrip extends ConsumerWidget {
       children: metricsToDisplay.map((m) {
         final logs = logsMap[m.id] ?? [];
         final hasData = logs.isNotEmpty;
-        final score = hasData ? logs.last.value : null;
-        // Tracked aesthetic — coloured by SCORE level on the 9-tier palette (not a rank).
-        final color = hasData ? scoreColor(score!) : const Color(0xFF454964);
+        final v = hasData ? logs.last.value : null;
+        // Ranked aesthetic — coloured by its TIER (eye/voice aren't /100, so a raw-score
+        // colour would be wrong; the tier is correct for every aesthetic).
+        final color = hasData && eng.standards.containsKey(m.id)
+            ? tierColor(eng.scoreLog(logs.last).tier)
+            : const Color(0xFF454964);
+        // Value label, formatted per unit (/100 → int, logMAR → 2dp, AVQI → 1dp).
+        final label = v == null
+            ? '—'
+            : m.unit == '/100'
+                ? v.round().toString()
+                : v.toStringAsFixed(m.unit == 'logMAR' ? 2 : 1);
 
         return Column(mainAxisSize: MainAxisSize.min, children: [
           Material(
@@ -923,7 +878,7 @@ class _AestheticsStrip extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Text(hasData ? '${score!.round()}' : '—',
+          Text(label,
               style: TextStyle(
                   fontSize: 11, fontWeight: FontWeight.w800,
                   color: hasData ? color : _muted)),

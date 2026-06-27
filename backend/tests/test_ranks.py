@@ -27,16 +27,23 @@ def test_ranks_overall_categories_metrics(client):
     assert 0 <= r["metrics"]["sleep_score"]["percentile"] <= 100
 
 
-def test_aesthetics_excluded_from_overall(client):
-    # Two users: one with only strength, one with the same strength PLUS a great skin
-    # score. The aesthetic must not change the overall (it's excluded).
-    base = [{"metric_id": "bench", "ts": "2026-06-01T08:00:00", "value": 100, "bodyweight_at_ts": 80}]
-    client.post("/me/samples", json=base)
-    overall_a = client.get("/me/ranks").json()["overall"]["rank_value"]
+def test_overall_is_category_equal_not_strength_heavy(client):
+    # Many weak strength lifts + one elite aesthetic. Because overall averages the four
+    # CATEGORIES equally (not per-metric), the single aesthetic pulls the overall up
+    # between the two category ranks — strength's metric count doesn't dominate.
     client.post("/me/samples", json=[
-        {"metric_id": "skin", "ts": "2026-06-02T08:00:00", "value": 99}])
-    overall_b = client.get("/me/ranks").json()["overall"]["rank_value"]
-    assert overall_a == overall_b  # skin did not move the headline
+        {"metric_id": "bench", "ts": "2026-06-01T08:00:00", "value": 40, "bodyweight_at_ts": 80},
+        {"metric_id": "squat", "ts": "2026-06-01T08:00:00", "value": 50, "bodyweight_at_ts": 80},
+        {"metric_id": "ohp", "ts": "2026-06-01T08:00:00", "value": 25, "bodyweight_at_ts": 80},
+        {"metric_id": "pullup", "ts": "2026-06-01T08:00:00", "value": 5, "bodyweight_at_ts": 80},
+        {"metric_id": "eye", "ts": "2026-06-01T08:00:00", "value": -0.25},  # elite vision
+    ])
+    r = client.get("/me/ranks").json()
+    ov = r["overall"]["rank_value"]
+    assert "aesthetics" in r["categories"]
+    lo = r["categories"]["strength"]["rank_value"]
+    hi = r["categories"]["aesthetics"]["rank_value"]
+    assert lo < ov < hi  # overall sits between the two categories, not pinned to strength
 
 
 def test_latest_value_is_used(client):

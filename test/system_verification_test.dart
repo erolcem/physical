@@ -173,16 +173,38 @@ void main() {
       }
     });
 
-    test('a ranked aesthetic (eye) ranks by category but is excluded from overall', () {
+    test('overall averages categories equally — aesthetics is one of the four', () {
       final repo = InMemoryRepository();
       repo.saveLog('eye', Log('eye', -0.1, ts: '2026-06-27T12:00:00'));
       final c = ProviderContainer(
           overrides: [repositoryProvider.overrideWithValue(repo)]);
       addTearDown(c.dispose);
-      // Eye is ranked → it surfaces as an 'aesthetics' category rank…
-      expect(c.read(categoryRanksProvider).containsKey('aesthetics'), isTrue);
-      // …but must NOT feed the overall (no non-aesthetic ranked log → empty result).
-      expect(c.read(overallProvider).rankValue, 0.0);
+      // Aesthetics now ranks as a category AND feeds the overall. With only the
+      // aesthetics category logged, overall == that category's rank.
+      final cats = c.read(categoryRanksProvider);
+      expect(cats.containsKey('aesthetics'), isTrue);
+      expect(c.read(overallProvider).rankValue,
+          closeTo(cats['aesthetics']!.rankValue, 1e-9));
+    });
+
+    test('overall is category-equal, not strength-heavy', () {
+      // Same single strong aesthetic; adding many strength lifts must NOT swamp it —
+      // each category still counts once. Overall stays between the two category ranks.
+      final repo = InMemoryRepository();
+      repo.saveLog('eye', Log('eye', -0.25, ts: '2026-06-27T12:00:00')); // elite vision
+      for (final id in ['bench', 'squat', 'ohp', 'pullup']) {
+        repo.saveLog(id, Log(id, 40, bodyweight: 80, ts: '2026-06-27T12:00:00')); // weak lifts
+      }
+      final c = ProviderContainer(
+          overrides: [repositoryProvider.overrideWithValue(repo)]);
+      addTearDown(c.dispose);
+      final cats = c.read(categoryRanksProvider);
+      final ov = c.read(overallProvider).rankValue;
+      final lo = cats['strength']!.rankValue, hi = cats['aesthetics']!.rankValue;
+      // Overall sits between the weak-strength and strong-aesthetics category ranks —
+      // i.e. the 4 strength metrics didn't dominate the single aesthetic one.
+      expect(ov, greaterThan(lo));
+      expect(ov, lessThan(hi));
     });
   });
 
