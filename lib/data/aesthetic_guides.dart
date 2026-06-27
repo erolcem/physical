@@ -45,8 +45,8 @@ const Map<String, AestheticGuide> aestheticGuides = {
   ),
   'grooming': AestheticGuide(
     what: 'Overall upkeep.',
-    how: 'A structured self-checklist: haircut freshness, facial/body hair, nails, brows.',
-    anchor: 'No clinical norm exists — a weighted self-rating.',
+    how: 'Tap “Grooming check” and rate each domain — haircut, facial/body hair, nails, brows — for a weighted score.',
+    anchor: 'No clinical norm exists — an honest structured self-rating.',
     status: MeasureStatus.manual,
   ),
 };
