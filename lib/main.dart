@@ -6,12 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'data/notifications.dart';
 import 'data/persistent_repository.dart';
+import 'data/readiness.dart' show backfillReadinessLogs;
 import 'state/providers.dart';
 import 'ui/main_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final repo = await PersistentRepository.create();
+  backfillReadinessLogs(repo); // ensure Daily Readiness has graphable history
   // Proactive habit reminders (no-op on desktop/web; iOS/Android only).
   // Fire-and-forget so the iOS permission prompt never blocks first render.
   unawaited(NotificationService.instance.init().then(

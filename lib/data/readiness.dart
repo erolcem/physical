@@ -9,6 +9,7 @@ import 'dart:math' as math;
 import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log;
 import 'habits.dart' show lastNDays;
+import 'repository.dart';
 import 'workout.dart';
 
 // 0–1 "goodness" for a recovery metric. Personal baseline (today vs trailing-7 mean,
@@ -60,6 +61,51 @@ double? dailyReadiness(Map<String, List<Log>> logs, List<WorkoutSession> session
   final wsum = parts.fold(0.0, (a, p) => a + p.$1);
   final score = parts.fold(0.0, (a, p) => a + p.$1 * p.$2) / wsum;
   return (score * 100).clamp(0.0, 100.0);
+}
+
+/// Daily Readiness per calendar day across history — each day scored from the
+/// recovery readings up to that day — so the metric can be graphed over time.
+Map<String, double> readinessSeries(
+    Map<String, List<Log>> logs, List<WorkoutSession> sessions) {
+  String? d(Log l) => l.ts.length >= 10 ? l.ts.substring(0, 10) : null;
+  final days = <String>{};
+  for (final id in const ['hrv', 'sleep_score', 'resting_hr']) {
+    for (final l in (logs[id] ?? const <Log>[])) {
+      final day = d(l);
+      if (day != null) days.add(day);
+    }
+  }
+  final out = <String, double>{};
+  for (final day in days.toList()..sort()) {
+    final upto = <String, List<Log>>{};
+    for (final id in const ['hrv', 'sleep_score', 'resting_hr']) {
+      final list = [
+        for (final l in (logs[id] ?? const <Log>[]))
+          if ((d(l) ?? '9').compareTo(day) <= 0) l
+      ];
+      if (list.isNotEmpty) upto[id] = list;
+    }
+    final r = dailyReadiness(upto, sessions, today: DateTime.tryParse(day));
+    if (r != null) out[day] = r;
+  }
+  return out;
+}
+
+/// Persist any missing daily_readiness logs so the metric graphs like the rest.
+/// Idempotent (skips days already logged). Returns how many were added.
+int backfillReadinessLogs(Repository repo) {
+  final logs = repo.loadLogs();
+  final have = {
+    for (final l in (logs['daily_readiness'] ?? const <Log>[]))
+      if (l.ts.length >= 10) l.ts.substring(0, 10)
+  };
+  var added = 0;
+  readinessSeries(logs, repo.loadWorkouts()).forEach((day, val) {
+    if (have.contains(day)) return;
+    repo.saveLog('daily_readiness', Log('daily_readiness', val, ts: '${day}T12:00:00'));
+    added++;
+  });
+  return added;
 }
 
 /// Traffic-light colour for readiness (green = ready … red = rest). NOT the tier

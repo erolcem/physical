@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../engine/rank_engine.dart' show Log;
 import '../state/providers.dart';
 import 'api_client.dart';
+import 'readiness.dart' show backfillReadinessLogs;
 import 'repository.dart';
 
 // Backend URL. Defaults to the hosted Railway backend so a plain `flutter run`
@@ -114,6 +115,7 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
 
   final samples = await api.fetchSamples(source: 'google_health');
   final added = mergeSamples(repo, samples);
+  backfillReadinessLogs(repo); // recompute readiness now that recovery data updated
   ref.read(logsProvider.notifier).reload();
   return CloudSyncResult(added, note, needsReconnect: needsReconnect);
 }

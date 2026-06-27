@@ -78,6 +78,8 @@ class ProgressTab extends ConsumerWidget {
                   const _ExerciseCard()
                 else if (id == 'health')
                   _HealthCard(title: title, icon: icon, logsMap: logsMap)
+                else if (id == 'sleep')
+                  _SleepCard(title: title, icon: icon, logsMap: logsMap)
                 else
                   _CategoryCard(
                     id: id, title: title, icon: icon, ranked: ranked,
@@ -325,6 +327,82 @@ class _HealthCard extends ConsumerWidget {
   }
 }
 
+// Sleep card — shows last night's score + hours-asleep bar, opens the Sleep screen.
+class _SleepCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Map<String, List<Log>> logsMap;
+  const _SleepCard({required this.title, required this.icon, required this.logsMap});
+
+  @override
+  Widget build(BuildContext context) {
+    final scoreLogs = logsMap['sleep_score'] ?? const <Log>[];
+    final durLogs = logsMap['sleep_duration'] ?? const <Log>[];
+    final score = scoreLogs.isNotEmpty ? scoreLogs.last.value : null;
+    final dur = durLogs.isNotEmpty ? durLogs.last.value : null;
+    final has = score != null || dur != null;
+    final c = score != null ? tierColor(eng.scoreLog(scoreLogs.last).tier) : _accent;
+    final subtitle = !has
+        ? 'Sleep · sync to see your nights'
+        : [
+            if (score != null) 'Score ${score.round()}',
+            if (dur != null) '${dur.toStringAsFixed(1)}h asleep',
+          ].join(' · ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => openSleepScreen(context),
+          child: Ink(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _bg3,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: has ? c.withValues(alpha: 0.3) : _border),
+            ),
+            child: Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: c.withValues(alpha: 0.12), shape: BoxShape.circle,
+                  border: Border.all(color: c.withValues(alpha: 0.35)),
+                ),
+                child: Icon(icon, color: c, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
+                  if (dur != null) ...[
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                          value: (dur / 8).clamp(0.0, 1.0), minHeight: 6,
+                          color: c, backgroundColor: c.withValues(alpha: 0.15)),
+                    ),
+                  ],
+                ]),
+              ),
+              if (score != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: Text('${score.round()}',
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: c)),
+                ),
+              const Icon(Icons.chevron_right, color: _muted),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CATEGORY GRAPH PAGE — one category's dedicated graphing area
 // ═══════════════════════════════════════════════════════════════════════════
@@ -347,7 +425,10 @@ class CategoryGraphPage extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 500),
             child: cands.isEmpty
                 ? const Center(child: Text('No metrics in this category', style: TextStyle(color: _muted)))
-                : _GraphArea(cands),
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+                    child: GraphArea(cands),
+                  ),
           ),
         ),
       ),
@@ -358,14 +439,16 @@ class CategoryGraphPage extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════
 // GRAPH AREA — chips + chart + correlation, scoped to a set of metrics.
 // ═══════════════════════════════════════════════════════════════════════════
-class _GraphArea extends ConsumerStatefulWidget {
+// Public + Column-based so it can be the body of CategoryGraphPage (wrapped in a
+// scroll) AND embedded inline inside other screens (e.g. the Sleep screen).
+class GraphArea extends ConsumerStatefulWidget {
   final List<MetricDef> candidates;
-  const _GraphArea(this.candidates);
+  const GraphArea(this.candidates, {super.key});
   @override
-  ConsumerState<_GraphArea> createState() => _GraphAreaState();
+  ConsumerState<GraphArea> createState() => _GraphAreaState();
 }
 
-class _GraphAreaState extends ConsumerState<_GraphArea> {
+class _GraphAreaState extends ConsumerState<GraphArea> {
   final Set<String> _selectedIds = {};
   String _timeframe = 'All';
 
@@ -374,13 +457,12 @@ class _GraphAreaState extends ConsumerState<_GraphArea> {
     final logsMap = ref.watch(logsProvider);
     if (_selectedIds.isEmpty) _selectedIds.add(widget.candidates.first.id);
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         _chips(),
         const SizedBox(height: 24),
         _multiChart(logsMap),
-        const SizedBox(height: 40),
       ],
     );
   }

@@ -5,9 +5,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/habits.dart' show valuesLastNDays;
-import '../data/metrics.dart' show tierColor;
+import '../data/metrics.dart' show tierColor, metrics;
 import '../engine/rank_engine.dart' show Log, tierOf;
 import '../state/providers.dart';
+import 'progress_screen.dart' show GraphArea;
 
 const _bg = Color(0xFF08091A);
 const _card = Color(0xFF12152E);
@@ -51,6 +52,15 @@ class SleepScreen extends ConsumerWidget {
         const SizedBox(height: 12),
         _stats(_latest(logs, 'sleep_efficiency'), _latest(logs, 'time_to_sleep'),
             _latest(logs, 'full_awakenings')),
+        const SizedBox(height: 24),
+        const Text('ALL SLEEP METRICS',
+            style: TextStyle(fontSize: 11, letterSpacing: 2, color: _muted, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 4),
+        const Text('Pick a metric + timeframe (1W · 3M · 6M · 1Y · All).',
+            style: TextStyle(fontSize: 12, color: _muted)),
+        const SizedBox(height: 8),
+        // Full multi-metric graph of every sleep sub-metric over any timeframe.
+        GraphArea([for (final m in metrics) if (m.category == 'sleep') m]),
       ]),
     );
   }
