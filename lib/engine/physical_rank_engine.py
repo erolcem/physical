@@ -162,6 +162,16 @@ STANDARDS = {
     "voice":      Standard("voice", -1, False, Dist("normal", 2.3, 0.8),
                            "Acoustic Voice Quality Index (lower better); healthy mean 2.3+-0.8 (Maryn), "
                            "vowel-only approximation - provisional"),
+    # Photo/self-rating aesthetics - ranked on the measured 0-100 against ASSUMED,
+    # uncalibrated distributions (no validated population data for the measured quantity).
+    "skin":       Standard("skin", 1, False, Dist("normal", 62.0, 16.0),
+                           "CV skin composite /100 - ASSUMED distribution, uncalibrated, provisional"),
+    "oral":       Standard("oral", 1, False, Dist("normal", 60.0, 16.0),
+                           "CV oral composite /100 - ASSUMED distribution, uncalibrated, provisional"),
+    "hair":       Standard("hair", 1, False, Dist("normal", 72.0, 15.0),
+                           "scalp hair coverage /100 - ASSUMED distribution (true norm is hairs/cm2), provisional"),
+    "grooming":   Standard("grooming", 1, False, Dist("normal", 62.0, 18.0),
+                           "grooming self-rating /100 - ASSUMED distribution (informed by ~5/10 crowd ratings), provisional"),
     "eye":        Standard("eye", -1, False, Dist("normal", 0.05, 0.15),
                            "visual acuity logMAR (lower better); general young-male presenting acuity "
                            "(median just below 20/20 from uncorrected error); best-corrected ~-0.14, provisional"),

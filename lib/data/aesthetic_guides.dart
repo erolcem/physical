@@ -28,25 +28,25 @@ const Map<String, AestheticGuide> aestheticGuides = {
   'hair': AestheticGuide(
     what: 'Scalp hair coverage (a density proxy).',
     how: 'Tap “Measure from photo” and take a close-up of the scalp; CV measures dark-strand coverage of the patch.',
-    anchor: 'Coverage % of the photographed area. (True hairs/cm² needs a macro lens + scale.)',
+    anchor: '⚠ Ranked on an ASSUMED distribution (true norm is hairs/cm² via macro lens). Provisional; excluded from overall.',
     status: MeasureStatus.ready,
   ),
   'skin': AestheticGuide(
     what: 'Skin clarity, evenness and blemishes.',
     how: 'Tap “Measure from photo” and face the camera; CV reads redness patchiness, tone evenness and blemish density on skin pixels.',
-    anchor: 'Screening composite (no clinical absolute) — track the trend, lighting matters.',
+    anchor: '⚠ Ranked on an ASSUMED distribution (no validated population data). Provisional; excluded from overall; lighting matters.',
     status: MeasureStatus.ready,
   ),
   'oral': AestheticGuide(
     what: 'Teeth whiteness + gum health.',
     how: 'Tap “Measure from photo” and smile; CV reads tooth brightness/yellowness and gum redness.',
-    anchor: 'Screening composite — bright, even lighting gives the most consistent read.',
+    anchor: '⚠ Ranked on an ASSUMED distribution (shade norms exist but aren’t calibrated here). Provisional; excluded from overall.',
     status: MeasureStatus.ready,
   ),
   'grooming': AestheticGuide(
     what: 'Overall upkeep.',
     how: 'Tap “Grooming check” and rate each domain — haircut, facial/body hair, nails, brows — for a weighted score.',
-    anchor: 'No clinical norm exists — an honest structured self-rating.',
+    anchor: '⚠ Ranked on an ASSUMED distribution (no clinical norm; informed by ~5/10 crowd ratings). Provisional; excluded from overall.',
     status: MeasureStatus.manual,
   ),
 };

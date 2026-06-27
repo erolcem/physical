@@ -37,10 +37,13 @@ def compute_ranks(samples):
             "percentile": res["percentile"], "rank_value": res["rank_value"],
         }
         log = E.Log(mid, s.value, s.bodyweight_at_ts)
-        all_logs.append(log)
         cat = category_of(mid)
         if cat:
             logs_by_cat.setdefault(cat, []).append(log)
+        # Aesthetics rank individually + by category, but never feed the overall score
+        # (appearance/sensory shouldn't drag the headline). Mirrors app overallProvider.
+        if cat != "aesthetics":
+            all_logs.append(log)
 
     overall = E.overall(all_logs)
     categories = {cat: E.overall(logs) for cat, logs in logs_by_cat.items()}

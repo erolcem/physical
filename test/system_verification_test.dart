@@ -44,19 +44,19 @@ void main() {
       }
     });
 
-    test('ranked aesthetics (eye, voice) have standards; both excluded from overall', () {
-      // Eye (logMAR) and Voice (AVQI) have defensible distributions → ranked with a
-      // real tier + percentile, but stay in 'aesthetics' and are excluded from the
-      // overall score (see overallProvider) so appearance/sensory never drag the headline.
-      for (final id in ['eye', 'voice']) {
+    test('all aesthetics are ranked (eye/voice real, rest provisional) + excluded from overall', () {
+      // Every aesthetic now has a standard + tier. Eye (logMAR) and Voice (AVQI) use
+      // real distributions; skin/oral/hair/grooming use ASSUMED provisional ones. All
+      // stay in 'aesthetics' and are excluded from the overall score (overallProvider)
+      // so appearance/sensory metrics never drag the headline rank.
+      for (final id in ['eye', 'voice', 'skin', 'oral', 'hair', 'grooming']) {
         expect(metricById(id).tier, MetricTier.ranked, reason: '$id should be ranked');
         expect(eng.standards.containsKey(id), isTrue, reason: '$id should have a standard');
         expect(metricById(id).category, 'aesthetics');
       }
-      // The rest stay tracked (no defensible population distribution yet).
+      // The assumed-distribution ones must be flagged provisional (drives the ⚠ in UI).
       for (final id in ['skin', 'oral', 'hair', 'grooming']) {
-        expect(metricById(id).tier, MetricTier.tracked, reason: '$id should be tracked');
-        expect(eng.standards.containsKey(id), isFalse, reason: '$id should have no standard');
+        expect(metricById(id).provisional, isTrue, reason: '$id rank must be flagged provisional');
       }
     });
 

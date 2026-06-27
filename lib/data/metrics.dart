@@ -89,16 +89,16 @@ const List<MetricDef> metrics = [
 
   // ── TRACKED · Aesthetics (unranked by design — no defensible population
   //    distribution; ranking appearance is a wellbeing risk. Graphs only.) ──
-  MetricDef('skin', 'Skin Health', 'aesthetics', MetricTier.tracked, '/100',
-      exercise: 'Selfie skin analysis'),
-  MetricDef('oral', 'Oral Health', 'aesthetics', MetricTier.tracked, '/100',
-      exercise: 'Smile photo analysis'),
+  MetricDef('skin', 'Skin Health', 'aesthetics', MetricTier.ranked, '/100',
+      exercise: 'Selfie skin analysis', provisional: true),
+  MetricDef('oral', 'Oral Health', 'aesthetics', MetricTier.ranked, '/100',
+      exercise: 'Smile photo analysis', provisional: true),
   MetricDef('eye', 'Eye Health', 'aesthetics', MetricTier.ranked, 'logMAR',
       exercise: 'In-app acuity test', provisional: true),
-  MetricDef('hair', 'Hair Density', 'aesthetics', MetricTier.tracked, '/100',
-      exercise: 'Scalp photo (coverage)'),
-  MetricDef('grooming', 'Grooming', 'aesthetics', MetricTier.tracked, '/100',
-      exercise: 'Self-checklist'),
+  MetricDef('hair', 'Hair Density', 'aesthetics', MetricTier.ranked, '/100',
+      exercise: 'Scalp photo (coverage)', provisional: true),
+  MetricDef('grooming', 'Grooming', 'aesthetics', MetricTier.ranked, '/100',
+      exercise: 'Self-checklist', provisional: true),
   MetricDef('voice', 'Voice Quality', 'aesthetics', MetricTier.ranked, 'AVQI',
       exercise: 'Mic recording (Praat)', provisional: true),
 
