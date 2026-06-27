@@ -11,9 +11,10 @@ import 'package:flutter/material.dart';
 import 'diet_screen.dart';
 import 'sleep_screen.dart';
 import 'exercise_screen.dart' show openExerciseScreen;
+import '../data/diet.dart' show todayDiet;
 import '../data/workout.dart' show sortedByRecent, typeEmoji, sessionsOverDays;
 import '../data/readiness.dart' show readinessLabel, readinessColorValue;
-import '../state/log_providers.dart' show workoutProvider, dailyReadinessProvider;
+import '../state/log_providers.dart' show workoutProvider, dailyReadinessProvider, dietProvider;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math' as math;
@@ -80,6 +81,8 @@ class ProgressTab extends ConsumerWidget {
                   _HealthCard(title: title, icon: icon, logsMap: logsMap)
                 else if (id == 'sleep')
                   _SleepCard(title: title, icon: icon, logsMap: logsMap)
+                else if (id == 'diet')
+                  _DietCard(title: title, icon: icon)
                 else
                   _CategoryCard(
                     id: id, title: title, icon: icon, ranked: ranked,
@@ -109,28 +112,12 @@ class _CategoryCard extends StatelessWidget {
     final cands = [for (final m in metrics) if (m.category == id) m];
     final withData = cands.where((m) => (logsMap[m.id] ?? const []).isNotEmpty).length;
     final allAuto = cands.isNotEmpty && cands.every((m) => m.autoSync);
-
-    // Aesthetics has no rank, but it has a composite 0–100 score — show it as a
-    // score-coloured progress bar on the card (mirrors the home breakdown row).
-    double? aesAvg;
-    if (id == 'aesthetics') {
-      final vals = [
-        for (final mm in cands)
-          if (mm.unit == '/100' && (logsMap[mm.id]?.isNotEmpty ?? false))
-            logsMap[mm.id]!.last.value
-      ];
-      if (vals.isNotEmpty) aesAvg = vals.reduce((a, b) => a + b) / vals.length;
-    }
-
-    final c = (ranked && rank != null)
-        ? tierColor(rank!.tier)
-        : (aesAvg != null ? scoreColor(aesAvg) : _accent);
+    final isRanked = ranked && rank != null;
+    final c = isRanked ? tierColor(rank!.tier) : _accent;
 
     String subtitle;
-    if (ranked && rank != null) {
+    if (isRanked) {
       subtitle = '${rank!.tier} ${rank!.sub} · top ${rank!.topPct.toStringAsFixed(1)}%';
-    } else if (aesAvg != null) {
-      subtitle = 'Composite ${aesAvg.round()}/100 · $withData of ${cands.length} tracked';
     } else if (withData > 0) {
       subtitle = '$withData of ${cands.length} tracked';
     } else if (allAuto) {
@@ -162,7 +149,7 @@ class _CategoryCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: _bg3,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: (ranked && rank != null) ? c.withValues(alpha: 0.3) : _border),
+              border: Border.all(color: isRanked ? c.withValues(alpha: 0.3) : _border),
             ),
             child: Row(children: [
               Container(
@@ -179,18 +166,19 @@ class _CategoryCard extends StatelessWidget {
                   Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                   const SizedBox(height: 2),
                   Text(subtitle, style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
-                  if (aesAvg != null) ...[
+                  if (isRanked) ...[
                     const SizedBox(height: 8),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
-                          value: (aesAvg / 100).clamp(0.0, 1.0), minHeight: 6,
-                          color: c, backgroundColor: c.withValues(alpha: 0.15)),
+                          // progress WITHIN the current tier (0–1), like the home rows
+                          value: (rank!.rankValue - rank!.rankValue.floor()).clamp(0.0, 1.0),
+                          minHeight: 6, color: c, backgroundColor: c.withValues(alpha: 0.15)),
                     ),
                   ],
                 ]),
               ),
-              if (ranked && rank != null)
+              if (isRanked)
                 RankBadge(tier: rank!.tier, sub: rank!.sub, size: 96),
               const Icon(Icons.chevron_right, color: _muted),
             ]),
@@ -389,6 +377,76 @@ class _SleepCard extends StatelessWidget {
                 ]),
               ),
               if (score != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: Text('${score.round()}',
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: c)),
+                ),
+              const Icon(Icons.chevron_right, color: _muted),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Diet card — today's calories + diet-health score (score-coloured), opens the Diet screen.
+class _DietCard extends ConsumerWidget {
+  final String title;
+  final IconData icon;
+  const _DietCard({required this.title, required this.icon});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = todayDiet(ref.watch(dietProvider));
+    final has = t.items > 0;
+    final score = t.healthScore;
+    final c = has ? scoreColor(score) : _accent;
+    final subtitle = has
+        ? '${t.calories.round()} kcal today · health ${score.round()}/100'
+        : 'Calories, macros + health radar · tap to log or sync';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => openDietScreen(context),
+          child: Ink(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _bg3,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: has ? c.withValues(alpha: 0.3) : _border),
+            ),
+            child: Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: c.withValues(alpha: 0.12), shape: BoxShape.circle,
+                  border: Border.all(color: c.withValues(alpha: 0.35)),
+                ),
+                child: Icon(icon, color: c, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
+                  if (has) ...[
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                          value: (score / 100).clamp(0.0, 1.0), minHeight: 6,
+                          color: c, backgroundColor: c.withValues(alpha: 0.15)),
+                    ),
+                  ],
+                ]),
+              ),
+              if (has)
                 Padding(
                   padding: const EdgeInsets.only(left: 10),
                   child: Text('${score.round()}',
