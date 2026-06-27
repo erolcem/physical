@@ -129,8 +129,10 @@ def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     # Probe whether DIET/nutrition is exposed by this API (Health Connect has a Nutrition
     # record, but this v4 REST API may not). Try the likely type IDs; a 200 with dataPoints
     # means we can auto-import food like we do exercise. (Reported under _nutrition_probe.)
-    for cand in ("nutrition", "hydration", "daily-nutrition", "active-calories-burned",
-                 "total-calories-burned", "basal-metabolic-rate"):
+    # Diet/calories: CONFIRMED unavailable (all 400). SpO2 + respiratory are probed for a
+    # possible health-background add (their real type IDs are still TBD).
+    for cand in ("oxygen-saturation", "spo2", "blood-oxygen", "respiratory-rate",
+                 "breathing-rate", "daily-oxygen-saturation"):
         try:
             status, body = client.get_raw(
                 f"/users/me/dataTypes/{cand}/dataPoints?pageSize=3")
