@@ -18,7 +18,7 @@ dependencies:
   flutter_local_notifications: ^17.2.3
   timezone: ^0.9.4
   flutter_timezone: ^3.0.1
-  record: ^5.1.2          # mic capture for the Voice aesthetic measurement
+  record: ^6.0.0          # mic capture for the Voice aesthetic measurement
   path_provider: ^2.1.4   # temp file path for the recorded clip
 
 dev_dependencies:
