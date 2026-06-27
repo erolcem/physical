@@ -126,28 +126,9 @@ def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
         out["_profile"] = {"status": status, "body": body}
     except Exception as e:
         out["_profile"] = {"error": str(e)[:200]}
-
-    # Probe the candidate type IDs PLAIN (startTime/endTime aren't accepted as query
-    # params — confirmed). `exercise` is the lead for workout sessions; the rest are
-    # background metrics. Shows count + first sample so we can wire whatever returns data.
-    for label, dtid in {
-        "_p_exercise": "exercise",
-        "_p_steps": "steps",
-        "_p_heart_rate": "heart-rate",
-        "_p_azm": "active-zone-minutes",
-        "_p_skin_temp": "skin-temperature",
-    }.items():
-        path = f"/users/me/dataTypes/{dtid}/dataPoints?pageSize=5"
-        try:
-            status, body = client.get_raw(path)
-            if status < 400 and isinstance(body, dict):
-                pts = body.get("dataPoints") or []
-                out[label] = {"status": status, "count": len(pts),
-                              "sample": pts[0] if pts else {"_no_dataPoints": True, "keys": list(body.keys())}}
-            else:
-                out[label] = {"status": status, "body": str(body)[:250]}
-        except Exception as e:
-            out[label] = {"error": str(e)[:200]}
+    # Confirmed working type IDs: exercise (sessions), steps, heart-rate,
+    # active-zone-minutes (all ported by /sync). skin-temperature + cardio-load aren't
+    # exposed — cardio load is reconstructed per exercise via Edwards' TRIMP.
     return out
 
 

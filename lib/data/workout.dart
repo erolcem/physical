@@ -156,7 +156,7 @@ class WorkoutSession {
         title: g['display_name'] as String?,
         start: (g['start'] as String?) ?? DateTime.now().toIso8601String(),
         durationMins: (g['duration_mins'] as num?)?.toInt(),
-        cardioLoad: (g['calories'] as num?)?.toDouble(),
+        cardioLoad: (g['cardio_load'] as num?)?.toDouble(),
         zoneMinutes: (g['zone_minutes'] as num?)?.toInt(),
         source: 'google',
         googleId: g['google_id'] as String?,

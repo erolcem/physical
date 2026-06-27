@@ -31,6 +31,7 @@ List<(String, String)> sessionStats(WorkoutSession s) {
   if (s.durationMins != null) out.add(('${s.durationMins}m', 'duration'));
   if (s.fromGoogle) {
     final cal = s.summary['calories'], dist = s.summary['distance_km'], hr = s.summary['avg_hr'];
+    if ((s.cardioLoad ?? 0) > 0) out.add(('${s.cardioLoad!.round()}', 'cardio load'));
     if (cal != null) out.add(('${cal.round()}', 'kcal'));
     if (dist != null && dist > 0) out.add((dist.toStringAsFixed(2), 'km'));
     if (hr != null) out.add(('${hr.round()}', 'avg hr'));

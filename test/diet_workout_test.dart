@@ -129,15 +129,16 @@ void main() {
     test('fromGoogle builds a sourced session with cardio summary', () {
       final g = WorkoutSession.fromGoogle({
         'google_id': 'abc', 'type': 'Walk', 'display_name': 'Walk',
-        'start': '2026-06-23T13:43:41', 'duration_mins': 37,
+        'start': '2026-06-23T13:43:41', 'duration_mins': 37, 'cardio_load': 42,
         'calories': 229, 'distance_km': 1.64, 'steps': 2148, 'avg_hr': 73, 'zone_minutes': 2,
       });
       expect(g.id, 'g:abc');
       expect(g.fromGoogle, true);
       expect(g.type, 'Walk');
       expect(g.durationMins, 37);
-      expect(g.cardioLoad, 229);
+      expect(g.cardioLoad, 42); // Edwards TRIMP, not calories
       expect(g.zoneMinutes, 2);
+      expect(g.summary['calories'], 229);
       expect(g.summary['distance_km'], 1.64);
       // survives a json round-trip
       final back = WorkoutSession.fromJson(g.toJson());

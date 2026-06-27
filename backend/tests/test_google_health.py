@@ -99,6 +99,7 @@ def test_parse_exercise_sessions_real_shape():
     assert s["distance_km"] == 1.64  # 1635492 mm
     assert s["steps"] == 2148.0 and s["avg_hr"] == 73.0
     assert s["zone_minutes"] == 2  # 120s moderate
+    assert s["cardio_load"] == 42  # Edwards TRIMP: 38min light×1 + 2min moderate×2
 
 
 def test_intraday_heart_rate_averages_per_day():

@@ -100,8 +100,6 @@ const List<MetricDef> metrics = [
 
   // ── BACKGROUND · health (automatically logged via API) ──
   MetricDef('heart_rate', 'Heart Rate', 'health', MetricTier.background, 'bpm', autoSync: true),
-  MetricDef('skin_temp', 'Skin Temp Variation', 'health', MetricTier.background, '°C', autoSync: true),
-  MetricDef('cardio_load', 'Cardio Load', 'health', MetricTier.background, 'score', autoSync: true),
   MetricDef('daily_readiness', 'Daily Readiness', 'health', MetricTier.background, 'score', autoSync: true),
   MetricDef('steps', 'Steps', 'health', MetricTier.background, 'count', autoSync: true),
   MetricDef('active_zone', 'Active Zone Mins', 'health', MetricTier.background, 'min', autoSync: true),

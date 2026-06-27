@@ -257,8 +257,18 @@ def parse_exercise_sessions(datapoints: list[dict]) -> list[dict]:
             "steps": _to_float(ms.get("steps")),
             "avg_hr": _to_float(ms.get("averageHeartRateBeatsPerMinute")),
             "zone_minutes": round(active / 60) if active else None,
+            "cardio_load": _cardio_load(zones),
         })
     return out
+
+
+def _cardio_load(zones: dict):
+    """Edwards' TRIMP cardio load from heart-rate zone durations: Σ minutes-in-zone ×
+    zone weight (light 1, fat-burn/moderate 2, cardio/vigorous 3, peak 4). Google's
+    own cardio-load is proprietary and not exposed, so we reconstruct it per session."""
+    weights = {"lightTime": 1, "moderateTime": 2, "vigorousTime": 3, "peakTime": 4}
+    load = sum((_secs(zones.get(k)) or 0) / 60.0 * w for k, w in weights.items())
+    return round(load) if load > 0 else None
 
 
 def parse_intraday_daily(metric_id: str, datapoints: list[dict],
