@@ -42,9 +42,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
       appBar: AppBar(
         backgroundColor: const Color(0xFF08091A),
         centerTitle: true,
-        toolbarHeight: 82,
+        toolbarHeight: 92,
         title: Image.asset('assets/brand/header.png',
-            height: 64, fit: BoxFit.contain,
+            height: 82, fit: BoxFit.contain,
             // Fallback to the wordmark if the asset ever fails to load.
             errorBuilder: (_, __, ___) => const Text('Physical',
                 style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3))),
