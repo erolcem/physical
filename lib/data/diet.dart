@@ -63,6 +63,13 @@ class FoodEntry {
 
   bool get fromGoogle => source == 'google';
 
+  FoodEntry copyWith({Map<String, double>? micros, Map<String, double>? health}) =>
+      FoodEntry(
+        id: id, dateKey: dateKey, name: name, calories: calories, protein: protein,
+        carbs: carbs, fat: fat, fibre: fibre, micros: micros ?? this.micros,
+        health: health ?? this.health, source: source, googleId: googleId,
+      );
+
   /// Build from a parsed Google nutrition-log food dict (macros only; no health axes).
   factory FoodEntry.fromGoogle(Map<String, dynamic> g) => FoodEntry(
         id: 'g:${g['google_id']}',

@@ -1,6 +1,7 @@
 // data/sync.dart — opt-in sync of local logs to the backend canonical store.
 // Local-first is preserved: ranks are still computed on-device; this just mirrors
 // the same logs up so the backend (and, later, Google Health) share one store.
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../engine/rank_engine.dart' show Log;
 import '../state/log_providers.dart' show dietProvider;
@@ -118,9 +119,13 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
   final added = mergeSamples(repo, samples);
   backfillReadinessLogs(repo); // recompute readiness now that recovery data updated
   ref.read(logsProvider.notifier).reload();
-  // Google Health food logs (nutrition-log) → the Diet section, deduped by id.
+  // Google Health food logs (nutrition-log) → the Diet section, deduped by id; then
+  // ask the AI to fill the diet-health radar for foods that lack health axes.
   try {
     ref.read(dietProvider.notifier).importGoogle(await api.googleFoods());
-  } catch (_) {/* food import is best-effort */}
+    // Background: fill the diet-health radar via the AI (many calls) without blocking
+    // the sync; dietProvider updates reactively as foods are enriched.
+    unawaited(ref.read(dietProvider.notifier).enrichFoodHealth(api));
+  } catch (_) {/* food import + enrichment are best-effort */}
   return CloudSyncResult(added, note, needsReconnect: needsReconnect);
 }

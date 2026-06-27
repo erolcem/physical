@@ -303,7 +303,7 @@ class _OverallCard extends StatelessWidget {
             style: const TextStyle(fontSize: 11, color: _muted2)),
         const SizedBox(height: 10),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text('TAP FOR CATEGORY BREAKDOWN',
+          Text('open',
               style: TextStyle(fontSize: 10.5, letterSpacing: 1.5, color: c.withValues(alpha: 0.8), fontWeight: FontWeight.w700)),
           Icon(Icons.chevron_right, size: 14, color: c.withValues(alpha: 0.8)),
         ]),

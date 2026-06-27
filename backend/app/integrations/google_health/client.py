@@ -26,6 +26,7 @@ DATA_TYPES = {
     "body_fat_pct": "body-fat",
     "height": "height",  # auto-ports the user's height (confirm shape via /debug)
     "sleep": "sleep",
+    "spo2": "daily-oxygen-saturation",  # background context (blood-oxygen %)
 }
 
 

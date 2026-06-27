@@ -99,6 +99,7 @@ _EXTRACTORS = {
     "height": _height,
     # Background context (AI tier). Field names are best-effort across candidates;
     # confirm against /debug if a daily type lands empty.
+    "spo2": lambda c: _to_float(c.get("averagePercentage")),  # daily-oxygen-saturation
     "steps": lambda c: _first(c, ("count", "steps", "stepCount", "totalSteps")),
     "active_zone": lambda c: _first(c, ("minutes", "activeZoneMinutes", "totalActiveZoneMinutes")),
     "energy_burned": lambda c: _first(c, ("energyKcal", "calories", "kilocalories", "kcal", "energy")),

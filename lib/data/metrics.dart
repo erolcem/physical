@@ -111,6 +111,7 @@ const List<MetricDef> metrics = [
   MetricDef('daily_readiness', 'Daily Readiness', 'health', MetricTier.background, 'score', autoSync: true),
   MetricDef('steps', 'Steps', 'health', MetricTier.background, 'count', autoSync: true),
   MetricDef('active_zone', 'Active Zone Mins', 'health', MetricTier.background, 'min', autoSync: true),
+  MetricDef('spo2', 'Blood Oxygen', 'health', MetricTier.background, '%', autoSync: true),
 
   // ── BACKGROUND · sleep sub-metrics (all from API) ──
   MetricDef('sleep_duration', 'Sleep Duration', 'sleep', MetricTier.background, 'hrs', autoSync: true),

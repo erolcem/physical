@@ -2,6 +2,7 @@
 // (workout session) logging. Workouts are a training/volume log decoupled from
 // ranks (lifts are logged separately for ranking); both feed the coach + habits.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/api_client.dart' show ApiClient;
 import '../data/correlation.dart';
 import '../data/diet.dart';
 import '../data/habits.dart' show todayKey;
@@ -68,6 +69,27 @@ class DietNotifier extends StateNotifier<List<FoodEntry>> {
     }
     if (added > 0) state = repo.loadFood();
     return added;
+  }
+
+  /// Fill the diet-health radar for foods that have macros but no health axes (mainly
+  /// Google-imported food) by asking the AI to infer health points from the food name.
+  /// Best-effort + capped; recent foods first. Returns how many were enriched.
+  Future<int> enrichFoodHealth(ApiClient api, {int max = 25}) async {
+    final pending = [for (final f in state) if (f.health.isEmpty) f]
+      ..sort((a, b) => b.dateKey.compareTo(a.dateKey));
+    var done = 0;
+    for (final f in pending.take(max)) {
+      try {
+        final n = await api.inferNutrition(f.name);
+        if (n.health.isNotEmpty) {
+          repo.saveFood(f.copyWith(health: n.health,
+              micros: f.micros.isEmpty ? n.micros : null));
+          done++;
+        }
+      } catch (_) {/* one failure shouldn't stop the rest */}
+    }
+    if (done > 0) state = repo.loadFood();
+    return done;
   }
 }
 

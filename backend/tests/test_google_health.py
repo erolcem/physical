@@ -264,3 +264,11 @@ def test_parse_nutrition_log_real_shape():
 
 def test_parse_nutrition_log_skips_non_log():
     assert mapping.parse_nutrition_log([{"name": "x", "notNutrition": {}}]) == []
+
+
+def test_spo2_daily_oxygen_saturation():
+    pts = [{"dataSource": {}, "dailyOxygenSaturation": {
+        "date": {"year": 2026, "month": 6, "day": 27}, "averagePercentage": 96.6}}]
+    out = {s["metric_id"]: s for s in mapping.to_samples("spo2", pts)}
+    assert out["spo2"]["value"] == 96.6
+    assert out["spo2"]["ts"] == "2026-06-27T00:00:00"
