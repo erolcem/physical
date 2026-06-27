@@ -6,11 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../data/api_client.dart';
 import '../data/diet.dart';
-import '../data/habits.dart' show todayKey;
+import '../data/habits.dart' show todayKey, lastNDays;
 import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart' show activeCaloriesOn;
+import '../engine/rank_engine.dart' show Log;
 import '../state/log_providers.dart';
-import '../state/providers.dart' show latestLogsProvider;
+import '../state/providers.dart' show latestLogsProvider, logsProvider;
 
 const _bg = Color(0xFF08091A);
 const _card = Color(0xFF12152E);
@@ -32,7 +33,6 @@ class DietScreen extends ConsumerWidget {
     final entries = ref.watch(dietProvider);
     final today = entriesFor(entries, todayKey());
     final t = todayDiet(entries);
-    final trend = caloriesLastNDays(entries);
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(backgroundColor: _bg, title: const Text('Diet')),
@@ -50,7 +50,7 @@ class DietScreen extends ConsumerWidget {
         const SizedBox(height: 12),
         _healthRadar(t),
         const SizedBox(height: 12),
-        _trend(trend),
+        const _EnergyTrend(),
         const SizedBox(height: 16),
         const Text('TODAY', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
         const SizedBox(height: 6),
@@ -238,40 +238,6 @@ class DietScreen extends ConsumerWidget {
     );
   }
 
-  Widget _trend(List<double> kcal) {
-    final maxK = kcal.fold<double>(1, (m, v) => v > m ? v : m);
-    return Card(
-      color: _card,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('LAST 7 DAYS · CALORIES',
-              style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (var i = 0; i < kcal.length; i++)
-                Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(kcal[i] > 0 ? '${(kcal[i] / 100).round() * 100}' : '',
-                      style: const TextStyle(fontSize: 8, color: _muted)),
-                  const SizedBox(height: 2),
-                  Container(
-                    width: 22,
-                    height: 4 + 46 * (kcal[i] / maxK),
-                    decoration: BoxDecoration(
-                        color: i == kcal.length - 1 ? _gold : _gold.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(4)),
-                  ),
-                ]),
-            ],
-          ),
-        ]),
-      ),
-    );
-  }
-
   Widget _entryRow(WidgetRef ref, FoodEntry e) => Card(
         color: _card,
         child: ListTile(
@@ -416,4 +382,140 @@ class DietScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+// Energy trend: calories IN (food) vs OUT (BMR + active) and weight, over a timeframe.
+class _EnergyTrend extends ConsumerStatefulWidget {
+  const _EnergyTrend();
+  @override
+  ConsumerState<_EnergyTrend> createState() => _EnergyTrendState();
+}
+
+class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
+  int _days = 30;
+  static const _frames = [(7, '1W'), (30, '1M'), (90, '3M'), (180, '6M')];
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = ref.watch(dietProvider);
+    final sessions = ref.watch(workoutProvider);
+    final logs = ref.watch(logsProvider);
+    final latest = ref.watch(latestLogsProvider);
+    final days = lastNDays(_days); // oldest → newest
+    final w = latest['bodyweight']?.value;
+    final h = latest['height']?.value;
+    final age = latest['age']?.value;
+    final bmr = (w != null && h != null && age != null) ? bmrMifflin(w, h, age.round()) : null;
+
+    final inSeries = [for (final d in days) dietTotals(entries, d).calories];
+    final outSeries = bmr == null
+        ? const <double>[]
+        : [for (final d in days) bmr + activeCaloriesOn(sessions, d)];
+
+    // Weight carried forward from the latest bodyweight log on/before each day.
+    final wlogs = [...(logs['bodyweight'] ?? const <Log>[])]
+      ..sort((a, b) => a.ts.compareTo(b.ts));
+    final weightSeries = <double?>[];
+    for (final d in days) {
+      double? v;
+      for (final l in wlogs) {
+        if (l.ts.length >= 10 && l.ts.substring(0, 10).compareTo(d) <= 0) v = l.value;
+      }
+      weightSeries.add(v);
+    }
+    final wPts = [for (var i = 0; i < days.length; i++)
+        if (weightSeries[i] != null) FlSpot(i.toDouble(), weightSeries[i]!)];
+
+    double maxKcal = 100;
+    for (final v in [...inSeries, ...outSeries]) {
+      if (v > maxKcal) maxKcal = v;
+    }
+    final firstW = weightSeries.firstWhere((v) => v != null, orElse: () => null);
+    final lastW = weightSeries.lastWhere((v) => v != null, orElse: () => null);
+    final dW = (firstW != null && lastW != null) ? lastW - firstW : null;
+
+    return Card(
+      color: _card,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Expanded(child: Text('ENERGY TREND',
+                style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted))),
+            for (final (d, label) in _frames)
+              GestureDetector(
+                onTap: () => setState(() => _days = d),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: Text(label,
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: _days == d ? FontWeight.w800 : FontWeight.w500,
+                          color: _days == d ? _teal : _muted)),
+                ),
+              ),
+          ]),
+          const SizedBox(height: 10),
+          Row(children: [
+            _legend('In', _gold), const SizedBox(width: 14), _legend('Out (est)', _teal),
+          ]),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 130,
+            child: LineChart(LineChartData(
+              minY: 0, maxY: maxKcal * 1.15,
+              titlesData: const FlTitlesData(show: false),
+              gridData: const FlGridData(show: false),
+              borderData: FlBorderData(show: false),
+              lineTouchData: const LineTouchData(enabled: false),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: [for (var i = 0; i < inSeries.length; i++) FlSpot(i.toDouble(), inSeries[i])],
+                  isCurved: true, color: _gold, barWidth: 2, dotData: const FlDotData(show: false),
+                  belowBarData: BarAreaData(show: true, color: _gold.withValues(alpha: 0.12)),
+                ),
+                if (outSeries.isNotEmpty)
+                  LineChartBarData(
+                    spots: [for (var i = 0; i < outSeries.length; i++) FlSpot(i.toDouble(), outSeries[i])],
+                    isCurved: true, color: _teal, barWidth: 2, dotData: const FlDotData(show: false),
+                  ),
+              ],
+            )),
+          ),
+          if (wPts.length >= 2) ...[
+            const SizedBox(height: 14),
+            Row(children: [
+              const Expanded(child: Text('WEIGHT',
+                  style: TextStyle(fontSize: 9, letterSpacing: 2, color: _muted))),
+              if (dW != null)
+                Text('${dW >= 0 ? '+' : ''}${dW.toStringAsFixed(1)} kg',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                        color: dW > 0 ? _pink : _teal)),
+            ]),
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 70,
+              child: LineChart(LineChartData(
+                titlesData: const FlTitlesData(show: false),
+                gridData: const FlGridData(show: false),
+                borderData: FlBorderData(show: false),
+                lineTouchData: const LineTouchData(enabled: false),
+                lineBarsData: [
+                  LineChartBarData(spots: wPts, isCurved: true, color: _accent,
+                      barWidth: 2, dotData: const FlDotData(show: false)),
+                ],
+              )),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _legend(String label, Color c) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 9, height: 9,
+            decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+        const SizedBox(width: 5),
+        Text(label, style: const TextStyle(fontSize: 11, color: _muted)),
+      ]);
 }
