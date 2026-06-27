@@ -233,6 +233,27 @@ class ApiClient {
     }
   }
 
+  /// Upload a recorded voice clip (WAV) for clinical voice-quality analysis.
+  /// Returns the backend result (score + jitter/shimmer/HNR/pitch). Throws on failure.
+  Future<Map<String, dynamic>> measureVoice(String filePath) async {
+    final req = http.MultipartRequest(
+        'POST', Uri.parse('$baseUrl/me/aesthetics/voice'))
+      ..headers.addAll(_headers())
+      ..files.add(await http.MultipartFile.fromPath('file', filePath));
+    final streamed = await _client.send(req).timeout(const Duration(seconds: 30));
+    final r = await http.Response.fromStream(streamed);
+    if (r.statusCode != 200) {
+      String msg;
+      try {
+        msg = (jsonDecode(r.body) as Map)['detail']?.toString() ?? r.body;
+      } catch (_) {
+        msg = r.body;
+      }
+      throw ApiException(msg, r.statusCode);
+    }
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
   /// Raw Google Health debug output (status + a real sample per data type, plus
   /// profile/session probes) — returned verbatim for the in-app inspector to copy.
   Future<String> googleDebug() async {

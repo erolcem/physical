@@ -8,6 +8,7 @@ import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log, strengthValue, isolationLifts;
 import '../state/providers.dart';
 import 'badge.dart';
+import 'voice_measure.dart';
 
 const List<String> _ladderTiers = [
   'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Champion', 'Titan'
@@ -65,6 +66,16 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
     ref.read(logsProvider.notifier).add(m.id, log);
     _weight.clear();
     _value.clear();
+  }
+
+  Future<void> _measureVoice() async {
+    final score = await measureVoiceFlow(context, ref);
+    if (score == null || !mounted) return;
+    ref.read(logsProvider.notifier)
+        .add('voice', Log('voice', score, ts: DateTime.now().toIso8601String()));
+    setState(() {}); // refresh latest/history
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Voice quality logged: ${score.toStringAsFixed(0)}/100')));
   }
 
   @override
@@ -201,8 +212,17 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
               ]),
               const SizedBox(height: 8),
               _field(_bw, 'Bodyweight now (kg) — snapshotted'),
-            ] else
+            ] else ...[
+              // Voice quality can be measured directly from the mic (Praat analysis).
+              if (m.id == 'voice') ...[
+                _grandButton('🎙  Measure with mic', const Color(0xFF4CE0C3), _measureVoice),
+                const SizedBox(height: 8),
+                const Text('— or enter a score manually —',
+                    style: TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 8),
+              ],
               _field(_value, '${m.label} (${m.unit})'),
+            ],
             const SizedBox(height: 12),
             _grandButton('Save', ranked ? c : const Color(0xFF5B6AF8), _save),
 

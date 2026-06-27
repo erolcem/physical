@@ -673,7 +673,7 @@ class _MetricGrid extends ConsumerWidget {
         crossAxisCount: 2, mainAxisSpacing: 8, crossAxisSpacing: 8,
         // FIXED height (not width-relative) so cells stay compact on wide screens
         // instead of growing tall. Fits the 2-line label + value with a little slack.
-        mainAxisExtent: 72,
+        mainAxisExtent: 64,
       ),
       itemCount: ids.length,
       itemBuilder: (ctx, i) => _MetricCell(ids[i], latest[ids[i]], onTap),
@@ -716,7 +716,7 @@ class _MetricCell extends StatelessWidget {
             onTap: () => onTap(metricId),
             borderRadius: BorderRadius.circular(12),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
               child: Row(children: [
                 Container(width: 11, height: 11,
                     decoration: BoxDecoration(
@@ -735,8 +735,8 @@ class _MetricCell extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(m.label, maxLines: 2, overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.15)),
-                      const SizedBox(height: 3),
+                          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.08)),
+                      const SizedBox(height: 2),
                       hasData
                           ? Text('${log!.value.toStringAsFixed(0)} ${m.unit}',
                               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: c))
@@ -902,8 +902,8 @@ class _AestheticsStrip extends ConsumerWidget {
           Material(
             color: Colors.transparent,
             child: Ink(
-              width: 52,
-              height: 52,
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(
                 gradient: hasData
                     ? LinearGradient(
@@ -918,7 +918,7 @@ class _AestheticsStrip extends ConsumerWidget {
               child: InkWell(
                 onTap: () => openDetailSheet(parentContext, m.id),
                 borderRadius: BorderRadius.circular(14),
-                child: Center(child: Icon(_aestheticIcons[m.id] ?? Icons.spa, color: color, size: 26)),
+                child: Center(child: Icon(_aestheticIcons[m.id] ?? Icons.spa, color: color, size: 24)),
               ),
             ),
           ),
