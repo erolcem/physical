@@ -1032,6 +1032,126 @@
         "sub": "III",
         "top_pct": 3.337651
       }
+    },
+    {
+      "metric": "blood_pressure",
+      "value": 100,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 99.95,
+        "rank_value": 8.5,
+        "tier": "Glory",
+        "sub": "II",
+        "top_pct": 0.05
+      }
+    },
+    {
+      "metric": "blood_pressure",
+      "value": 105,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 99.95,
+        "rank_value": 8.5,
+        "tier": "Glory",
+        "sub": "II",
+        "top_pct": 0.05
+      }
+    },
+    {
+      "metric": "blood_pressure",
+      "value": 112,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 81.834893,
+        "rank_value": 4.183489,
+        "tier": "Platinum",
+        "sub": "I",
+        "top_pct": 18.165107
+      }
+    },
+    {
+      "metric": "blood_pressure",
+      "value": 122,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 50.0,
+        "rank_value": 2.5,
+        "tier": "Silver",
+        "sub": "II",
+        "top_pct": 50.0
+      }
+    },
+    {
+      "metric": "blood_pressure",
+      "value": 140,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 5.088175,
+        "rank_value": 0.254409,
+        "tier": "Wood",
+        "sub": "I",
+        "top_pct": 94.911825
+      }
+    },
+    {
+      "metric": "hrr",
+      "value": 10,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 6.68072,
+        "rank_value": 0.334036,
+        "tier": "Wood",
+        "sub": "II",
+        "top_pct": 93.31928
+      }
+    },
+    {
+      "metric": "hrr",
+      "value": 18,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 24.196365,
+        "rank_value": 1.209818,
+        "tier": "Bronze",
+        "sub": "I",
+        "top_pct": 75.803635
+      }
+    },
+    {
+      "metric": "hrr",
+      "value": 25,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 50.0,
+        "rank_value": 2.5,
+        "tier": "Silver",
+        "sub": "II",
+        "top_pct": 50.0
+      }
+    },
+    {
+      "metric": "hrr",
+      "value": 35,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 84.134475,
+        "rank_value": 4.413447,
+        "tier": "Platinum",
+        "sub": "II",
+        "top_pct": 15.865525
+      }
+    },
+    {
+      "metric": "hrr",
+      "value": 50,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 99.379033,
+        "rank_value": 7.421148,
+        "tier": "Titan",
+        "sub": "II",
+        "top_pct": 0.620967
+      }
     }
   ],
   "threshold_cases": [
@@ -1238,6 +1358,42 @@
       "tier": "Bronze",
       "bodyweight": null,
       "expected_kg": 46.850818
+    },
+    {
+      "metric": "blood_pressure",
+      "tier": "Diamond",
+      "bodyweight": null,
+      "expected_kg": 60.0
+    },
+    {
+      "metric": "blood_pressure",
+      "tier": "Gold",
+      "bodyweight": null,
+      "expected_kg": 60.0
+    },
+    {
+      "metric": "blood_pressure",
+      "tier": "Bronze",
+      "bodyweight": null,
+      "expected_kg": 60.0
+    },
+    {
+      "metric": "hrr",
+      "tier": "Diamond",
+      "bodyweight": null,
+      "expected_kg": 37.815516
+    },
+    {
+      "metric": "hrr",
+      "tier": "Gold",
+      "bodyweight": null,
+      "expected_kg": 27.533471
+    },
+    {
+      "metric": "hrr",
+      "tier": "Bronze",
+      "bodyweight": null,
+      "expected_kg": 16.583788
     }
   ],
   "overall_cases": [

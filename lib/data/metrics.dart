@@ -81,6 +81,10 @@ const List<MetricDef> metrics = [
       exercise: 'Morning resting heart rate'),
   MetricDef('hrv', 'HRV', 'recovery', MetricTier.ranked, 'ms',
       exercise: 'Heart rate variability'),
+  MetricDef('blood_pressure', 'Blood Pressure', 'recovery', MetricTier.ranked, 'mmHg',
+      exercise: 'Systolic (cuff) — optimal ≤105', provisional: true),
+  MetricDef('hrr', 'HR Recovery', 'recovery', MetricTier.ranked, 'bpm',
+      exercise: 'HR drop 1 min after peak effort', provisional: true),
   // Sleep score: auto-derived on sync — the Fitbit/Google vendor score when the
   // payload carries one, else a transparent composite of the night's readings
   // (duration / efficiency / deep+REM). Ranked as recovery; also loggable by hand.

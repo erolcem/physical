@@ -19,7 +19,7 @@ RANKED_CATEGORY: dict[str, str] = {
     "sprint_100m": "performance",
     # recovery (body_fat_pct lives here — it's a health metric)
     "resting_hr": "recovery", "hrv": "recovery", "sleep_score": "recovery",
-    "body_fat_pct": "recovery",
+    "body_fat_pct": "recovery", "blood_pressure": "recovery", "hrr": "recovery",
     # aesthetics (ranked, but EXCLUDED from the overall score — see ranking.py)
     "eye": "aesthetics", "voice": "aesthetics", "skin": "aesthetics",
     "oral": "aesthetics", "hair": "aesthetics", "grooming": "aesthetics",

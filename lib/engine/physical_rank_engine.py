@@ -186,6 +186,11 @@ STANDARDS = {
     # ── Recovery ──
     "resting_hr": Standard("resting_hr", -1, False, Dist("normal", 70.0, 10.0),
                            "genpop RHR ~70±10 (lower better)"),
+    "blood_pressure": Standard("blood_pressure", -1, False, Dist("normal", 122.0, 11.0),
+                           "systolic BP mmHg (lower better); optimal <=105, genpop ~122+-11 - provisional",
+                           ideal=105.0, provisional=True),
+    "hrr":        Standard("hrr", 1, False, Dist("normal", 25.0, 10.0),
+                           "1-min heart-rate recovery bpm (higher better); healthy ~25+-10 - provisional"),
     "hrv":        Standard("hrv", +1, False, Dist("lognormal", math.log(50), 0.5),
                            "HRV ms — method-dependent, FLAG"),
     "sleep_score": Standard("sleep_score", +1, False, Dist("normal", 77.0, 8.0),
