@@ -20,6 +20,18 @@ const Map<String, String> microLabels = {
 
 String microUnit(String key) => key.endsWith('_ug') ? 'µg' : 'mg';
 
+// Diet-health radar axes (keys match the backend nutrition.HEALTH_AXES). Each food
+// contributes 0–100 points per axis (portion-scaled, AI-inferred); points ACCUMULATE
+// across the day and cap at 100, and the overall diet-health score averages all axes.
+const Map<String, String> healthAxisLabels = {
+  'micronutrients': 'Micronutrients',
+  'fibre': 'Fibre',
+  'gut_health': 'Gut Health',
+  'antioxidants': 'Antioxidants',
+  'healthy_fats': 'Healthy Fats',
+  'whole_food': 'Whole-food',
+};
+
 class FoodEntry {
   final String id;
   final String dateKey; // YYYY-MM-DD
@@ -30,6 +42,7 @@ class FoodEntry {
   final double fat;
   final double fibre;
   final Map<String, double> micros;
+  final Map<String, double> health; // diet-health axis points (0–100 per axis)
 
   const FoodEntry({
     required this.id,
@@ -41,12 +54,14 @@ class FoodEntry {
     this.fat = 0,
     this.fibre = 0,
     this.micros = const {},
+    this.health = const {},
   });
 
   Map<String, dynamic> toJson() => {
         'id': id, 'day': dateKey, 'name': name,
         'kcal': calories, 'p': protein, 'c': carbs, 'f': fat, 'fib': fibre,
         if (micros.isNotEmpty) 'mic': micros,
+        if (health.isNotEmpty) 'hl': health,
       };
 
   factory FoodEntry.fromJson(Map<String, dynamic> j) => FoodEntry(
@@ -62,6 +77,10 @@ class FoodEntry {
           for (final e in ((j['mic'] as Map?) ?? const {}).entries)
             e.key as String: (e.value as num).toDouble()
         },
+        health: {
+          for (final e in ((j['hl'] as Map?) ?? const {}).entries)
+            e.key as String: (e.value as num).toDouble()
+        },
       );
 }
 
@@ -69,19 +88,33 @@ class DietTotals {
   final double calories, protein, carbs, fat, fibre;
   final int items;
   final Map<String, double> micros;
+  final Map<String, double> health; // accumulated axis points, capped 100 each
   const DietTotals(this.calories, this.protein, this.carbs, this.fat, this.fibre,
-      this.items, {this.micros = const {}});
+      this.items, {this.micros = const {}, this.health = const {}});
   static const zero = DietTotals(0, 0, 0, 0, 0, 0);
 
   /// Macro split of total energy (4/4/9 kcal per g of P/C/F), for the breakdown bar.
   double get proteinKcal => protein * 4;
   double get carbsKcal => carbs * 4;
   double get fatKcal => fat * 9;
+
+  /// Overall diet-health score (0–100): the average across ALL radar axes of the
+  /// day's accumulated (capped) points — so a balanced, whole-food day scores high.
+  double get healthScore {
+    final keys = healthAxisLabels.keys;
+    final sum = keys.fold(0.0, (a, k) => a + (health[k] ?? 0).clamp(0.0, 100.0));
+    return keys.isEmpty ? 0 : sum / keys.length;
+  }
 }
+
+/// Mifflin–St Jeor basal metabolic rate (kcal/day) for a male.
+double bmrMifflin(double weightKg, double heightCm, int age) =>
+    10 * weightKg + 6.25 * heightCm - 5 * age + 5;
 
 DietTotals dietTotals(List<FoodEntry> entries, String day) {
   var c = 0.0, p = 0.0, cb = 0.0, f = 0.0, fib = 0.0, n = 0;
   final mic = <String, double>{};
+  final hl = <String, double>{};
   for (final e in entries) {
     if (e.dateKey != day) continue;
     c += e.calories;
@@ -90,9 +123,11 @@ DietTotals dietTotals(List<FoodEntry> entries, String day) {
     f += e.fat;
     fib += e.fibre;
     e.micros.forEach((k, v) => mic[k] = (mic[k] ?? 0) + v);
+    // Health axis points accumulate across the day, capped at 100 per axis.
+    e.health.forEach((k, v) => hl[k] = ((hl[k] ?? 0) + v).clamp(0.0, 100.0));
     n++;
   }
-  return DietTotals(c, p, cb, f, fib, n, micros: mic);
+  return DietTotals(c, p, cb, f, fib, n, micros: mic, health: hl);
 }
 
 DietTotals todayDiet(List<FoodEntry> entries) => dietTotals(entries, todayKey());

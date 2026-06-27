@@ -101,3 +101,4 @@ class NutritionOut(BaseModel):
     fat: float
     fibre: float
     micros: dict[str, float] = {}  # canonical keys (sodium_mg, vitamin_c_mg, …)
+    health: dict[str, float] = {}  # diet-health radar axis points (0–100 per food)

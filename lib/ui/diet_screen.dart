@@ -3,11 +3,14 @@
 // 7-day calorie trend, and the day's food entries. Feeds the coach.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../data/api_client.dart';
 import '../data/diet.dart';
 import '../data/habits.dart' show todayKey;
 import '../data/sync.dart' show apiClientProvider;
+import '../data/workout.dart' show activeCaloriesOn;
 import '../state/log_providers.dart';
+import '../state/providers.dart' show latestLogsProvider;
 
 const _bg = Color(0xFF08091A);
 const _card = Color(0xFF12152E);
@@ -42,6 +45,10 @@ class DietScreen extends ConsumerWidget {
       ),
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
         _totals(t),
+        const SizedBox(height: 12),
+        _energyBalance(ref, t),
+        const SizedBox(height: 12),
+        _healthRadar(t),
         const SizedBox(height: 12),
         _trend(trend),
         const SizedBox(height: 16),
@@ -120,6 +127,117 @@ class DietScreen extends ConsumerWidget {
         Text(label, style: const TextStyle(fontSize: 10, color: _muted)),
       ]);
 
+  // Energy balance: calories in (food) vs out (estimated BMR + active from Google
+  // exercise sessions) + current weight. Out is ESTIMATED (watch-derived) — relative.
+  Widget _energyBalance(WidgetRef ref, DietTotals t) {
+    final latest = ref.watch(latestLogsProvider);
+    final sessions = ref.watch(workoutProvider);
+    final w = latest['bodyweight']?.value;
+    final h = latest['height']?.value;
+    final age = latest['age']?.value;
+    final hasBody = w != null && h != null && age != null;
+    final out = hasBody
+        ? bmrMifflin(w, h, age.round()) + activeCaloriesOn(sessions, todayKey())
+        : null;
+    final net = out == null ? null : t.calories - out;
+    return Card(
+      color: _card,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('ENERGY BALANCE', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+          const SizedBox(height: 12),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            _energyStat('In', '${t.calories.round()}', 'kcal', _gold),
+            _energyStat('Out (est)', out == null ? '—' : '${out.round()}', 'kcal', _teal),
+            _energyStat(net == null ? 'Net' : (net >= 0 ? 'Surplus' : 'Deficit'),
+                net == null ? '—' : '${net.abs().round()}', 'kcal',
+                net == null ? _muted : (net >= 0 ? _pink : _teal)),
+            _energyStat('Weight', w == null ? '—' : w.toStringAsFixed(1), 'kg', _accent),
+          ]),
+          if (!hasBody) ...[
+            const SizedBox(height: 10),
+            const Text('Sync weight/height/age (☁) for the burn estimate.',
+                style: TextStyle(fontSize: 11, color: _muted)),
+          ] else ...[
+            const SizedBox(height: 10),
+            Text('Out = BMR ${bmrMifflin(w, h, age.round()).round()} + active '
+                '${activeCaloriesOn(sessions, todayKey()).round()} kcal · estimated',
+                style: const TextStyle(fontSize: 10.5, color: _muted)),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _energyStat(String label, String value, String unit, Color c) =>
+      Column(children: [
+        Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: c)),
+        Text(unit, style: const TextStyle(fontSize: 9, color: _muted)),
+        const SizedBox(height: 3),
+        Text(label, style: const TextStyle(fontSize: 10.5, color: _muted, fontWeight: FontWeight.w600)),
+      ]);
+
+  // Diet-health radar: the day's accumulated points per axis + an averaged /100 score.
+  Widget _healthRadar(DietTotals t) {
+    final axes = healthAxisLabels.keys.toList();
+    final score = t.healthScore;
+    final c = score >= 67 ? _teal : (score >= 34 ? _gold : _pink);
+    final hasAny = axes.any((k) => (t.health[k] ?? 0) > 0);
+    return Card(
+      color: _card,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Expanded(child: Text('DIET HEALTH',
+                style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted))),
+            Text('${score.round()}', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: c)),
+            const Padding(padding: EdgeInsets.only(left: 2, bottom: 3),
+                child: Text('/100', style: TextStyle(fontSize: 11, color: _muted))),
+          ]),
+          const SizedBox(height: 8),
+          if (!hasAny)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: Text('Log food (AI auto-fill) to build your health radar.',
+                  style: TextStyle(color: _muted, fontSize: 12))))
+          else
+            SizedBox(
+              height: 240,
+              child: RadarChart(RadarChartData(
+                radarShape: RadarShape.polygon,
+                tickCount: 4,
+                ticksTextStyle: const TextStyle(color: Colors.transparent, fontSize: 0),
+                radarBorderData: const BorderSide(color: Color(0x22FFFFFF)),
+                gridBorderData: const BorderSide(color: Color(0x18FFFFFF)),
+                tickBorderData: const BorderSide(color: Color(0x18FFFFFF)),
+                titleTextStyle: const TextStyle(color: _muted, fontSize: 10, fontWeight: FontWeight.w600),
+                getTitle: (i, _) => RadarChartTitle(text: healthAxisLabels[axes[i]] ?? axes[i]),
+                dataSets: [
+                  // Faint 0–100 reference ring so the shape reads on an absolute scale.
+                  RadarDataSet(
+                    fillColor: Colors.transparent,
+                    borderColor: const Color(0x14FFFFFF),
+                    borderWidth: 1,
+                    entryRadius: 0,
+                    dataEntries: [for (final _ in axes) const RadarEntry(value: 100)],
+                  ),
+                  RadarDataSet(
+                    fillColor: c.withValues(alpha: 0.22),
+                    borderColor: c,
+                    borderWidth: 2,
+                    entryRadius: 2,
+                    dataEntries: [for (final k in axes) RadarEntry(value: (t.health[k] ?? 0).clamp(0, 100))],
+                  ),
+                ],
+              )),
+            ),
+        ]),
+      ),
+    );
+  }
+
   Widget _trend(List<double> kcal) {
     final maxK = kcal.fold<double>(1, (m, v) => v > m ? v : m);
     return Card(
@@ -177,6 +295,7 @@ class DietScreen extends ConsumerWidget {
     final f = TextEditingController();
     final fib = TextEditingController();
     var micros = <String, double>{};
+    var health = <String, double>{};
     var busy = false;
 
     Widget num(TextEditingController ctrl, String label) => Expanded(
@@ -213,6 +332,7 @@ class DietScreen extends ConsumerWidget {
               f.text = n.fat.round().toString();
               fib.text = n.fibre.round().toString();
               micros = n.micros;
+              health = n.health;
               setLocal(() => busy = false);
             } catch (e) {
               setLocal(() => busy = false);
@@ -284,6 +404,7 @@ class DietScreen extends ConsumerWidget {
                         fat: double.tryParse(f.text) ?? 0,
                         fibre: double.tryParse(fib.text) ?? 0,
                         micros: micros,
+                        health: health,
                       );
                   Navigator.pop(ctx);
                 },

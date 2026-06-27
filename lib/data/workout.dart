@@ -171,6 +171,16 @@ class WorkoutSession {
 List<WorkoutSession> sortedByRecent(List<WorkoutSession> sessions) =>
     [...sessions]..sort((a, b) => b.start.compareTo(a.start));
 
+/// Active calories burned on [day] (YYYY-MM-DD), summed from sessions' Google calorie
+/// summaries. Estimated (watch-derived) — feeds the diet energy-balance "out" figure.
+double activeCaloriesOn(List<WorkoutSession> sessions, String day) {
+  var kcal = 0.0;
+  for (final s in sessions) {
+    if (s.dateKey == day) kcal += s.summary['calories'] ?? 0;
+  }
+  return kcal;
+}
+
 /// Group sets under their exercise name, preserving first-seen order.
 Map<String, List<WorkoutSet>> groupByExercise(List<WorkoutSet> sets) {
   final m = <String, List<WorkoutSet>>{};

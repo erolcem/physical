@@ -23,6 +23,13 @@ MICRO_UNITS = {
 }
 _MACROS = ("calories", "protein", "carbs", "fat", "fibre")
 
+# Diet-health radar axes. Each food gets points 0–100 PER AXIS for the portion eaten,
+# scaled so a full healthy day's foods sum to ~100 on each axis (i.e. one food is a
+# fraction). They accumulate across the day → a radar + an averaged /100 diet-health
+# score. Provisional (AI estimate). Keep keys in sync with diet.dart `healthAxisLabels`.
+HEALTH_AXES = ("micronutrients", "fibre", "gut_health", "antioxidants",
+               "healthy_fats", "whole_food")
+
 NUTRITION_PROMPT = (
     "You are a precise nutrition estimator. Given a food or meal description, "
     "estimate its nutrition for the portion described (assume one typical serving "
@@ -30,8 +37,12 @@ NUTRITION_PROMPT = (
     "markdown fences. Keys: calories (kcal), protein, carbs, fat, fibre (all in "
     "grams), and these micronutrients in the stated units: "
     + ", ".join(f"{k} ({u})" for k, u in MICRO_UNITS.items())
-    + ". All values plain numbers; use 0 for negligible amounts. Approximate "
-    "honestly from typical food composition."
+    + ". Also include a \"health\" object scoring THIS food+portion's contribution "
+    "to each diet-health axis as points 0-100, calibrated so a full day of healthy "
+    "eating sums to about 100 per axis (so one item is a fraction): "
+    + ", ".join(HEALTH_AXES)
+    + " (whole_food = minimally-processed/whole vs ultra-processed). "
+    "All values plain numbers; use 0 for negligible amounts. Approximate honestly."
 )
 
 
@@ -71,6 +82,14 @@ def parse_nutrition(text: str):
         if v is not None:
             micros[k] = v
     out["micros"] = micros
+
+    hsrc = obj.get("health") if isinstance(obj.get("health"), dict) else obj
+    health = {}
+    for k in HEALTH_AXES:
+        v = _num(hsrc.get(k))
+        if v is not None:
+            health[k] = min(100.0, v)  # cap one food's per-axis contribution
+    out["health"] = health
 
     # Reject all-zero results (junk input) so the app never shows a fake "0 kcal".
     if out["calories"] == 0 and not any(out[k] for k in ("protein", "carbs", "fat")):

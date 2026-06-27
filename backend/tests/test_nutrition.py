@@ -27,6 +27,17 @@ def test_accepts_nested_micros_object():
     assert out["micros"] == {"calcium_mg": 120.0, "iron_mg": 1.2}
 
 
+def test_parses_health_axes_capped_at_100():
+    out = parse_nutrition(
+        '{"calories": 50, "protein": 1, "carbs": 12, "fat": 0, "fibre": 6, '
+        '"health": {"fibre": 35, "gut_health": 40, "antioxidants": 120, "whole_food": 90}}')
+    h = out["health"]
+    assert h["fibre"] == 35 and h["gut_health"] == 40
+    assert h["antioxidants"] == 100  # one food's contribution capped at 100
+    assert h["whole_food"] == 90
+    assert "micronutrients" not in h  # omitted axes simply absent
+
+
 def test_coerces_strings_clamps_negatives_drops_unknown_and_nonfinite():
     out = parse_nutrition(
         '{"calories": "250", "protein": -3, "carbs": 20, "fat": 8, "fibre": 2, '

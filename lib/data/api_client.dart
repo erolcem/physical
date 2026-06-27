@@ -16,10 +16,12 @@ class ApiException implements Exception {
   String toString() => 'ApiException($status): $message';
 }
 
-/// Gemini-inferred nutrition for a food description (macros + canonical micros).
+/// Gemini-inferred nutrition for a food description (macros + canonical micros +
+/// diet-health radar axis points).
 class InferredNutrition {
   final double calories, protein, carbs, fat, fibre;
   final Map<String, double> micros;
+  final Map<String, double> health;
   const InferredNutrition({
     required this.calories,
     required this.protein,
@@ -27,6 +29,7 @@ class InferredNutrition {
     required this.fat,
     required this.fibre,
     this.micros = const {},
+    this.health = const {},
   });
 }
 
@@ -363,6 +366,10 @@ class ApiClient {
       fibre: (j['fibre'] as num).toDouble(),
       micros: {
         for (final e in ((j['micros'] as Map?) ?? const {}).entries)
+          e.key as String: (e.value as num).toDouble()
+      },
+      health: {
+        for (final e in ((j['health'] as Map?) ?? const {}).entries)
           e.key as String: (e.value as num).toDouble()
       },
     );
