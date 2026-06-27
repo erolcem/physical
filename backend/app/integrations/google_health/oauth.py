@@ -22,6 +22,9 @@ SCOPES = [
     "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
     "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
     "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
+    # Nutrition (food/macros) + hydration — needs its own scope. Adding it means users
+    # must RE-CONSENT (reconnect Google) for nutrition-log to return data.
+    "https://www.googleapis.com/auth/googlehealth.nutrition.readonly",
 ]
 
 
