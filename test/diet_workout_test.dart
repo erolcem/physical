@@ -56,6 +56,33 @@ void main() {
       expect(t.fatKcal, 90); // 10g × 9
     });
 
+    test('FoodEntry.fromGoogle maps a nutrition-log dict + round-trips', () {
+      final g = FoodEntry.fromGoogle({
+        'google_id': '7534057579911318776', 'name': 'Chicken Thigh, Fried',
+        'day': '2026-06-27', 'calories': 144, 'protein': 11.2, 'carbs': 4.7,
+        'fat': 8.6, 'fibre': 0.16,
+      });
+      expect(g.id, 'g:7534057579911318776');
+      expect(g.fromGoogle, true);
+      expect(g.name, 'Chicken Thigh, Fried');
+      expect(g.calories, 144);
+      expect(g.protein, 11.2);
+      final back = FoodEntry.fromJson(g.toJson());
+      expect(back.source, 'google');
+      expect(back.googleId, '7534057579911318776');
+      expect(back.calories, 144);
+    });
+
+    test('dietHealthScore averages the six axes (capped)', () {
+      const e = FoodEntry(id: '1', dateKey: 'd', name: 'x',
+          health: {'micronutrients': 60, 'fibre': 60, 'gut_health': 60,
+            'antioxidants': 60, 'healthy_fats': 60, 'whole_food': 60});
+      expect(dietTotals([e], 'd').healthScore, closeTo(60, 1e-9));
+      // points accumulate + cap at 100 per axis
+      final two = dietTotals([e, e], 'd');
+      expect(two.health['fibre'], 100); // 60+60 capped
+    });
+
     test('caloriesLastNDays returns the day-by-day trend ending today', () {
       const day = [
         FoodEntry(id: '1', dateKey: '2026-06-24', name: 'a', calories: 500),

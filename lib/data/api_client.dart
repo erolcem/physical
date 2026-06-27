@@ -236,6 +236,20 @@ class ApiClient {
     }
   }
 
+  /// Recent Google Health food logs (nutrition-log, parsed) for the Diet section.
+  Future<List<Map<String, dynamic>>> googleFoods() async {
+    try {
+      final r = await _client
+          .get(Uri.parse('$baseUrl/integrations/google/foods'), headers: _headers())
+          .timeout(const Duration(seconds: 30));
+      if (r.statusCode != 200) return const [];
+      final body = jsonDecode(r.body) as Map<String, dynamic>;
+      return ((body['foods'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Upload a recorded voice clip (WAV) for clinical voice-quality analysis.
   /// Returns the backend result (score + jitter/shimmer/HNR/pitch). Throws on failure.
   Future<Map<String, dynamic>> measureVoice(String filePath) async {

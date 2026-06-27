@@ -55,6 +55,20 @@ class DietNotifier extends StateNotifier<List<FoodEntry>> {
     repo.deleteFood(id);
     state = repo.loadFood();
   }
+
+  /// Import Google Health food logs (dedup by googleId), returning how many were new.
+  int importGoogle(List<Map<String, dynamic>> foods) {
+    final have = {for (final f in state) if (f.googleId != null) f.googleId};
+    var added = 0;
+    for (final g in foods) {
+      final gid = g['google_id'];
+      if (gid == null || have.contains(gid)) continue;
+      repo.saveFood(FoodEntry.fromGoogle(g));
+      added++;
+    }
+    if (added > 0) state = repo.loadFood();
+    return added;
+  }
 }
 
 final workoutProvider =

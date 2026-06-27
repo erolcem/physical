@@ -87,6 +87,26 @@ def google_exercises(user_id: str = Depends(current_user), db: Session = Depends
     return {"sessions": mapping.parse_exercise_sessions(pts)}
 
 
+@router.get("/foods")
+def google_foods(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
+    """The user's recent Google Health food logs (nutrition-log) → name + day + calories
+    + macros, for importing into the Diet section. Needs the nutrition scope (reconnect)."""
+    token = db.get(GoogleHealthToken, user_id)
+    if token is None:
+        raise HTTPException(404, "Google Health not connected")
+    try:
+        access = _valid_access_token(db, token)
+    except Exception as e:
+        return {"error": str(e)[:200], "foods": []}
+    try:
+        status, body = GoogleHealthClient(access).get_raw(
+            "/users/me/dataTypes/nutrition-log/dataPoints?pageSize=100")
+        pts = body.get("dataPoints", []) if isinstance(body, dict) else []
+    except Exception as e:
+        return {"error": str(e)[:200], "foods": []}
+    return {"foods": mapping.parse_nutrition_log(pts)}
+
+
 @router.get("/debug")
 def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     """Diagnose an empty sync: what does Google actually have for this account?

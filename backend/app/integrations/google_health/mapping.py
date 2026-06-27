@@ -270,6 +270,50 @@ def _local_start(interval: dict):
         return start[:19]
 
 
+def parse_nutrition_log(datapoints: list[dict]) -> list[dict]:
+    """Google `nutrition-log` dataPoints → food dicts the app imports as FoodEntries
+    (name, day, calories + macros). Only the RELIABLE energy + macros are taken: this
+    source reports per-nutrient values under a `grams` key with inconsistent scaling
+    (sodium looks like mg, potassium absurdly small), so micros are skipped — the app's
+    AI pass handles micros/health for foods that need them."""
+    out = []
+    for p in datapoints:
+        c = p.get("nutritionLog")
+        if not isinstance(c, dict):
+            continue
+        interval = c.get("interval") or {}
+        start = _local_start(interval)
+        day = start[:10] if start else None
+        if not day:
+            civ = (interval.get("civilStartTime") or {}).get("date") or {}
+            if civ.get("year"):
+                day = f"{int(civ['year']):04d}-{int(civ.get('month', 1)):02d}-{int(civ.get('day', 1)):02d}"
+        if not day:
+            continue
+        protein = fibre = 0.0
+        for n in (c.get("nutrients") or []):
+            g = _to_float((n.get("quantity") or {}).get("grams"))
+            if g is None:
+                continue
+            if n.get("nutrient") == "PROTEIN":
+                protein = g
+            elif n.get("nutrient") == "DIETARY_FIBER":
+                fibre = g
+        gid = str(p.get("name") or "").rsplit("/", 1)[-1]
+        out.append({
+            "google_id": gid or f"{day}:{c.get('foodDisplayName', 'food')}",
+            "name": c.get("foodDisplayName") or "Food",
+            "day": day,
+            "calories": _to_float((c.get("energy") or {}).get("kcal")) or 0.0,
+            "protein": round(protein, 1),
+            "carbs": _to_float((c.get("totalCarbohydrate") or {}).get("grams")) or 0.0,
+            "fat": _to_float((c.get("totalFat") or {}).get("grams")) or 0.0,
+            "fibre": round(fibre, 2),
+            "meal_type": c.get("mealType"),
+        })
+    return out
+
+
 def parse_exercise_sessions(datapoints: list[dict]) -> list[dict]:
     """Google `exercise` dataPoints → session dicts the app imports as WorkoutSessions
     (type, duration, and a cardio summary: calories/distance/steps/avg-HR/zone-minutes)."""

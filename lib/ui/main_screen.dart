@@ -42,12 +42,18 @@ class _MainScreenState extends ConsumerState<MainScreen>
       appBar: AppBar(
         backgroundColor: const Color(0xFF08091A),
         centerTitle: true,
-        toolbarHeight: 92,
-        title: Image.asset('assets/brand/header.png',
-            height: 82, fit: BoxFit.contain,
-            // Fallback to the wordmark if the asset ever fails to load.
-            errorBuilder: (_, __, ___) => const Text('Physical',
-                style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3))),
+        // Toolbar stays the default height (doesn't push content down); the logo sits in
+        // a small bounded box but renders larger via OverflowBox, so it overlaps a little.
+        title: SizedBox(
+          height: 42,
+          child: OverflowBox(
+            minHeight: 82, maxHeight: 82,
+            child: Image.asset('assets/brand/header.png',
+                height: 82, fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Text('Physical',
+                    style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3))),
+          ),
+        ),
         actions: [
           IconButton(
             tooltip: 'Cloud sync',

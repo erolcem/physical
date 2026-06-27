@@ -43,6 +43,8 @@ class FoodEntry {
   final double fibre;
   final Map<String, double> micros;
   final Map<String, double> health; // diet-health axis points (0–100 per axis)
+  final String source; // 'manual' | 'google'
+  final String? googleId; // nutrition-log datapoint id (dedupe imports)
 
   const FoodEntry({
     required this.id,
@@ -55,13 +57,33 @@ class FoodEntry {
     this.fibre = 0,
     this.micros = const {},
     this.health = const {},
+    this.source = 'manual',
+    this.googleId,
   });
+
+  bool get fromGoogle => source == 'google';
+
+  /// Build from a parsed Google nutrition-log food dict (macros only; no health axes).
+  factory FoodEntry.fromGoogle(Map<String, dynamic> g) => FoodEntry(
+        id: 'g:${g['google_id']}',
+        dateKey: g['day'] as String,
+        name: (g['name'] as String?) ?? 'Food',
+        calories: (g['calories'] as num?)?.toDouble() ?? 0,
+        protein: (g['protein'] as num?)?.toDouble() ?? 0,
+        carbs: (g['carbs'] as num?)?.toDouble() ?? 0,
+        fat: (g['fat'] as num?)?.toDouble() ?? 0,
+        fibre: (g['fibre'] as num?)?.toDouble() ?? 0,
+        source: 'google',
+        googleId: g['google_id'] as String?,
+      );
 
   Map<String, dynamic> toJson() => {
         'id': id, 'day': dateKey, 'name': name,
         'kcal': calories, 'p': protein, 'c': carbs, 'f': fat, 'fib': fibre,
         if (micros.isNotEmpty) 'mic': micros,
         if (health.isNotEmpty) 'hl': health,
+        if (source != 'manual') 'src': source,
+        if (googleId != null) 'gid': googleId,
       };
 
   factory FoodEntry.fromJson(Map<String, dynamic> j) => FoodEntry(
@@ -81,6 +103,8 @@ class FoodEntry {
           for (final e in ((j['hl'] as Map?) ?? const {}).entries)
             e.key as String: (e.value as num).toDouble()
         },
+        source: j['src'] as String? ?? 'manual',
+        googleId: j['gid'] as String?,
       );
 }
 

@@ -234,3 +234,33 @@ def test_endpoints_require_auth():
 def test_status_reports_not_connected(client):
     r = client.get("/integrations/google/status")
     assert r.status_code == 200 and r.json()["connected"] is False
+
+
+def test_parse_nutrition_log_real_shape():
+    # The exact /debug nutrition-log shape (chicken thigh): +10h offset → local day,
+    # reliable energy + macros; protein/fibre come from the nutrients array.
+    pts = [{"name": "users/x/dataTypes/nutrition-log/dataPoints/7534057579911318776",
+            "nutritionLog": {
+                "interval": {"startTime": "2026-06-27T13:21:13Z", "startUtcOffset": "36000s",
+                             "civilStartTime": {"date": {"year": 2026, "month": 6, "day": 27}}},
+                "nutrients": [{"quantity": {"grams": 11.237}, "nutrient": "PROTEIN"},
+                              {"quantity": {"grams": 0.156}, "nutrient": "DIETARY_FIBER"},
+                              {"quantity": {"grams": 149.76}, "nutrient": "SODIUM"}],
+                "energy": {"kcal": 144},
+                "totalCarbohydrate": {"grams": 4.722},
+                "totalFat": {"grams": 8.596},
+                "mealType": "SNACK",
+                "foodDisplayName": "Chicken Thigh, Fried"}}]
+    out = mapping.parse_nutrition_log(pts)
+    assert len(out) == 1
+    f = out[0]
+    assert f["name"] == "Chicken Thigh, Fried"
+    assert f["day"] == "2026-06-27"  # 13:21Z + 10h = local 27th
+    assert f["calories"] == 144 and f["carbs"] == 4.722 and f["fat"] == 8.596
+    assert f["protein"] == 11.2 and f["fibre"] == 0.16
+    assert f["google_id"] == "7534057579911318776"  # last path segment, for dedupe
+    assert f["meal_type"] == "SNACK"
+
+
+def test_parse_nutrition_log_skips_non_log():
+    assert mapping.parse_nutrition_log([{"name": "x", "notNutrition": {}}]) == []

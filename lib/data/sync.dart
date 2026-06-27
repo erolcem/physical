@@ -3,6 +3,7 @@
 // the same logs up so the backend (and, later, Google Health) share one store.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../engine/rank_engine.dart' show Log;
+import '../state/log_providers.dart' show dietProvider;
 import '../state/providers.dart';
 import 'api_client.dart';
 import 'readiness.dart' show backfillReadinessLogs;
@@ -117,5 +118,9 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
   final added = mergeSamples(repo, samples);
   backfillReadinessLogs(repo); // recompute readiness now that recovery data updated
   ref.read(logsProvider.notifier).reload();
+  // Google Health food logs (nutrition-log) → the Diet section, deduped by id.
+  try {
+    ref.read(dietProvider.notifier).importGoogle(await api.googleFoods());
+  } catch (_) {/* food import is best-effort */}
   return CloudSyncResult(added, note, needsReconnect: needsReconnect);
 }
