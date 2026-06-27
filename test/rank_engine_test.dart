@@ -58,6 +58,23 @@ void main() {
     }
   });
 
+  group('body fat health-target (hockey-stick)', () {
+    test('≤12% all hit Glory; leaner never out-ranks the ideal', () {
+      final r12 = tierOf('body_fat_pct', 12);
+      final r6 = tierOf('body_fat_pct', 6);
+      expect(r12.tier, 'Glory');
+      expect(r6.tier, 'Glory');
+      expect(r6.rankValue, closeTo(r12.rankValue, 1e-9)); // 6% is no "better" than 12%
+    });
+    test('rank decreases monotonically as body fat rises above the ideal', () {
+      const vals = [12.0, 13.0, 14.0, 16.0, 20.0, 25.0, 30.0];
+      for (var i = 1; i < vals.length; i++) {
+        expect(rankValue('body_fat_pct', vals[i]) <= rankValue('body_fat_pct', vals[i - 1]),
+            isTrue, reason: '${vals[i]}% should rank ≤ ${vals[i - 1]}%');
+      }
+    });
+  });
+
   group('overall (z-space blend)', () {
     var i = 0;
     for (final raw in golden['overall_cases'] as List) {

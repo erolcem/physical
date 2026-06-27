@@ -132,8 +132,27 @@ class Standard {
   final Distribution dist;
   final String source;
   final bool provisional;
+  // Health TARGET (e.g. body fat): at/below [ideal] the metric is optimal → Glory,
+  // population percentile above it, with an exponential hockey-stick ramp between
+  // ideal and ideal+[idealBand]. Leaner-than-ideal never out-ranks ideal (nor is it
+  // penalised). null = ordinary lower/higher-is-better percentile.
+  final double? ideal;
+  final double idealBand;
   const Standard(this.metricId, this.direction, this.bodyweightScaled, this.dist,
-      this.source, {this.provisional = true});
+      this.source, {this.provisional = true, this.ideal, this.idealBand = 4.0});
+}
+
+const double _idealGloryP = 0.9995; // capped just inside Glory (keeps rankValue < 9)
+
+// Hockey-stick percentile for a health target (lower-is-better below the ideal).
+double _idealPercentile(Standard std, double value) {
+  final ideal = std.ideal!;
+  final top = ideal + std.idealBand;
+  if (value <= ideal) return _idealGloryP; // optimal → top tier, no reward below
+  final pNat = 1.0 - std.dist.cdf(value); // honest population percentile above ideal
+  final near = ((top - value) / (top - ideal)).clamp(0.0, 1.0);
+  final p = pNat + (1.0 - pNat) * near * near * near; // cubic = accelerating climb
+  return p < _idealGloryP ? p : _idealGloryP;
 }
 
 // Strength: untrained mass (grip-grounded CV) + trained tail (prevalence weight).
@@ -187,8 +206,12 @@ final Map<String, Standard> standards = {
       'Fitbit/Google Health sleep score — most users 72–83 (IQR), provisional'),
   'deadhang': Standard('deadhang', 1, false, Dist('lognormal', math.log(60), 0.5), 'provisional'),
   'hamstring_mobility': const Standard('hamstring_mobility', 1, false, Dist('normal', 15.0, 5.0), 'provisional'),
+  'pushups': const Standard('pushups', 1, false, Dist('normal', 35.0, 13.0),
+      'push-ups in 60s, young-male norms, provisional'),
+  'sprint_100m': const Standard('sprint_100m', -1, false, Dist('normal', 15.5, 2.0),
+      '100m sprint seconds (lower better), young-male norms, provisional'),
   'body_fat_pct': const Standard('body_fat_pct', -1, false, Dist('normal', 20.0, 6.0),
-      'young male genpop ~20±6%, lower better, provisional'),
+      'health target: <=12% = Glory, population percentile above, provisional', ideal: 12.0),
   // NOTE: aesthetics (skin/oral/eye/hair/grooming/voice) are intentionally absent.
   // They have no defensible population distribution, so they are TRACKED-only
   // (graphs, never ranked) per the design doc. Keep them out of this map so they
@@ -208,6 +231,7 @@ double _score(Standard std, double value, double? bw) {
 
 double percentile(String metricId, double value, [double? bodyweight]) {
   final std = standards[metricId]!;
+  if (std.ideal != null) return _idealPercentile(std, value);
   final below = std.dist.cdf(_score(std, value, bodyweight));
   final p = std.direction == 1 ? below : 1.0 - below;
   return p.clamp(0.0, 1.0);
@@ -249,6 +273,19 @@ RankResult tierOf(String metricId, double value, [double? bodyweight]) {
 double threshold(String metricId, String tier, [double? bodyweight]) {
   final std = standards[metricId]!;
   final pEntry = tierEntryP[tiers.indexOf(tier)];
+  if (std.ideal != null) {
+    // Numerically invert the hockey-stick (percentile is monotone-decreasing in value).
+    var lo = 0.0, hi = 60.0;
+    for (var i = 0; i < 60; i++) {
+      final mid = (lo + hi) / 2;
+      if (_idealPercentile(std, mid) >= pEntry) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  }
   final cdfP = std.direction == 1 ? pEntry : 1.0 - pEntry;
   final x = std.dist.quantile(cdfP);
   return std.bodyweightScaled ? x * math.pow(bodyweight!, _allo) : x;

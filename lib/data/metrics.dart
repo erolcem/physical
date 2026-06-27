@@ -69,6 +69,10 @@ const List<MetricDef> metrics = [
       exercise: 'Max deadhang time'),
   MetricDef('hamstring_mobility', 'Hamstring Mobility', 'performance', MetricTier.ranked, 'cm',
       exercise: 'Sit and reach'),
+  MetricDef('pushups', 'Push-ups (1 min)', 'performance', MetricTier.ranked, 'reps',
+      exercise: 'Max push-ups in 60 s'),
+  MetricDef('sprint_100m', '100m Sprint', 'performance', MetricTier.ranked, 'sec',
+      exercise: 'Timed 100 m sprint'),
   MetricDef('body_fat_pct', 'Body Fat %', 'recovery', MetricTier.ranked, '%',
       exercise: 'Caliper / DEXA / smart scale'),
 

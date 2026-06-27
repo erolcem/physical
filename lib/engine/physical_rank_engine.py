@@ -100,6 +100,12 @@ class Standard:
     dist: object              # Dist | MixtureDist
     source: str
     provisional: bool = True
+    # Health TARGET (e.g. body fat): at/below `ideal` the metric is optimal → Glory,
+    # honest population percentile above it, with an exponential hockey-stick ramp
+    # between ideal and ideal+ideal_band. Leaner-than-ideal never out-ranks ideal
+    # (nor is penalised). None = ordinary lower/higher-is-better percentile.
+    ideal: float | None = None
+    ideal_band: float = 4.0
 
 
 # ─── Standards: healthy young male, GENERAL population ─────────────────────
@@ -153,8 +159,13 @@ STANDARDS = {
                            "deadhang hold sec — provisional"),
     "hamstring_mobility": Standard("hamstring_mobility", +1, False, Dist("normal", 15.0, 5.0),
                            "sit-and-reach cm — provisional, mobility unmodelled"),
+    "pushups":    Standard("pushups", +1, False, Dist("normal", 35.0, 13.0),
+                           "push-ups in 60s, young-male norms, provisional"),
+    "sprint_100m": Standard("sprint_100m", -1, False, Dist("normal", 15.5, 2.0),
+                           "100m sprint seconds (lower better), young-male norms, provisional"),
     "body_fat_pct": Standard("body_fat_pct", -1, False, Dist("normal", 20.0, 6.0),
-                           "young male genpop ~20±6%, lower better, provisional"),
+                           "health target: <=12% = Glory, population percentile above, provisional",
+                           ideal=12.0),
 
     # ── Recovery ──
     "resting_hr": Standard("resting_hr", -1, False, Dist("normal", 70.0, 10.0),
@@ -175,8 +186,24 @@ def _score(std, value, bodyweight):
     return value
 
 
+_IDEAL_GLORY_P = 0.9995  # capped just inside Glory (keeps rank_value < 9)
+
+
+def _ideal_percentile(std, value):
+    """Hockey-stick percentile for a health target (lower-is-better below the ideal)."""
+    ideal, top = std.ideal, std.ideal + std.ideal_band
+    if value <= ideal:
+        return _IDEAL_GLORY_P  # optimal → top tier, no reward below
+    p_nat = 1.0 - std.dist.cdf(value)  # honest population percentile above ideal
+    near = min(max((top - value) / (top - ideal), 0.0), 1.0)
+    p = p_nat + (1.0 - p_nat) * near ** 3  # cubic = accelerating climb to Glory
+    return min(p, _IDEAL_GLORY_P)
+
+
 def percentile(metric_id, value, bodyweight=None):
     std = STANDARDS[metric_id]
+    if std.ideal is not None:
+        return _ideal_percentile(std, value)
     below = std.dist.cdf(_score(std, value, bodyweight))
     P = below if std.direction == +1 else 1.0 - below
     return min(max(P, 0.0), 1.0)
@@ -213,6 +240,16 @@ def tier_of(metric_id, value, bodyweight=None):
 def threshold(metric_id, tier, bodyweight=None):
     std = STANDARDS[metric_id]
     P_entry = TIER_ENTRY_P[TIERS.index(tier)]
+    if std.ideal is not None:
+        # Numerically invert the hockey-stick (percentile is monotone-decreasing).
+        lo, hi = 0.0, 60.0
+        for _ in range(60):
+            mid = (lo + hi) / 2
+            if _ideal_percentile(std, mid) >= P_entry:
+                lo = mid
+            else:
+                hi = mid
+        return lo
     cdf_p = P_entry if std.direction == +1 else 1.0 - P_entry
     x = std.dist.quantile(cdf_p)
     return x * (bodyweight ** _ALLO) if std.bodyweight_scaled else x
