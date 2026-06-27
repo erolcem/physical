@@ -283,7 +283,7 @@ class _OverallCard extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        RankBadge(tier: r.tier, sub: r.sub, size: 210, animated: true),
+        RankBadge(tier: r.tier, sub: r.sub, size: 244, animated: true),
         const SizedBox(height: 16),
         const Text('OVERALL RANK',
             textAlign: TextAlign.center,
@@ -378,7 +378,7 @@ class _OverallBreakdownSheet extends ConsumerWidget {
                     decoration: BoxDecoration(color: _border2, borderRadius: BorderRadius.circular(3)))),
               ),
             ),
-            Center(child: RankBadge(tier: overall.tier, sub: overall.sub, size: 188, animated: true)),
+            Center(child: RankBadge(tier: overall.tier, sub: overall.sub, size: 220, animated: true)),
             const SizedBox(height: 10),
             Center(child: Text('${overall.tier} ${overall.sub}',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: c, height: 1))),
@@ -428,12 +428,12 @@ class _OverallBreakdownSheet extends ConsumerWidget {
     final col = tierColor(tier);
     final on = count > 0;
     return SizedBox(
-      width: 100,
+      width: 112,
       child: Column(children: [
         SizedBox(
-          width: 86, height: 86,
+          width: 102, height: 102,
           child: Stack(clipBehavior: Clip.none, children: [
-            Center(child: Opacity(opacity: on ? 1.0 : 0.22, child: RankBadge(tier: tier, size: 84))),
+            Center(child: Opacity(opacity: on ? 1.0 : 0.22, child: RankBadge(tier: tier, size: 100))),
             if (on)
               Positioned(
                 right: -4, top: -4,
@@ -472,10 +472,10 @@ class _OverallBreakdownSheet extends ConsumerWidget {
       ),
       child: Row(children: [
         if (ranked)
-          RankBadge(tier: r.tier, sub: r.sub, size: 88)
+          RankBadge(tier: r.tier, sub: r.sub, size: 108)
         else
           Container(
-            width: 86, height: 86, alignment: Alignment.center,
+            width: 106, height: 106, alignment: Alignment.center,
             decoration: BoxDecoration(
                 shape: BoxShape.circle, color: _surface, border: Border.all(color: _border)),
             child: const Icon(Icons.lock_outline, size: 28, color: _muted),

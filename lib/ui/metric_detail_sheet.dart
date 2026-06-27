@@ -180,7 +180,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
             // ── Header ──
             Row(children: [
               if (r != null)
-                RankBadge(tier: r.tier, sub: r.sub, size: 104)
+                RankBadge(tier: r.tier, sub: r.sub, size: 128)
               else
                 // Tracked / unranked metric — no tier, so no medallion.
                 Container(
