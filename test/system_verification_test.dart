@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:physical/data/metrics.dart';
 import 'package:physical/data/body_figure_data.dart';
 import 'package:physical/data/persistent_repository.dart';
+import 'package:physical/data/repository.dart';
 import 'package:physical/state/providers.dart';
 import 'package:physical/engine/rank_engine.dart' as eng;
 import 'package:physical/engine/rank_engine.dart' show Log;
@@ -43,11 +44,18 @@ void main() {
       }
     });
 
-    test('aesthetics are tracked, not ranked', () {
-      for (final id in ['skin', 'oral', 'eye', 'hair', 'grooming', 'voice']) {
+    test('aesthetics are tracked, except eye acuity (real logMAR distribution)', () {
+      for (final id in ['skin', 'oral', 'hair', 'grooming', 'voice']) {
         expect(metricById(id).tier, MetricTier.tracked, reason: '$id should be tracked');
         expect(eng.standards.containsKey(id), isFalse, reason: '$id should have no standard');
       }
+      // Eye acuity is the deliberate exception: visual acuity has a defensible
+      // clinical distribution (logMAR), so it's ranked with a real tier + percentile.
+      // It stays in the 'aesthetics' category and is excluded from the overall score
+      // (see overallProvider) so appearance/sensory metrics never drag the headline.
+      expect(metricById('eye').tier, MetricTier.ranked);
+      expect(eng.standards.containsKey('eye'), isTrue);
+      expect(metricById('eye').category, 'aesthetics');
     });
 
     test('PDF categories: vo2max is performance, recovery = sleep/hrv/resting_hr', () {
@@ -156,11 +164,23 @@ void main() {
       expect(cats.containsKey('strength'), isTrue);
       expect(cats.containsKey('performance'), isTrue);
       expect(cats.containsKey('recovery'), isTrue);
-      expect(cats.containsKey('aesthetics'), isFalse, reason: 'tracked → never ranked');
+      expect(cats.containsKey('aesthetics'), isFalse, reason: 'no aesthetic logged in the seed');
       for (final r in cats.values) {
         expect(eng.tiers.contains(r.tier), isTrue);
         expect(r.percentile, inInclusiveRange(0, 100));
       }
+    });
+
+    test('a ranked aesthetic (eye) ranks by category but is excluded from overall', () {
+      final repo = InMemoryRepository();
+      repo.saveLog('eye', Log('eye', -0.1, ts: '2026-06-27T12:00:00'));
+      final c = ProviderContainer(
+          overrides: [repositoryProvider.overrideWithValue(repo)]);
+      addTearDown(c.dispose);
+      // Eye is ranked → it surfaces as an 'aesthetics' category rank…
+      expect(c.read(categoryRanksProvider).containsKey('aesthetics'), isTrue);
+      // …but must NOT feed the overall (no non-aesthetic ranked log → empty result).
+      expect(c.read(overallProvider).rankValue, 0.0);
     });
   });
 

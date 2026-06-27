@@ -52,9 +52,13 @@ final latestLogsProvider = Provider<Map<String, Log>>((ref) {
 });
 
 /// Overall rank — latest ranked lifts, each scored at its own snapshot weight.
+/// Aesthetics are excluded even when ranked (e.g. eye acuity): appearance/sensory
+/// metrics get their own tier + percentile, but never drag the headline rank.
 final overallProvider = Provider<eng.RankResult>((ref) {
   final latest = ref.watch(latestLogsProvider);
-  final logs = latest.values.where((l) => eng.standards.containsKey(l.metricId));
+  final logs = latest.values.where((l) =>
+      eng.standards.containsKey(l.metricId) &&
+      metricById(l.metricId).category != 'aesthetics');
   return eng.overall(logs.toList());
 });
 
