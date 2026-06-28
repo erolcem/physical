@@ -399,7 +399,11 @@ class _DietMetricGraphState extends ConsumerState<_DietMetricGraph> {
   int _days = 30;
   int _sel = 0;
   static const _frames = [(7, '1W'), (30, '1M'), (90, '3M'), (180, '6M')];
+  static const _weightLabel = 'Weight (kg)';
   static final List<(String, Color, double Function(DietTotals))> _metrics = [
+    // Weight sits first so you can read body-weight change against the diet that drives
+    // it. It's sourced from the bodyweight logs (handled specially below), not DietTotals.
+    (_weightLabel, const Color(0xFFB07BF8), (t) => 0.0),
     ('Calories', _gold, (t) => t.calories),
     ('Protein', _teal, (t) => t.protein),
     ('Carbs', _accent, (t) => t.carbs),
@@ -414,16 +418,45 @@ class _DietMetricGraphState extends ConsumerState<_DietMetricGraph> {
     ('Whole-food', _teal, (t) => t.health['whole_food'] ?? 0),
   ];
 
+  // Latest body-weight on/before each day (carry-forward), so weight reads as a line
+  // even on days without a weigh-in. Leading days fall back to the first known weight.
+  List<double> _weightSeries(List<String> days, List<Log> wlogs) {
+    if (wlogs.isEmpty) return [for (final _ in days) 0];
+    final sorted = [...wlogs]..sort((a, b) => a.ts.compareTo(b.ts));
+    final first = sorted.first.value;
+    return [
+      for (final d in days)
+        () {
+          double? v;
+          for (final l in sorted) {
+            if (l.ts.substring(0, 10).compareTo(d) <= 0) {
+              v = l.value;
+            } else {
+              break;
+            }
+          }
+          return v ?? first;
+        }()
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final entries = ref.watch(dietProvider);
     final days = lastNDays(_days);
     final (label, color, fn) = _metrics[_sel];
-    final series = [for (final d in days) fn(dietTotals(entries, d))];
-    var maxV = 1.0;
+    final isWeight = label == _weightLabel;
+    final series = isWeight
+        ? _weightSeries(days, ref.watch(logsProvider)['bodyweight'] ?? const <Log>[])
+        : [for (final d in days) fn(dietTotals(entries, d))];
+    // Weight uses a zoomed baseline (a 2 kg swing shouldn't look flat on a 0-based axis).
+    var minV = double.infinity, maxV = 1.0;
     for (final v in series) {
       if (v > maxV) maxV = v;
+      if (v > 0 && v < minV) minV = v;
     }
+    final loY = isWeight && minV.isFinite ? minV - 2 : 0.0;
+    final hiY = isWeight ? maxV + 2 : maxV * 1.15;
     return Card(
       color: _card,
       child: Padding(
@@ -466,7 +499,7 @@ class _DietMetricGraphState extends ConsumerState<_DietMetricGraph> {
           SizedBox(
             height: 150,
             child: LineChart(LineChartData(
-              minY: 0, maxY: maxV * 1.15,
+              minY: loY, maxY: hiY,
               titlesData: const FlTitlesData(show: false),
               gridData: const FlGridData(show: false),
               borderData: FlBorderData(show: false),

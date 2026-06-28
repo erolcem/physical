@@ -88,7 +88,9 @@ class DietNotifier extends StateNotifier<List<FoodEntry>> {
         }
       } catch (_) {/* one failure shouldn't stop the rest */}
     }
-    if (done > 0) state = repo.loadFood();
+    // `mounted` guard: enrichment runs in the background during sync, which may dispose
+    // this notifier (dietProvider invalidate) before we finish — the caller refreshes.
+    if (done > 0 && mounted) state = repo.loadFood();
     return done;
   }
 }

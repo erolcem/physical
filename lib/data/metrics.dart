@@ -126,12 +126,14 @@ const List<MetricDef> metrics = [
   MetricDef('sleep_interruptions', 'Interruptions', 'sleep', MetricTier.background, 'count', autoSync: true),
 
   // ── BACKGROUND · diet ──
+  // Bodyweight lives with diet (not Profile) so weight change reads against the diet
+  // that drives it — for both the user (diet graph) and the AI coach.
   MetricDef('energy_burned', 'Total Energy Burned', 'diet', MetricTier.background, 'kcal', autoSync: true),
   MetricDef('food_logs', 'Food Logs', 'diet', MetricTier.background, 'kcal', autoSync: true),
+  MetricDef('bodyweight', 'Bodyweight', 'diet', MetricTier.background, 'kg',
+      exercise: 'Scales every strength rank'),
 
   // ── BACKGROUND · general / profile ──
-  MetricDef('bodyweight', 'Bodyweight', 'general', MetricTier.background, 'kg',
-      exercise: 'Scales every strength rank'),
   MetricDef('height', 'Height', 'general', MetricTier.background, 'cm', autoSync: true),
   MetricDef('age', 'Age', 'general', MetricTier.background, 'yr', autoSync: true),
 

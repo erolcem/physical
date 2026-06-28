@@ -127,8 +127,11 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
   try {
     ref.read(dietProvider.notifier).importGoogle(await api.googleFoods());
     // Background: fill the diet-health radar via the AI (many calls) without blocking
-    // the sync; dietProvider updates reactively as foods are enriched.
-    unawaited(ref.read(dietProvider.notifier).enrichFoodHealth(api));
+    // the sync. Refresh the Diet UI when it finishes — the enrichment can outlive the
+    // dietProvider invalidate below, so re-read the freshly-enriched repo at the end.
+    unawaited(ref.read(dietProvider.notifier).enrichFoodHealth(api).then((n) {
+      if (n > 0) ref.invalidate(dietProvider);
+    }).catchError((_) {}));
   } catch (_) {/* food import + enrichment are best-effort */}
   // Full-data sync: MERGE the cloud snapshot into local (so the other device's data
   // arrives without clobbering), then push the merged result back. Both devices

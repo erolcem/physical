@@ -5,6 +5,8 @@
 // the coach + habit verification.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_chart/fl_chart.dart';
+import '../data/habits.dart' show lastNDays;
 import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart';
 import '../state/log_providers.dart';
@@ -111,7 +113,7 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
         else ...[
           _lastCard(sessions.first),
           const SizedBox(height: 12),
-          _weekStats(sessions),
+          _ExerciseMetricGraph(sessions),
           const SizedBox(height: 16),
           const Text('RECENT', style: TextStyle(fontSize: 11, letterSpacing: 2, color: _muted)),
           const SizedBox(height: 6),
@@ -145,38 +147,6 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
           ]),
         ),
       );
-
-  Widget _weekStats(List<WorkoutSession> sessions) {
-    final perDay = volumePerDay(sessions, days: 7);
-    final maxV = perDay.fold<double>(1, (m, v) => v > m ? v : m);
-    return Card(
-      color: _card,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('LAST 7 DAYS', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (var i = 0; i < perDay.length; i++)
-                Container(width: 22, height: 4 + 40 * (perDay[i] / maxV),
-                    decoration: BoxDecoration(
-                        color: i == perDay.length - 1 ? _teal : _teal.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(4))),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-            _stat('${sessionsOverDays(sessions, days: 7)}', 'sessions'),
-            _stat('${volumeOverDays(sessions, days: 7).round()}', 'volume'),
-            _stat('${exercisesOverDays(sessions, days: 7).length}', 'exercises'),
-          ]),
-        ]),
-      ),
-    );
-  }
 
   Widget _stat(String v, String l) => Column(children: [
         Text(v, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _teal)),
@@ -430,5 +400,125 @@ class SessionDetailScreen extends ConsumerWidget {
       distance: double.tryParse(dist.text),
     );
     ref.read(workoutProvider.notifier).addSet(sessionId, set);
+  }
+}
+
+// Multi-timeframe exercise plot: pick a metric (cardio load, volume, active kcal,
+// sessions, duration) and a window (1W/1M/3M/6M); headline shows the window total —
+// mirrors the Diet metric graph so every section reads the same way.
+class _ExerciseMetricGraph extends StatefulWidget {
+  final List<WorkoutSession> sessions;
+  const _ExerciseMetricGraph(this.sessions);
+  @override
+  State<_ExerciseMetricGraph> createState() => _ExerciseMetricGraphState();
+}
+
+class _ExerciseMetricGraphState extends State<_ExerciseMetricGraph> {
+  int _days = 30;
+  int _sel = 0;
+  static const _gold = Color(0xFFF6CF3E);
+  static const _pink = Color(0xFFF85B88);
+  static const _purple = Color(0xFFB07BF8);
+  static const _frames = [(7, '1W'), (30, '1M'), (90, '3M'), (180, '6M')];
+  // (label, colour, per-session value, unit, integer-total?)
+  static final List<(String, Color, double Function(WorkoutSession), String, bool)> _metrics = [
+    ('Cardio load', _teal, (s) => s.cardioLoad ?? 0, '', true),
+    ('Volume', _accent, (s) => s.volume, '', true),
+    ('Active kcal', _gold, (s) => s.summary['calories'] ?? 0, 'kcal', true),
+    ('Sessions', _pink, (s) => 1, '', true),
+    ('Duration', _purple, (s) => (s.durationMins ?? 0).toDouble(), 'min', true),
+  ];
+
+  List<double> _perDay(List<String> days, double Function(WorkoutSession) f) {
+    final byDay = <String, double>{};
+    for (final s in widget.sessions) {
+      byDay[s.dateKey] = (byDay[s.dateKey] ?? 0) + f(s);
+    }
+    return [for (final d in days) byDay[d] ?? 0.0];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final days = lastNDays(_days);
+    final (label, color, fn, unit, _) = _metrics[_sel];
+    final series = _perDay(days, fn);
+    final total = series.fold(0.0, (a, v) => a + v);
+    var maxV = 1.0;
+    for (final v in series) {
+      if (v > maxV) maxV = v;
+    }
+    return Card(
+      color: _card,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Headline stat (window total of the selected metric).
+          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('${total.round()}',
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: color)),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Text('$label${unit.isEmpty ? '' : ' ($unit)'} · last ${_days}d',
+                    style: const TextStyle(fontSize: 12, color: _muted, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          Row(children: [
+            const Spacer(),
+            for (final (d, t) in _frames)
+              GestureDetector(
+                onTap: () => setState(() => _days = d),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Text(t, style: TextStyle(fontSize: 11,
+                      fontWeight: _days == d ? FontWeight.w800 : FontWeight.w500,
+                      color: _days == d ? _teal : _muted)),
+                ),
+              ),
+          ]),
+          const SizedBox(height: 10),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (var i = 0; i < _metrics.length; i++)
+              GestureDetector(
+                onTap: () => setState(() => _sel = i),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _sel == i ? _metrics[i].$2.withValues(alpha: 0.18) : _bg,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _sel == i ? _metrics[i].$2 : const Color(0x18FFFFFF)),
+                  ),
+                  child: Text(_metrics[i].$1,
+                      style: TextStyle(fontSize: 11,
+                          color: _sel == i ? _metrics[i].$2 : _muted,
+                          fontWeight: _sel == i ? FontWeight.w700 : FontWeight.w500)),
+                ),
+              ),
+          ]),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 150,
+            child: LineChart(LineChartData(
+              minY: 0, maxY: maxV * 1.15,
+              titlesData: const FlTitlesData(show: false),
+              gridData: const FlGridData(show: false),
+              borderData: FlBorderData(show: false),
+              lineTouchData: const LineTouchData(enabled: false),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: [for (var i = 0; i < series.length; i++) FlSpot(i.toDouble(), series[i])],
+                  isCurved: true, curveSmoothness: 0.3, color: color, barWidth: 2,
+                  dotData: const FlDotData(show: false),
+                  belowBarData: BarAreaData(show: true, color: color.withValues(alpha: 0.12)),
+                ),
+              ],
+            )),
+          ),
+        ]),
+      ),
+    );
   }
 }
