@@ -14,7 +14,10 @@ import 'workout.dart';
 
 // 0–1 "goodness" for a recovery metric. Personal baseline (today vs trailing-7 mean,
 // direction-aware) once ≥7 prior readings exist; otherwise the population percentile.
-double _goodness(String metricId, List<Log> logs, {required bool higherBetter}) {
+double _goodness(String metricId, List<Log> unsorted, {required bool higherBetter}) {
+  // Sort by time — logs can be stored out of order (e.g. after a sync/merge), and the
+  // personal baseline depends on "today vs the trailing 7" being chronological.
+  final logs = [...unsorted]..sort((a, b) => a.ts.compareTo(b.ts));
   final latest = logs.last.value;
   final prior = logs.length > 7 ? logs.sublist(logs.length - 8, logs.length - 1) : null;
   if (prior != null && prior.length >= 7) {

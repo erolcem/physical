@@ -20,7 +20,7 @@ const List<String> _ladderTiers = [
 ];
 
 // Cap the rendered history so a metric with hundreds of logs stays snappy.
-const int _historyLimit = 60;
+const int _historyWindow = 8; // beyond this, history becomes a fixed-height scroll window
 
 void openDetailSheet(BuildContext context, String metricId) {
   showModalBottomSheet(
@@ -338,12 +338,18 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
               Text('HISTORY · ${logs.length}',
                   style: const TextStyle(fontSize: 10, letterSpacing: 2, color: Colors.grey)),
               const SizedBox(height: 6),
-              for (final (idx, log) in ordered.take(_historyLimit)) _historyRow(m, log, idx),
-              if (ordered.length > _historyLimit)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text('+ ${ordered.length - _historyLimit} older entries',
-                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              // Short histories render inline; long ones become a fixed-height scroll
+              // window so the sheet never grows without bound (scales to thousands).
+              if (ordered.length <= _historyWindow)
+                for (final (idx, log) in ordered) _historyRow(m, log, idx)
+              else
+                SizedBox(
+                  height: 360,
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: ordered.length,
+                    itemBuilder: (_, i) => _historyRow(m, ordered[i].$2, ordered[i].$1),
+                  ),
                 ),
             ],
           ]),

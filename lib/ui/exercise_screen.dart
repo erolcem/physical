@@ -115,9 +115,21 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
           const SizedBox(height: 12),
           _ExerciseMetricGraph(sessions),
           const SizedBox(height: 16),
-          const Text('RECENT', style: TextStyle(fontSize: 11, letterSpacing: 2, color: _muted)),
+          Text('RECENT · ${sessions.length}', style: const TextStyle(fontSize: 11, letterSpacing: 2, color: _muted)),
           const SizedBox(height: 6),
-          for (final s in sessions.take(30)) _sessionRow(context, s),
+          // Short lists inline; long ones scroll inside a fixed window so the page
+          // never grows unbounded (scales to thousands of sessions).
+          if (sessions.length <= 12)
+            for (final s in sessions) _sessionRow(context, s)
+          else
+            SizedBox(
+              height: 460,
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                itemCount: sessions.length,
+                itemBuilder: (_, i) => _sessionRow(context, sessions[i]),
+              ),
+            ),
         ],
       ]),
     );

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../data/diet.dart';
 import '../data/habits.dart' show todayKey, lastNDays;
+import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart' show activeCaloriesOn;
 import '../engine/rank_engine.dart' show Log;
 import '../state/log_providers.dart';
@@ -36,6 +37,7 @@ class DietScreen extends ConsumerWidget {
       appBar: AppBar(backgroundColor: _bg, title: const Text('Diet')),
       // No manual "Log food" — food is auto-imported from Google Health (nutrition-log).
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
+        const _DietHealthEnricher(),
         _totals(t),
         const SizedBox(height: 12),
         _energyBalance(ref, t),
@@ -44,14 +46,23 @@ class DietScreen extends ConsumerWidget {
         const SizedBox(height: 12),
         const _EnergyTrend(),
         const SizedBox(height: 16),
-        const Text('TODAY', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+        Text('TODAY · ${today.length}', style: const TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
         const SizedBox(height: 6),
         if (today.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Center(child: Text('No food logged today.', style: TextStyle(color: _muted))))
+        // Short lists inline; long ones scroll inside a fixed window (page stays bounded).
+        else if (today.length <= 10)
+          for (final e in today.reversed) _entryRow(ref, e)
         else
-          for (final e in today.reversed) _entryRow(ref, e),
+          SizedBox(
+            height: 320,
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [for (final e in today.reversed) _entryRow(ref, e)],
+            ),
+          ),
         const SizedBox(height: 16),
         const _DietMetricGraph(),
       ]),
@@ -517,6 +528,79 @@ class _DietMetricGraphState extends ConsumerState<_DietMetricGraph> {
           Center(child: Text('$label · last ${_days}d',
               style: const TextStyle(fontSize: 10.5, color: _muted))),
         ]),
+      ),
+    );
+  }
+}
+
+// Diet-health enricher: on open, AI-fills the health radar for any foods that lack it
+// (mainly Google-imported). Visible status + a manual retry so it's never a silent no-op.
+class _DietHealthEnricher extends ConsumerStatefulWidget {
+  const _DietHealthEnricher();
+  @override
+  ConsumerState<_DietHealthEnricher> createState() => _DietHealthEnricherState();
+}
+
+class _DietHealthEnricherState extends ConsumerState<_DietHealthEnricher> {
+  bool _busy = false;
+  String? _error;
+
+  int get _pending =>
+      ref.read(dietProvider).where((f) => f.health.isEmpty && f.calories > 0).length;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_pending > 0) _run();
+    });
+  }
+
+  Future<void> _run() async {
+    if (_busy) return;
+    setState(() { _busy = true; _error = null; });
+    try {
+      await ref.read(dietProvider.notifier).enrichFoodHealth(ref.read(apiClientProvider));
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = ref.watch(dietProvider).where((f) => f.health.isEmpty && f.calories > 0).length;
+    if (!_busy && _error == null && pending == 0) return const SizedBox.shrink();
+    final (icon, text, color) = _busy
+        ? (null, 'Analysing $pending food${pending == 1 ? '' : 's'} for the health web…', _teal)
+        : _error != null
+            ? (Icons.error_outline, 'Health analysis failed — tap to retry', _pink)
+            : (Icons.auto_awesome, 'Analyse $pending food${pending == 1 ? '' : 's'} for the health web', _gold);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: _busy ? null : _run,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _card,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withValues(alpha: 0.4)),
+            ),
+            child: Row(children: [
+              if (_busy)
+                const SizedBox(width: 16, height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: _teal))
+              else
+                Icon(icon, size: 18, color: color),
+              const SizedBox(width: 10),
+              Expanded(child: Text(text, style: TextStyle(fontSize: 12.5, color: color, fontWeight: FontWeight.w600))),
+            ]),
+          ),
+        ),
       ),
     );
   }

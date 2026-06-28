@@ -2,6 +2,7 @@
 // body graph, strength metrics grid, performance & recovery grid, and log sheet.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/achievements.dart';
 import '../data/metrics.dart';
 import '../data/body_figure_data.dart';
 import '../data/correlation.dart';
@@ -406,10 +407,56 @@ class _OverallBreakdownSheet extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
             Center(child: _stat('$totalLogs', 'TOTAL LOGS')),
+            _trophyRoom(ref),
           ]),
         ),
       ),
     );
+  }
+
+  // Trophy Room — every new overall-rank personal best (tier + I/II/III), newest first.
+  Widget _trophyRoom(WidgetRef ref) {
+    final trophies = overallAchievements(ref.watch(logsProvider)['overall_rank'] ?? const []);
+    if (trophies.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SizedBox(height: 24),
+      Text('TROPHY ROOM', style: _secTitle()),
+      const SizedBox(height: 4),
+      Text('${trophies.length} overall milestone${trophies.length == 1 ? '' : 's'} reached',
+          style: const TextStyle(fontSize: 11, color: _muted2)),
+      const SizedBox(height: 14),
+      SizedBox(
+        height: 116,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.zero,
+          itemCount: trophies.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 16),
+          itemBuilder: (_, i) {
+            final a = trophies[trophies.length - 1 - i]; // newest first
+            final col = tierColor(a.tier);
+            return SizedBox(
+              width: 78,
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                RankBadge(tier: a.tier, sub: a.sub, size: 54),
+                const SizedBox(height: 6),
+                Text('${a.tier} ${a.sub}', textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: col)),
+                Text(_prettyDate(a.date),
+                    style: const TextStyle(fontSize: 9.5, color: _muted)),
+              ]),
+            );
+          },
+        ),
+      ),
+    ]);
+  }
+
+  static String _prettyDate(String ymd) {
+    final d = DateTime.tryParse(ymd);
+    if (d == null) return ymd;
+    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${d.day} ${m[d.month - 1]} ${d.year % 100}';
   }
 
   Widget _stat(String value, String label) => Column(children: [
