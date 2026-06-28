@@ -112,9 +112,9 @@ def _sleep_score(container: dict, summary: dict, asleep_min, efficiency_pct,
 
     Prefers the vendor's own score (Fitbit/Google expose a 0–100 sleep score) if
     it's anywhere in the payload; otherwise derives a transparent composite from
-    the night's readings — duration vs an 8h target (50%), efficiency (25%), and
-    restorative deep+REM share (25%). Lands typical nights near the engine's
-    population mean (~77)."""
+    the night's readings — duration vs an 8h target (50%), deep+REM composition
+    (25%), and restoration from resting-HR (25%, efficiency as a fallback). Lands
+    typical nights near the engine's population mean (~77)."""
     # 1) Real vendor score if present (any 0–100 field whose key mentions "score").
     for src in (summary, container):
         for k, v in (src or {}).items():

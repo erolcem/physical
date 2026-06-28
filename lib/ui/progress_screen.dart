@@ -88,6 +88,8 @@ class ProgressTab extends ConsumerWidget {
                     id: id, title: title, icon: icon, ranked: ranked,
                     rank: cats[id], logsMap: logsMap,
                   ),
+              const SizedBox(height: 4),
+              const _CompareCard(),
             ],
           ),
         ),
@@ -461,16 +463,68 @@ class _DietCard extends ConsumerWidget {
   }
 }
 
+// Compare card — overlay ANY metrics across categories on one graph.
+class _CompareCard extends StatelessWidget {
+  const _CompareCard();
+  @override
+  Widget build(BuildContext context) {
+    const c = _accent;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const CategoryGraphPage(
+                  categoryId: '*', title: 'Compare Metrics', candidates: metrics))),
+          child: Ink(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _bg3,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: c.withValues(alpha: 0.3)),
+            ),
+            child: Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: c.withValues(alpha: 0.12), shape: BoxShape.circle,
+                  border: Border.all(color: c.withValues(alpha: 0.35)),
+                ),
+                child: const Icon(Icons.multiline_chart, color: c, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Compare', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  SizedBox(height: 2),
+                  Text('Overlay any metrics on one graph',
+                      style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+              const Icon(Icons.chevron_right, color: _muted),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CATEGORY GRAPH PAGE — one category's dedicated graphing area
 // ═══════════════════════════════════════════════════════════════════════════
 class CategoryGraphPage extends StatelessWidget {
   final String categoryId, title;
-  const CategoryGraphPage({required this.categoryId, required this.title, super.key});
+  // When set, graphs these metrics instead of one category (used by Compare — any metric).
+  final List<MetricDef>? candidates;
+  const CategoryGraphPage(
+      {required this.categoryId, required this.title, this.candidates, super.key});
 
   @override
   Widget build(BuildContext context) {
-    final cands = [for (final m in metrics) if (m.category == categoryId) m];
+    final cands = candidates ?? [for (final m in metrics) if (m.category == categoryId) m];
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
