@@ -682,6 +682,10 @@ class _GraphAreaState extends ConsumerState<GraphArea> {
     for (final metricId in _selectedIds) {
       final met = metricById(metricId);
       final isRanked = eng.standards.containsKey(metricId);
+      // Rank-over-time series carry the rank value directly — render them tier-coloured
+      // on the same 0–8 rank axis as a ranked metric (their value IS the percentile band).
+      final isRankSeries = met.category == 'rank';
+      final rankLike = isRanked || isRankSeries;
       final entries = logsMap[metricId] ?? [];
 
       final filtered = cutoff == null ? entries : entries.where((e) => DateTime.parse(e.ts).isAfter(cutoff)).toList();
@@ -707,7 +711,7 @@ class _GraphAreaState extends ConsumerState<GraphArea> {
         if (val > mMax) mMax = val;
       }
 
-      if (isRanked) {
+      if (rankLike) {
         mMin = 0; mMax = 8;
       } else {
         if (mMin == mMax) { mMin -= 10; mMax += 10; }
@@ -716,7 +720,7 @@ class _GraphAreaState extends ConsumerState<GraphArea> {
 
       seriesByMetric[metricId] = Map.of(dailyMax);
       if (_selectedIds.length == 1) {
-        singleMin = mMin; singleMax = mMax; singleRanked = isRanked;
+        singleMin = mMin; singleMax = mMax; singleRanked = rankLike;
       }
 
       final sortedDays = dailyMax.keys.toList()..sort();
@@ -730,15 +734,18 @@ class _GraphAreaState extends ConsumerState<GraphArea> {
         spots.add(FlSpot(days.toDouble(), normY));
 
         // Always show the real metric value (e.g. kg); add the tier for ranked ones.
+        // Rank series show the tier + rank value (the value already IS the rank).
         final actual = dailyActual[d]!;
-        final tooltipStr = isRanked
-            ? '${met.label}: ${actual.toStringAsFixed(1)} ${met.unit} · ${_tierShort[val.floor().clamp(0, 8)]}'
-            : '${met.label}: ${actual.toStringAsFixed(1)} ${met.unit}';
+        final tooltipStr = isRankSeries
+            ? '${met.label}: ${_tierShort[val.floor().clamp(0, 8)]} (${val.toStringAsFixed(1)}/8)'
+            : isRanked
+                ? '${met.label}: ${actual.toStringAsFixed(1)} ${met.unit} · ${_tierShort[val.floor().clamp(0, 8)]}'
+                : '${met.label}: ${actual.toStringAsFixed(1)} ${met.unit}';
         tooltipData.putIfAbsent(days.toDouble(), () => {})[metricId] = tooltipStr;
       }
 
       Color lineCol;
-      if (_selectedIds.length == 1 && isRanked) {
+      if (_selectedIds.length == 1 && rankLike) {
         lineCol = tierColor(_tierFull[math.min(8, mMax.floor())]);
       } else {
         lineCol = colors[colorIdx % colors.length];
@@ -758,7 +765,7 @@ class _GraphAreaState extends ConsumerState<GraphArea> {
           show: (_selectedIds.length == 1 && spots.length <= 80) || spots.length == 1,
           getDotPainter: (spot, percent, barData, index) {
             var dotCol = lineCol;
-            if (_selectedIds.length == 1 && isRanked) {
+            if (_selectedIds.length == 1 && rankLike) {
               dotCol = tierColor(_tierFull[(spot.y * 8).floor().clamp(0, 8)]);
             }
             return FlDotCirclePainter(
@@ -779,7 +786,7 @@ class _GraphAreaState extends ConsumerState<GraphArea> {
     // For a single ranked metric, the actual weight/score at each tier line — so the
     // rank axis also reads as real numbers ("Gold = 100 kg").
     List<String?>? tierVals;
-    if (_selectedIds.length == 1 && singleRanked) {
+    if (_selectedIds.length == 1 && eng.standards.containsKey(m.id)) {
       final bw = m.bodyweightScaled ? ref.read(currentBodyweightProvider) : null;
       tierVals = [
         for (var k = 0; k <= 8; k++)
@@ -803,12 +810,18 @@ class _GraphAreaState extends ConsumerState<GraphArea> {
     Color subColor = _muted;
     if (_selectedIds.length == 1 && hasAnyData) {
       final isRanked = eng.standards.containsKey(m.id);
+      final isRankSeries = m.category == 'rank';
       final entries = logsMap[m.id]!;
       if (isRanked) {
         final res = eng.scoreLog(entries.last);
         subColor = tierColor(res.tier);
         subtitle = '${res.tier} ${res.sub} · top ${res.topPct.toStringAsFixed(1)}% · '
             'latest ${entries.last.value.toStringAsFixed(1)} ${m.unit}';
+      } else if (isRankSeries) {
+        final v = entries.last.value;
+        final idx = v.floor().clamp(0, 8);
+        subColor = tierColor(_tierFull[idx]);
+        subtitle = '${_tierFull[idx]} · rank ${v.toStringAsFixed(2)} / 8';
       } else {
         subColor = const Color(0xFF4CE0C3);
         subtitle = 'Latest: ${entries.last.value.toStringAsFixed(1)} ${m.unit}';
@@ -828,6 +841,24 @@ class _GraphAreaState extends ConsumerState<GraphArea> {
     } else if (_selectedIds.length > 2) {
       subtitle = 'Comparing ${_selectedIds.length} metrics';
       subColor = _accent;
+    }
+
+    // Rank-over-time series can't be logged — they're computed from your metric history.
+    if (!hasAnyData && _selectedIds.length == 1 && m.category == 'rank' &&
+        (logsMap[m.id] ?? []).isEmpty) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Text(m.label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 24),
+        Container(
+          height: 260, alignment: Alignment.center,
+          decoration: BoxDecoration(color: _bg3, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32),
+            child: Text('This rank plots itself as you log metrics over several days.',
+                textAlign: TextAlign.center, style: TextStyle(color: _muted)),
+          ),
+        ),
+      ]);
     }
 
     // Empty single-metric state — always offer manual logging (and note auto-sync).
