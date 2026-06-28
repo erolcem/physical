@@ -58,39 +58,62 @@ const List<HabitPreset> habitPresets = [
   HabitPreset('sleep', 'Sleep score', 'metric', linkedMetricId: 'sleep_score', target: 80, unit: '/100'),
   HabitPreset('sleep', 'Sleep duration', 'metric', linkedMetricId: 'sleep_duration', target: 8, unit: 'h'),
   HabitPreset('sleep', 'Deep sleep', 'metric', linkedMetricId: 'deep_sleep', target: 90, unit: 'min'),
-  HabitPreset('sleep', 'In bed by', 'metric', linkedMetricId: 'sleep_score'),
+  HabitPreset('sleep', 'REM sleep', 'metric', linkedMetricId: 'rem_sleep', target: 90, unit: 'min'),
+  HabitPreset('sleep', 'In bed by', 'metric', linkedMetricId: 'sleep_schedule', compare: 'lte', target: 23, unit: 'h'),
+  HabitPreset('sleep', 'Fewer interruptions', 'metric', linkedMetricId: 'sleep_interruptions', compare: 'lte', target: 2, unit: 'count'),
   HabitPreset('sleep', 'No screens before bed', 'manual'),
-  // ── exercise / strength — from the day's workout sets (volume / named lift) ──
+  // ── strength — from the day's workout sets (volume / intensity / named lift) ──
   HabitPreset('exercise', 'Train', 'workout'),
   HabitPreset('exercise', 'Training volume', 'workout', target: 8000, unit: 'vol'),
   HabitPreset('exercise', 'Chest sets', 'workout', goalKey: 'bench,chest,press,fly', target: 12, unit: 'sets'),
   HabitPreset('exercise', 'Back sets', 'workout', goalKey: 'row,pull,lat,deadlift', target: 12, unit: 'sets'),
   HabitPreset('exercise', 'Leg sets', 'workout', goalKey: 'squat,leg,lunge,calf,rdl', target: 12, unit: 'sets'),
-  HabitPreset('exercise', 'Cardio session', 'workout'),
+  HabitPreset('exercise', 'Arm sets', 'workout', goalKey: 'curl,tricep,skull', target: 8, unit: 'sets'),
+  HabitPreset('exercise', 'Shoulder sets', 'workout', goalKey: 'ohp,overhead,lateral,raise', target: 9, unit: 'sets'),
   // ── performance — endurance / mobility / cardio / explosiveness + activity ──
   HabitPreset('exercise', 'Steps', 'metric', linkedMetricId: 'steps', target: 8000, unit: 'steps'),
   HabitPreset('exercise', 'Active zone minutes', 'metric', linkedMetricId: 'active_zone', target: 30, unit: 'min'),
   HabitPreset('exercise', 'Plank hold', 'metric', linkedMetricId: 'plank', target: 120, unit: 's'),
   HabitPreset('exercise', '5k pace', 'metric', linkedMetricId: 'run5k_kmh', target: 10, unit: 'km/h'),
+  HabitPreset('exercise', 'Vertical jump', 'metric', linkedMetricId: 'vert', target: 50, unit: 'cm'),
+  HabitPreset('exercise', 'Hamstring mobility', 'metric', linkedMetricId: 'hamstring_mobility', target: 20, unit: 'cm'),
+  HabitPreset('exercise', 'Cardio session', 'workout'),
   HabitPreset('exercise', 'Mobility / stretch', 'manual'),
-  // ── diet — from the day's food log (macros + diet-health) ──
+  // ── diet — from the day's food log (macros + diet-health) + body composition ──
   HabitPreset('diet', 'Protein', 'diet', goalKey: 'protein', target: 150, unit: 'g'),
   HabitPreset('diet', 'Calories (cut)', 'diet', goalKey: 'calories', compare: 'lte', target: 2200, unit: 'kcal'),
   HabitPreset('diet', 'Calories (bulk)', 'diet', goalKey: 'calories', target: 2800, unit: 'kcal'),
   HabitPreset('diet', 'Fibre', 'diet', goalKey: 'fibre', target: 30, unit: 'g'),
   HabitPreset('diet', 'Diet-health score', 'diet', goalKey: 'health', target: 60, unit: '/100'),
+  HabitPreset('diet', 'Micronutrient score', 'diet', goalKey: 'micronutrients', target: 60, unit: '/100'),
+  HabitPreset('diet', 'Gut-health score', 'diet', goalKey: 'gut_health', target: 60, unit: '/100'),
+  HabitPreset('diet', 'Bodyweight target', 'metric', linkedMetricId: 'bodyweight', compare: 'lte', target: 80, unit: 'kg'),
+  HabitPreset('diet', 'Body fat', 'metric', linkedMetricId: 'body_fat_pct', compare: 'lte', target: 15, unit: '%'),
   HabitPreset('diet', 'Log all meals', 'diet'),
-  // ── aesthetics — manual routines (record products used) ──
+  // ── aesthetics — manual care routines (record products used) + measurement reminders ──
   HabitPreset('aesthetics', 'Skincare (AM)', 'manual'),
   HabitPreset('aesthetics', 'Skincare (PM)', 'manual'),
-  HabitPreset('aesthetics', 'Brush & floss', 'manual'),
-  HabitPreset('aesthetics', 'Hair care', 'manual'),
   HabitPreset('aesthetics', 'Sunscreen', 'manual'),
+  HabitPreset('aesthetics', 'Oral care', 'manual'),
+  HabitPreset('aesthetics', 'Hair care', 'manual'),
+  HabitPreset('aesthetics', 'Eye rest (20-20-20)', 'manual'),
+  HabitPreset('aesthetics', 'Vocal warm-up', 'manual'),
+  HabitPreset('aesthetics', 'Measure skin', 'metric', linkedMetricId: 'skin'),
+  HabitPreset('aesthetics', 'Measure hair', 'metric', linkedMetricId: 'hair'),
+  HabitPreset('aesthetics', 'Hearing test', 'metric', linkedMetricId: 'ear'),
   // ── recovery ──
   HabitPreset('recovery', 'Meditate', 'manual'),
+  HabitPreset('recovery', 'Breathwork', 'manual'),
   HabitPreset('recovery', 'Cold shower', 'manual'),
+  HabitPreset('recovery', 'Morning sunlight', 'manual'),
   HabitPreset('recovery', 'HRV', 'metric', linkedMetricId: 'hrv', target: 50, unit: 'ms'),
-  // misc → custom only (handled by the 'Custom' option in the UI)
+  HabitPreset('recovery', 'Resting HR', 'metric', linkedMetricId: 'resting_hr', compare: 'lte', target: 60, unit: 'bpm'),
+  // ── misc — manual to-dos worth tracking ──
+  HabitPreset('misc', 'Journaling', 'manual'),
+  HabitPreset('misc', 'Posture check', 'manual'),
+  HabitPreset('misc', 'Ab vacuum', 'manual'),
+  HabitPreset('misc', 'Shave / trim', 'manual'),
+  HabitPreset('misc', 'Read', 'manual'),
 ];
 
 List<HabitPreset> presetsFor(String section) =>
@@ -112,6 +135,7 @@ class Habit {
   final List<String> products; // aesthetics: products/items used in this routine
   final String? time; // ideal time 'HH:MM' (drives calendar + reminder)
   final int durationMins;
+  final double cost; // money per occurrence (the planner/budgeter angle)
   final String cadence; // 'daily' | 'weekly'
   final List<int> days; // weekly: weekday ints 1..7 (Mon..Sun); empty = all
   final String createdAt; // ISO-8601
@@ -129,10 +153,16 @@ class Habit {
     this.products = const [],
     this.time,
     this.durationMins = 0,
+    this.cost = 0,
     this.cadence = 'daily',
     this.days = const [],
     required this.createdAt,
   });
+
+  /// Roughly how many times this habit recurs in a 30-day month.
+  double get occurrencesPerMonth => cadence == 'weekly' && days.isNotEmpty
+      ? days.length * (30 / 7)
+      : 30;
 
   // The section drives the card colour/emoji; alias kept for old call sites.
   String get category => section;
@@ -151,6 +181,7 @@ class Habit {
         if (unit.isNotEmpty) 'unit': unit,
         if (products.isNotEmpty) 'products': products,
         'time': time, 'dur': durationMins,
+        if (cost > 0) 'cost': cost,
         'cadence': cadence, 'days': days, 'created': createdAt,
       };
 
@@ -169,6 +200,7 @@ class Habit {
       products: [for (final p in (j['products'] as List? ?? const [])) p as String],
       time: j['time'] as String?,
       durationMins: (j['dur'] as num?)?.toInt() ?? 0,
+      cost: (j['cost'] as num?)?.toDouble() ?? 0,
       cadence: j['cadence'] as String? ?? 'daily',
       days: [for (final d in (j['days'] as List? ?? const [])) (d as num).toInt()],
       createdAt: j['created'] as String? ?? DateTime.now().toIso8601String(),
@@ -307,3 +339,32 @@ List<int> dailyDoneCounts(
 /// Total scheduled minutes per day across habits (the budget rollup).
 int minutesPerDay(List<Habit> habits) =>
     habits.fold<int>(0, (s, h) => s + h.durationMins);
+
+/// Planner/budgeter rollup: scheduled minutes + money per 30-day month.
+class HabitBudget {
+  final int minutesPerMonth;
+  final double costPerMonth;
+  const HabitBudget(this.minutesPerMonth, this.costPerMonth);
+  double get hoursPerMonth => minutesPerMonth / 60.0;
+}
+
+HabitBudget monthlyBudget(List<Habit> habits) {
+  var mins = 0.0, cost = 0.0;
+  for (final h in habits) {
+    mins += h.durationMins * h.occurrencesPerMonth;
+    cost += h.cost * h.occurrencesPerMonth;
+  }
+  return HabitBudget(mins.round(), cost);
+}
+
+/// Habits-per-hour across a 24h day (index 0..23) — the planner's density bar.
+List<int> hourDensity(List<Habit> habits) {
+  final d = List<int>.filled(24, 0);
+  for (final h in habits) {
+    final t = h.time;
+    if (t == null) continue;
+    final hh = int.tryParse(t.split(':').first);
+    if (hh != null && hh >= 0 && hh < 24) d[hh]++;
+  }
+  return d;
+}

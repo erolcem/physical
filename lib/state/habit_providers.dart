@@ -39,6 +39,7 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
       List<String> products = const [],
       String? time,
       int durationMins = 0,
+      double cost = 0,
       String cadence = 'daily',
       List<int> days = const []}) {
     final t = title.trim();
@@ -56,6 +57,7 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
       products: products,
       time: time,
       durationMins: durationMins,
+      cost: cost,
       cadence: cadence,
       days: days,
       createdAt: DateTime.now().toIso8601String(),

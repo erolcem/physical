@@ -90,14 +90,19 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           ]),
           if (habits.isEmpty)
             _empty()
-          else if (_week)
-            _weekView(habits, st, met, done)
+          else if (_week) ...[
+            _budgetCard(habits),
+            const SizedBox(height: 12),
+            _weekView(habits, st, met, done),
+          ]
           else ...[
             _summaryCard(doneCount, dueToday.length,
                 verified: dueToday.where((h) => met(h, todayKey())).length,
                 missed: [for (final h in dueToday) if (!done(h, todayKey())) h]),
             const SizedBox(height: 12),
-            if (dueToday.isNotEmpty) _dayPartBar(dueToday),
+            _budgetCard(habits),
+            const SizedBox(height: 12),
+            if (dueToday.isNotEmpty) _densityBar(dueToday),
             const SizedBox(height: 12),
             const Text('TODAY', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
             const SizedBox(height: 6),
@@ -187,25 +192,35 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     );
   }
 
-  // ── Time-of-day distribution: where the day's habits land (a 4-bucket bar chart) ──
-  Widget _dayPartBar(List<Habit> due) {
-    const parts = [('Morning', 5, 12), ('Afternoon', 12, 17), ('Evening', 17, 22), ('Night', 22, 29)];
-    int hourOf(Habit h) {
-      if (h.time == null) return -1;
-      final hh = int.tryParse(h.time!.split(':').first) ?? 0;
-      return hh;
-    }
-    final counts = [
-      for (final (_, lo, hi) in parts)
-        due.where((h) {
-          final hr = hourOf(h);
-          if (hr < 0) return false;
-          final adj = hr < 5 ? hr + 24 : hr; // night wraps past midnight
-          return adj >= lo && adj < hi;
-        }).length
-    ];
+  // ── Planner/budgeter rollup: scheduled time + money per month + habit count ──
+  Widget _budgetCard(List<Habit> habits) {
+    final b = monthlyBudget(habits);
+    Widget stat(String v, String l, Color c) => Expanded(
+          child: Column(children: [
+            Text(v, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: c)),
+            const SizedBox(height: 2),
+            Text(l, style: const TextStyle(fontSize: 9.5, letterSpacing: 1, color: _muted, fontWeight: FontWeight.w700)),
+          ]),
+        );
+    return Card(
+      color: _card,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(children: [
+          stat('${b.hoursPerMonth.toStringAsFixed(b.hoursPerMonth < 10 ? 1 : 0)} h', 'TIME / MONTH', _accent),
+          stat('£${b.costPerMonth.toStringAsFixed(b.costPerMonth < 100 ? 0 : 0)}', 'COST / MONTH', _teal),
+          stat('${habits.length}', 'HABITS', Colors.white),
+        ]),
+      ),
+    );
+  }
+
+  // ── 24h density bar: how the day's habits are distributed across the clock ──
+  Widget _densityBar(List<Habit> due) {
+    final d = hourDensity(due);
+    final maxC = [...d, 1].reduce((a, b) => a > b ? a : b);
     final untimed = due.where((h) => h.time == null).length;
-    final maxC = [...counts, 1].reduce((a, b) => a > b ? a : b);
+    final nowHour = DateTime.now().hour;
     return Card(
       color: _card,
       child: Padding(
@@ -217,25 +232,31 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
             if (untimed > 0) Text('$untimed anytime', style: const TextStyle(fontSize: 10.5, color: _muted)),
           ]),
           const SizedBox(height: 14),
-          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            for (var i = 0; i < parts.length; i++)
-              Expanded(
-                child: Column(children: [
-                  Text(counts[i] > 0 ? '${counts[i]}' : '',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: _accent)),
-                  const SizedBox(height: 4),
-                  Container(
-                    height: 6 + 46 * (counts[i] / maxC),
-                    margin: const EdgeInsets.symmetric(horizontal: 6),
+          SizedBox(
+            height: 40,
+            child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              for (var h = 0; h < 24; h++)
+                Expanded(
+                  child: Container(
+                    height: d[h] == 0 ? 3 : 6 + 32 * (d[h] / maxC),
+                    margin: const EdgeInsets.symmetric(horizontal: 1),
                     decoration: BoxDecoration(
-                      color: counts[i] > 0 ? _accent : Colors.white.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(6),
+                      color: d[h] > 0
+                          ? (h == nowHour ? _teal : _accent)
+                          : (h == nowHour ? _teal.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.06)),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(parts[i].$1, style: const TextStyle(fontSize: 9.5, color: _muted)),
-                ]),
-              ),
+                ),
+            ]),
+          ),
+          const SizedBox(height: 4),
+          const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('12a', style: TextStyle(fontSize: 9, color: _muted)),
+            Text('6a', style: TextStyle(fontSize: 9, color: _muted)),
+            Text('12p', style: TextStyle(fontSize: 9, color: _muted)),
+            Text('6p', style: TextStyle(fontSize: 9, color: _muted)),
+            Text('12a', style: TextStyle(fontSize: 9, color: _muted)),
           ]),
         ]),
       ),
@@ -440,9 +461,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
   List<Widget> _pills(Habit h) => [
         if (h.time != null) _pill('⏰ ${_fmt12(h.time!)}', _muted),
         if (h.durationMins > 0) _pill('⏱ ${_fmtDur(h.durationMins)}', _muted),
+        if (h.cost > 0) _pill('£${h.cost == h.cost.roundToDouble() ? h.cost.round() : h.cost}', _muted),
         if (h.cadence == 'weekly' && h.days.isNotEmpty)
           _pill('📅 ${h.days.map((d) => weekdayShort[d - 1]).join(' ')}', _muted),
         if (h.verify != 'manual') _pill('auto-verify', _teal),
+        for (final p in h.products) _pill('🧴 $p', const Color(0xFFE67BE6)),
       ];
 
   Widget _pill(String text, Color c) => Container(
@@ -494,6 +517,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     HabitPreset? preset;
     final titleCtrl = TextEditingController();
     final durCtrl = TextEditingController();
+    final costCtrl = TextEditingController();
     final targetCtrl = TextEditingController();
     final productsCtrl = TextEditingController();
     String compare = 'gte';
@@ -651,6 +675,14 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                       decoration: const InputDecoration(labelText: 'Mins', border: OutlineInputBorder()),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: costCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Cost', prefixText: '£', border: OutlineInputBorder()),
+                    ),
+                  ),
                 ]),
               ]),
             ),
@@ -675,6 +707,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                         products: products,
                         time: time,
                         durationMins: int.tryParse(durCtrl.text) ?? 0,
+                        cost: double.tryParse(costCtrl.text.trim()) ?? 0,
                         cadence: cadence,
                         days: cadence == 'weekly' ? days.toList() : const [],
                       );
