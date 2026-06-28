@@ -173,6 +173,8 @@ STANDARDS = {
                            "(trichoscopy) - measured from a macro photo, provisional"),
     "grooming":   Standard("grooming", 1, False, Dist("normal", 62.0, 18.0),
                            "grooming self-rating /100 - ASSUMED distribution (informed by ~5/10 crowd ratings), provisional"),
+    "ear":        Standard("ear", 1, False, Dist("normal", 78.0, 14.0),
+                           "hearing screening /100 (higher better) - ASSUMED distribution, uncalibrated, provisional"),
     "eye":        Standard("eye", -1, False, Dist("normal", 0.05, 0.15),
                            "visual acuity logMAR (lower better); general young-male presenting acuity "
                            "(median just below 20/20 from uncorrected error); best-corrected ~-0.14, provisional"),

@@ -21,6 +21,7 @@ dependencies:
   record: ^6.0.0          # mic capture for the Voice aesthetic measurement
   path_provider: ^2.1.4   # temp file path for the recorded clip
   image_picker: ^1.1.2    # camera capture for skin/oral/hair photo measurements
+  just_audio: ^0.9.40     # pure-tone playback for the hearing (ear) test
 
 dev_dependencies:
   flutter_test:

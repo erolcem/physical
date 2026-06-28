@@ -1152,6 +1152,42 @@
         "sub": "I",
         "top_pct": 0.725377
       }
+    },
+    {
+      "metric": "ear",
+      "value": 60.0,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 9.92714,
+        "rank_value": 0.496357,
+        "tier": "Wood",
+        "sub": "II",
+        "top_pct": 90.07286
+      }
+    },
+    {
+      "metric": "ear",
+      "value": 78.0,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 50.0,
+        "rank_value": 2.5,
+        "tier": "Silver",
+        "sub": "II",
+        "top_pct": 50.0
+      }
+    },
+    {
+      "metric": "ear",
+      "value": 95.0,
+      "bodyweight": null,
+      "expected": {
+        "percentile": 88.768068,
+        "rank_value": 4.876807,
+        "tier": "Platinum",
+        "sub": "III",
+        "top_pct": 11.231932
+      }
     }
   ],
   "threshold_cases": [

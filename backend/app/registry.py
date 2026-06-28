@@ -23,6 +23,7 @@ RANKED_CATEGORY: dict[str, str] = {
     # aesthetics (ranked, but EXCLUDED from the overall score — see ranking.py)
     "eye": "aesthetics", "voice": "aesthetics", "skin": "aesthetics",
     "oral": "aesthetics", "hair": "aesthetics", "grooming": "aesthetics",
+    "ear": "aesthetics",
 }
 
 

@@ -105,6 +105,8 @@ const List<MetricDef> metrics = [
       exercise: 'Self-checklist', provisional: true),
   MetricDef('voice', 'Voice Quality', 'aesthetics', MetricTier.ranked, 'AVQI',
       exercise: 'Mic recording (Praat)', provisional: true),
+  MetricDef('ear', 'Hearing', 'aesthetics', MetricTier.ranked, '/100',
+      exercise: 'In-app tone hearing test', provisional: true),
 
   // ── BACKGROUND · health (automatically logged via API) ──
   MetricDef('heart_rate', 'Heart Rate', 'health', MetricTier.background, 'bpm', autoSync: true),

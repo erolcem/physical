@@ -9,6 +9,7 @@ import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log, strengthValue, isolationLifts;
 import '../state/providers.dart';
 import 'acuity_test.dart';
+import 'hearing_test.dart';
 import 'badge.dart';
 import 'grooming_checklist.dart';
 import 'photo_measure.dart';
@@ -90,6 +91,16 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
     setState(() {}); // refresh latest/history
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Acuity logged: ${snellen(logMar)} (${logMar.toStringAsFixed(2)} logMAR)')));
+  }
+
+  Future<void> _measureHearing() async {
+    final score = await measureHearingFlow(context, ref);
+    if (score == null || !mounted) return;
+    ref.read(logsProvider.notifier)
+        .add('ear', Log('ear', score, ts: DateTime.now().toIso8601String()));
+    setState(() {}); // refresh latest/history
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Hearing logged: ${score.toStringAsFixed(0)} / 100')));
   }
 
   Future<void> _measureGrooming() async {
@@ -300,6 +311,13 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
                     style: TextStyle(fontSize: 11, color: Colors.grey)),
                 const SizedBox(height: 8),
               ],
+              if (m.id == 'ear') ...[
+                _grandButton('👂  Measure hearing', const Color(0xFF4CE0C3), _measureHearing),
+                const SizedBox(height: 8),
+                const Text('— or enter a score manually —',
+                    style: TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 8),
+              ],
               if (_photoTips[m.id] != null) ...[
                 _grandButton('📷  Measure from photo', const Color(0xFF4CE0C3),
                     () => _measurePhoto(m.id, m.label)),
@@ -349,11 +367,14 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
         border: Border.all(color: const Color(0x14FFFFFF)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('HOW IT’S MEASURED',
               style: TextStyle(fontSize: 10, letterSpacing: 2, color: Colors.grey)),
-          const Spacer(),
-          Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: color)),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(label, textAlign: TextAlign.end,
+                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: color)),
+          ),
         ]),
         const SizedBox(height: 8),
         _guideRow('What', g.what),
