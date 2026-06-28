@@ -50,4 +50,24 @@ void main() {
     expect(out.first['met'], isTrue); // manually completed today
     expect(out.first['adherence'], isNotNull);
   });
+
+  test('coachInsights surfaces readiness, correlation, weak area, slipping habit', () {
+    final ins = coachInsights(
+      readiness: 48,
+      correlations: [{'a': 'deep_sleep', 'b': 'bench', 'r': 0.61, 'n': 12}],
+      ranks: {'categories': {
+        'strength': {'tier': 'Gold', 'rank_value': 3.4},
+        'recovery': {'tier': 'Silver', 'rank_value': 2.1},
+      }},
+      trends: {'sleep_score': {'direction': 'down', 'change': -7}},
+      habits: [{'title': 'PM skincare', 'adherence': 40}],
+    );
+    final titles = ins.map((i) => i.title).toList();
+    expect(titles, contains('Readiness 48'));
+    expect(titles, contains('Pattern found'));
+    expect(titles, contains('Weakest area'));
+    expect(titles, contains('Slipping habit'));
+    // weak area is the lowest rank_value category (recovery)
+    expect(ins.firstWhere((i) => i.title == 'Weakest area').body.contains('recovery'), isTrue);
+  });
 }

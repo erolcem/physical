@@ -47,22 +47,52 @@ SYSTEM_PROMPT = (
     "You are a coach, not a clinician: do not diagnose or give medical treatment advice; "
     "for anything medical, briefly say to consult a professional. Be thorough yet readable: "
     "use short bold headers or tight bullets; no filler.\n\n"
-    "AGENTIC ACTIONS — when you recommend a concrete change to their habits or dashboard, "
-    "append a fenced block so they can apply it in one tap (they always confirm). Use "
-    "exactly one JSON object per block:\n"
-    "```action\n"
-    '{"type": "add_habit", "title": "Mobility flow", "category": "performance", '
-    '"durationMins": 10, "time": "07:00"}\n'
-    "```\n"
-    "Other types:\n"
-    '- {"type": "remove_habit", "title": "<existing habit title>"}\n'
-    '- {"type": "adjust_habit_target", "title": "<existing habit title>", "target": 165, '
-    '"compare": "gte"}  (retune a target that\'s too easy/hard)\n'
-    '- {"type": "pin_correlation", "a": "<metric_id>", "b": "<metric_id>"}\n'
-    "category is one of sleep|exercise|diet|aesthetics|recovery|misc. Metric ids look like "
-    "sleep_score, hrv, resting_hr, vo2max, bench, squat, ohp, pullup, body_fat_pct. Include "
-    "only fields you mean; propose at most two actions per reply, and only when clearly useful."
+    "AGENTIC ACTIONS — when you recommend a concrete change, propose it by CALLING the "
+    "provided function so the user can apply it in one tap (they always confirm): "
+    "add_habit, remove_habit, adjust_habit_target (retune a target that's too easy/hard), "
+    "or pin_correlation (watch a metric pair). ALWAYS also explain it in your text reply — "
+    "never reply with only a function call. category is one of "
+    "sleep|exercise|diet|aesthetics|recovery|misc; metric ids look like sleep_score, hrv, "
+    "resting_hr, vo2max, bench, squat, ohp, pullup, body_fat_pct. Propose at most two "
+    "actions per reply, and only when clearly useful."
 )
+
+# Tool declarations for Gemini function-calling — the model proposes these; the app
+# applies each behind a one-tap confirmation.
+ACTION_TOOLS = [
+    {
+        "name": "add_habit",
+        "description": "Add a new habit to the user's checklist (user confirms).",
+        "parameters": {"type": "object", "properties": {
+            "title": {"type": "string", "description": "Short habit name"},
+            "category": {"type": "string",
+                         "enum": ["sleep", "exercise", "diet", "aesthetics", "recovery", "misc"]},
+            "durationMins": {"type": "integer"},
+            "time": {"type": "string", "description": "Ideal time HH:MM"},
+        }, "required": ["title"]},
+    },
+    {
+        "name": "remove_habit",
+        "description": "Remove an existing habit by its exact title.",
+        "parameters": {"type": "object", "properties": {
+            "title": {"type": "string"}}, "required": ["title"]},
+    },
+    {
+        "name": "adjust_habit_target",
+        "description": "Retune an existing habit's numeric target.",
+        "parameters": {"type": "object", "properties": {
+            "title": {"type": "string"},
+            "target": {"type": "number"},
+            "compare": {"type": "string", "enum": ["gte", "lte"]},
+        }, "required": ["title", "target"]},
+    },
+    {
+        "name": "pin_correlation",
+        "description": "Pin a metric pair to the dashboard to track over time.",
+        "parameters": {"type": "object", "properties": {
+            "a": {"type": "string"}, "b": {"type": "string"}}, "required": ["a", "b"]},
+    },
+]
 
 _ACTION_RE = re.compile(r"```action\s*(\{.*?\})\s*```", re.DOTALL)
 _ACTION_TYPES = {"add_habit", "remove_habit", "adjust_habit_target", "pin_correlation"}
@@ -70,47 +100,86 @@ _CATEGORIES = {"sleep", "exercise", "diet", "aesthetics", "recovery", "misc"}
 _TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
 
 
+def _validate_action(obj: dict) -> dict | None:
+    """Validate one action dict ({"type": ..., ...}) → a clean action or None."""
+    t = obj.get("type")
+    if t not in _ACTION_TYPES:
+        return None
+    if t == "pin_correlation":
+        a, b = str(obj.get("a", "")).strip(), str(obj.get("b", "")).strip()
+        return {"type": t, "a": a, "b": b} if (a and b and a != b) else None
+    title = str(obj.get("title", "")).strip()[:60]
+    if not title:
+        return None
+    if t == "add_habit":
+        act = {"type": t, "title": title,
+               "category": obj.get("category") if obj.get("category") in _CATEGORIES else "misc"}
+        dur = obj.get("durationMins")
+        if isinstance(dur, (int, float)) and not isinstance(dur, bool):
+            act["durationMins"] = int(dur)
+        tm = obj.get("time")
+        if isinstance(tm, str) and _TIME_RE.match(tm):
+            act["time"] = tm
+        return act
+    if t == "adjust_habit_target":
+        tgt = obj.get("target")
+        if isinstance(tgt, (int, float)) and not isinstance(tgt, bool):
+            act = {"type": t, "title": title, "target": float(tgt)}
+            if obj.get("compare") in ("gte", "lte"):
+                act["compare"] = obj["compare"]
+            return act
+        return None
+    return {"type": t, "title": title}  # remove_habit
+
+
 def parse_actions(text: str):
-    """Extract validated agentic actions from ```action blocks, returning
-    (clean_text_without_blocks, actions). Malformed blocks are ignored — never raises."""
+    """Extract validated actions from ```action blocks (a text fallback for models that
+    don't use tool-calling). Returns (clean_text_without_blocks, actions)."""
     actions = []
     for m in _ACTION_RE.finditer(text):
         try:
             obj = json.loads(m.group(1))
         except Exception:
             continue
-        t = obj.get("type")
-        if t not in _ACTION_TYPES:
+        a = _validate_action(obj)
+        if a:
+            actions.append(a)
+    return _ACTION_RE.sub("", text).strip(), actions
+
+
+def actions_from_calls(calls) -> list[dict]:
+    """Validated actions from Gemini function calls ([{"name", "args"}, ...])."""
+    out = []
+    for c in (calls or []):
+        name = c.get("name")
+        if not name:
             continue
-        if t == "pin_correlation":
-            a, b = str(obj.get("a", "")).strip(), str(obj.get("b", "")).strip()
-            if a and b and a != b:
-                actions.append({"type": t, "a": a, "b": b})
+        args = c.get("args") if isinstance(c.get("args"), dict) else {}
+        a = _validate_action({"type": name, **args})
+        if a:
+            out.append(a)
+    return out
+
+
+def dedupe_actions(actions: list[dict]) -> list[dict]:
+    seen, out = set(), []
+    for a in actions:
+        key = (a.get("type"), a.get("title", ""), a.get("a", ""), a.get("b", ""))
+        if key in seen:
             continue
-        title = str(obj.get("title", "")).strip()[:60]
-        if not title:
-            continue
-        if t == "add_habit":
-            act = {"type": t, "title": title,
-                   "category": obj.get("category") if obj.get("category") in _CATEGORIES else "misc"}
-            dur = obj.get("durationMins")
-            if isinstance(dur, (int, float)) and not isinstance(dur, bool):
-                act["durationMins"] = int(dur)
-            tm = obj.get("time")
-            if isinstance(tm, str) and _TIME_RE.match(tm):
-                act["time"] = tm
-            actions.append(act)
-        elif t == "adjust_habit_target":
-            tgt = obj.get("target")
-            if isinstance(tgt, (int, float)) and not isinstance(tgt, bool):
-                act = {"type": t, "title": title, "target": float(tgt)}
-                if obj.get("compare") in ("gte", "lte"):
-                    act["compare"] = obj["compare"]
-                actions.append(act)
-        else:  # remove_habit
-            actions.append({"type": t, "title": title})
-    clean = _ACTION_RE.sub("", text).strip()
-    return clean, actions
+        seen.add(key)
+        out.append(a)
+    return out
+
+
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+_LONGNUM_RE = re.compile(r"\b\d{10,}\b")
+
+
+def scrub_pii(s: str) -> str:
+    """Defence-in-depth: strip emails and long digit runs (phone/account ids) before any
+    cloud call. The app already sends only metrics/ranks/habits — this is a safety net."""
+    return _LONGNUM_RE.sub("[redacted]", _EMAIL_RE.sub("[redacted]", s))
 
 
 # Metrics most useful to surface a recent value for, in context.
@@ -307,7 +376,7 @@ def compose_system(samples, habits=None, profile=None, diet=None, training=None,
                    workout_sets=None) -> str:
     ctx = build_context(samples, habits, profile, diet, training, aesthetics,
                         ranks, trends, correlations, workout_sets)
-    return f"{SYSTEM_PROMPT}\n\n=== USER DATA ===\n{ctx}"
+    return scrub_pii(f"{SYSTEM_PROMPT}\n\n=== USER DATA ===\n{ctx}")
 
 
 def context_sections(samples, habits=None, profile=None, diet=None, training=None,

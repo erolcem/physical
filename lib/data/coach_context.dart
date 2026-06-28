@@ -147,6 +147,100 @@ List<Map<String, dynamic>> coachWorkoutSets(List<WorkoutSession> sessions, {int 
   ];
 }
 
+String _labelize(String id) {
+  try {
+    return metricById(id).label;
+  } catch (_) {
+    return id.replaceAll('_', ' ');
+  }
+}
+
+/// Proactive, LLM-free insights for the coach home — surfaces the strongest correlation,
+/// weakest category, today's readiness, a notable trend, and the slipping habit, each with
+/// a ready prompt to dig in. Computed entirely from local data (instant + free + offline).
+List<({String title, String body, String ask})> coachInsights({
+  List<Map<String, dynamic>> correlations = const [],
+  Map<String, dynamic>? ranks,
+  Map<String, dynamic> trends = const {},
+  List<Map<String, dynamic>> habits = const [],
+  double? readiness,
+}) {
+  final out = <({String title, String body, String ask})>[];
+
+  if (readiness != null) {
+    final r = readiness.round();
+    final label = r >= 65 ? 'ready to train' : (r >= 50 ? 'moderate' : 'low — prioritise recovery');
+    out.add((title: 'Readiness $r', body: 'Recovery looks $label today.',
+        ask: 'My readiness is $r today — how should I adjust training?'));
+  }
+
+  if (correlations.isNotEmpty) {
+    final c = correlations.first;
+    final r = c['r'] as double;
+    final dir = r >= 0 ? 'rise together' : 'move oppositely';
+    out.add((
+      title: 'Pattern found',
+      body: '${_labelize(c['a'])} & ${_labelize(c['b'])} $dir (r=${r.toStringAsFixed(2)}, ${c['n']}d).',
+      ask: 'Explain the correlation between ${c['a']} and ${c['b']}, and whether it could be causal.'
+    ));
+  }
+
+  final cats = (ranks?['categories'] as Map?)?.cast<String, dynamic>() ?? const {};
+  if (cats.isNotEmpty) {
+    String? weak;
+    double lo = 1e9;
+    cats.forEach((k, v) {
+      final rv = (v as Map)['rank_value'];
+      if (rv is num && rv < lo) {
+        lo = rv.toDouble();
+        weak = k;
+      }
+    });
+    if (weak != null) {
+      final tier = (cats[weak] as Map)['tier'];
+      out.add((title: 'Weakest area', body: '$weak is your lowest category ($tier).',
+          ask: 'My weakest category is $weak — what is the highest-leverage way to raise it?'));
+    }
+  }
+
+  // The biggest meaningful recent move among the headline trends.
+  String? tKey;
+  double tMag = 0;
+  trends.forEach((k, v) {
+    if (v is Map && v['direction'] != 'flat') {
+      final ch = (v['change'] as num?)?.abs().toDouble() ?? 0;
+      if (ch > tMag) {
+        tMag = ch;
+        tKey = k;
+      }
+    }
+  });
+  if (tKey != null) {
+    final t = trends[tKey] as Map;
+    final ch = (t['change'] as num).toDouble();
+    out.add((
+      title: 'Trend',
+      body: '${_labelize(tKey!)} ${ch >= 0 ? 'up' : 'down'} ${ch.abs().toStringAsFixed(1)} recently.',
+      ask: 'My ${_labelize(tKey!)} is trending ${ch >= 0 ? 'up' : 'down'} — what does that mean and what next?'
+    ));
+  }
+
+  // The habit slipping the most (lowest 30-day adherence).
+  Map<String, dynamic>? slip;
+  for (final h in habits) {
+    final a = h['adherence'];
+    if (a is num && (slip == null || a < (slip['adherence'] as num))) slip = h;
+  }
+  final slipping = slip;
+  if (slipping != null && (slipping['adherence'] as num) < 70) {
+    out.add((title: 'Slipping habit',
+        body: '"${slipping['title']}" is at ${(slipping['adherence'] as num).round()}% this month.',
+        ask: 'I keep missing "${slipping['title']}" — help me fix my adherence.'));
+  }
+
+  return out.take(5).toList();
+}
+
 /// Rich habit context: target, today's measured value + met, streak, 30-day adherence,
 /// and the products used (for aesthetics reasoning).
 List<Map<String, dynamic>> coachHabits(

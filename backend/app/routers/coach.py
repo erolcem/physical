@@ -6,7 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth import current_user
-from ..coach import compose_system, context_sections, parse_actions
+from ..coach import (ACTION_TOOLS, actions_from_calls, compose_system,
+                     context_sections, dedupe_actions, parse_actions)
 from ..config import settings
 from ..db import get_db
 from ..integrations.gemini import client as gemini
@@ -47,8 +48,13 @@ def chat(body: CoachChatIn,
     turns = [{"role": t.role, "text": t.text} for t in body.history]
     turns.append({"role": "user", "text": body.message})
     try:
-        reply = gemini.generate(system, turns)
+        reply, calls = gemini.generate_full(system, turns, tools=ACTION_TOOLS)
     except gemini.GeminiError as e:
         raise HTTPException(502, f"Coach unavailable: {e}")
-    clean, actions = parse_actions(reply)
+    # Actions can arrive as tool calls (preferred) or ```action blocks (fallback).
+    clean, fenced = parse_actions(reply)
+    actions = dedupe_actions(actions_from_calls(calls) + fenced)
+    # If the model only called a tool with no prose, give the bubble a short line.
+    if not clean and actions:
+        clean = "Here's a change I'd suggest — tap to apply."
     return CoachChatOut(reply=clean, actions=actions)

@@ -7,6 +7,7 @@ import '../data/api_client.dart';
 import '../data/coach_context.dart';
 import '../data/diet.dart' show todayDiet;
 import '../data/metrics.dart' show metricById, metrics, MetricTier;
+import '../data/readiness.dart' show dailyReadiness;
 import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart' show exercisesOverDays, sessionsOverDays, sortedByRecent, volumeOverDays;
 import '../state/habit_providers.dart';
@@ -115,6 +116,15 @@ class _CoachTabState extends ConsumerState<CoachTab> {
   Map<String, dynamic> _trendsCtx() => coachTrends(ref.read(logsProvider));
   List<Map<String, dynamic>> _correlationsCtx() => coachCorrelations(ref.read(logsProvider));
   List<Map<String, dynamic>> _setsCtx() => coachWorkoutSets(ref.read(workoutProvider));
+
+  // Local, LLM-free insights for the welcome screen (instant + offline).
+  List<({String title, String body, String ask})> _insights() => coachInsights(
+        correlations: _correlationsCtx(),
+        ranks: _ranksCtx(),
+        trends: _trendsCtx(),
+        habits: _habitsCtx(),
+        readiness: dailyReadiness(ref.read(logsProvider), ref.read(workoutProvider)),
+      );
 
   // Stats are auto-sourced (no manual profile page): age from Google, height/weight/
   // body-fat from synced logs. Gender defaults to the app's young-male cohort.
@@ -409,6 +419,7 @@ class _CoachTabState extends ConsumerState<CoachTab> {
               textAlign: TextAlign.center,
               style: TextStyle(color: _muted, fontSize: 13)),
           const SizedBox(height: 20),
+          ..._insightCards(),
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 8,
@@ -426,6 +437,49 @@ class _CoachTabState extends ConsumerState<CoachTab> {
           ),
         ],
       );
+
+  // Proactive insight cards on the welcome screen — tap to ask the coach about one.
+  List<Widget> _insightCards() {
+    final insights = _insights();
+    if (insights.isEmpty) return const [];
+    return [
+      const Align(
+        alignment: Alignment.centerLeft,
+        child: Text('INSIGHTS', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+      ),
+      const SizedBox(height: 8),
+      for (final i in insights)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _send(i.ask),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _card,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _accent.withValues(alpha: 0.25)),
+                ),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(i.title, style: const TextStyle(fontSize: 11, color: _teal, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(i.body, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    ]),
+                  ),
+                  const Icon(Icons.chevron_right, color: _muted, size: 18),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      const SizedBox(height: 16),
+    ];
+  }
 
   Widget _messageWidget(_Msg m) {
     if (m.actions.isEmpty) return _bubble(m);

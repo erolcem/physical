@@ -79,12 +79,12 @@ def test_coach_chat_sees_real_data(client, monkeypatch):
     monkeypatch.setattr(gem, "configured", lambda: True)
     captured = {}
 
-    def fake_generate(system, turns, **kw):
+    def fake_generate_full(system, turns, **kw):
         captured["system"] = system
         captured["turns"] = turns
-        return "Prioritise your weakest lift this week."
+        return "Prioritise your weakest lift this week.", []
 
-    monkeypatch.setattr(gem, "generate", fake_generate)
+    monkeypatch.setattr(gem, "generate_full", fake_generate_full)
 
     client.post("/me/samples", json=[
         {"metric_id": "bench", "ts": "2026-06-01T08:00:00", "bodyweight_at_ts": 80,
@@ -155,3 +155,34 @@ def test_parse_adjust_habit_target_action():
     clean, actions = parse_actions(txt)
     assert "Bump it up." in clean and "```" not in clean
     assert actions == [{"type": "adjust_habit_target", "title": "Protein", "target": 170.0, "compare": "gte"}]
+
+
+# ── Function-calling (tool use) ──
+from app.coach import actions_from_calls, dedupe_actions, scrub_pii  # noqa: E402
+
+
+def test_actions_from_function_calls():
+    calls = [
+        {"name": "add_habit", "args": {"title": "Mobility", "category": "exercise", "durationMins": 10}},
+        {"name": "adjust_habit_target", "args": {"title": "Protein", "target": 170, "compare": "gte"}},
+        {"name": "pin_correlation", "args": {"a": "deep_sleep", "b": "bench"}},
+        {"name": "bogus", "args": {}},                      # invalid → dropped
+        {"name": "add_habit", "args": {}},                  # no title → dropped
+    ]
+    acts = actions_from_calls(calls)
+    assert {"type": "add_habit", "title": "Mobility", "category": "exercise", "durationMins": 10} in acts
+    assert {"type": "adjust_habit_target", "title": "Protein", "target": 170.0, "compare": "gte"} in acts
+    assert {"type": "pin_correlation", "a": "deep_sleep", "b": "bench"} in acts
+    assert len(acts) == 3
+
+
+def test_dedupe_merges_tool_and_fenced():
+    a = [{"type": "add_habit", "title": "Mobility", "category": "misc"},
+         {"type": "add_habit", "title": "Mobility", "category": "misc"}]
+    assert len(dedupe_actions(a)) == 1
+
+
+def test_scrub_pii_strips_email_and_long_ids_not_data():
+    s = scrub_pii("contact a@b.com id 1234567890 but bench 80x8 sets stay")
+    assert "a@b.com" not in s and "1234567890" not in s
+    assert "80x8" in s  # set data preserved
