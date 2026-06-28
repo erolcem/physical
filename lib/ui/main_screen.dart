@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/notifications.dart';
+import '../data/sync.dart' show apiClientProvider, cloudSync;
 import '../state/habit_providers.dart';
 import 'cloud_sheet.dart';
 import 'coach_screen.dart';
@@ -19,10 +20,25 @@ class _MainScreenState extends ConsumerState<MainScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
+  bool _autoSynced = false;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    // Auto-sync once on launch (best-effort, silent) so the app opens up to date.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _autoSync());
+  }
+
+  Future<void> _autoSync() async {
+    if (_autoSynced) return;
+    _autoSynced = true;
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.loadPersistedToken();
+      if (!api.isSignedIn || !mounted) return;
+      await cloudSync(ref); // pulls Google + merges/pushes the backup, refreshing providers
+    } catch (_) {/* launch sync is best-effort — the ☁ button is always there */}
   }
 
   @override
