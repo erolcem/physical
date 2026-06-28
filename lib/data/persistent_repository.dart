@@ -19,6 +19,7 @@ class PersistentRepository implements Repository {
   static const _foodKey = 'physical_food_v1';
   static const _workoutKey = 'physical_workouts_v1';
   static const _pinsKey = 'physical_pins_v1';
+  static const _tombKey = 'physical_tombstones_v1';
   final SharedPreferences _prefs;
   final Map<String, List<Log>> _cache;
   final List<Habit> _habits;
@@ -26,13 +27,15 @@ class PersistentRepository implements Repository {
   final List<FoodEntry> _food;
   final List<WorkoutSession> _workouts;
   final List<PinnedCorrelation> _pins;
+  final Set<String> _tombstones;
   PersistentRepository._(this._prefs, this._cache, this._habits,
-      this._completions, this._food, this._workouts, this._pins);
+      this._completions, this._food, this._workouts, this._pins, this._tombstones);
 
   /// Load once at startup. First run seeds demo data, then persists it.
   static Future<PersistentRepository> create() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
+    final tombRaw = prefs.getString(_tombKey);
     final repo = PersistentRepository._(
       prefs,
       raw == null ? {} : _decode(raw),
@@ -41,10 +44,22 @@ class PersistentRepository implements Repository {
       _decodeFood(prefs.getString(_foodKey)),
       _decodeWorkouts(prefs.getString(_workoutKey)),
       _decodePins(prefs.getString(_pinsKey)),
+      tombRaw == null ? <String>{} : {for (final t in (jsonDecode(tombRaw) as List)) t as String},
     );
     if (raw == null) applyDemoSeed(repo); // first run only
     return repo;
   }
+
+  @override
+  Set<String> loadTombstones() => Set.of(_tombstones);
+  @override
+  void addTombstone(String key) {
+    _tombstones.add(key);
+    _persistTombstones();
+  }
+
+  void _persistTombstones() =>
+      unawaited(_prefs.setString(_tombKey, jsonEncode(_tombstones.toList())));
 
   @override
   Map<String, List<Log>> loadLogs() =>
@@ -59,7 +74,11 @@ class PersistentRepository implements Repository {
   @override
   void deleteLog(String metricId, int index) {
     final list = _cache[metricId];
-    if (list != null && index >= 0 && index < list.length) list.removeAt(index);
+    if (list != null && index >= 0 && index < list.length) {
+      _tombstones.add(logKey(metricId, list[index]));
+      list.removeAt(index);
+      _persistTombstones();
+    }
     _persist();
   }
 
@@ -156,12 +175,14 @@ class PersistentRepository implements Repository {
     _food.clear();
     _workouts.clear();
     _pins.clear();
+    _tombstones.clear();
     _persist();
     _persistHabits();
     _persistDone();
     _persistFood();
     _persistWorkouts();
     _persistPins();
+    _persistTombstones();
   }
 
   void _persistPins() => unawaited(_prefs.setString(

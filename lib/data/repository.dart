@@ -8,11 +8,19 @@ import 'diet.dart';
 import 'habits.dart';
 import 'workout.dart';
 
+/// Stable key for a single log ("metricId@ts") — used for dedupe + tombstones.
+String logKey(String metricId, Log l) => '$metricId@${l.ts}';
+
 abstract class Repository {
   Map<String, List<Log>> loadLogs();
   void saveLog(String metricId, Log log);
   void deleteLog(String metricId, int index);
   void clear();
+
+  // Tombstones: keys ("metricId@ts") of deleted logs, so a delete STICKS — Google
+  // re-sync and the cloud backup merge won't resurrect them across syncs/devices.
+  Set<String> loadTombstones();
+  void addTombstone(String key);
 
   // Habits (Phase 2) — accountability layer, stored separately from logs.
   List<Habit> loadHabits();
@@ -39,6 +47,7 @@ abstract class Repository {
 
 class InMemoryRepository implements Repository {
   final Map<String, List<Log>> _logs = {};
+  final Set<String> _tombstones = {};
   final List<Habit> _habits = [];
   final Map<String, Set<String>> _completions = {};
   final List<FoodEntry> _food = [];
@@ -55,8 +64,16 @@ class InMemoryRepository implements Repository {
   @override
   void deleteLog(String metricId, int index) {
     final list = _logs[metricId];
-    if (list != null && index >= 0 && index < list.length) list.removeAt(index);
+    if (list != null && index >= 0 && index < list.length) {
+      _tombstones.add(logKey(metricId, list[index]));
+      list.removeAt(index);
+    }
   }
+
+  @override
+  Set<String> loadTombstones() => Set.of(_tombstones);
+  @override
+  void addTombstone(String key) => _tombstones.add(key);
 
   @override
   List<Habit> loadHabits() => List.of(_habits);
@@ -126,6 +143,7 @@ class InMemoryRepository implements Repository {
   @override
   void clear() {
     _logs.clear();
+    _tombstones.clear();
     _habits.clear();
     _completions.clear();
     _food.clear();
@@ -179,16 +197,24 @@ Map<String, dynamic> repoExport(Repository r) => {
       'food': [for (final f in r.loadFood()) f.toJson()],
       'workouts': [for (final w in r.loadWorkouts()) w.toJson()],
       'pins': [for (final p in r.loadPins()) p.toJson()],
+      'tombstones': r.loadTombstones().toList(),
     };
 
 /// Replace ALL local data with a snapshot from [repoExport]. No-op-safe on junk.
 void repoImport(Repository r, Map<String, dynamic> m) {
   r.clear();
+  // Restore tombstones first so a resurrected log in the snapshot can't slip back in.
+  final tombs = {for (final t in ((m['tombstones'] as List?) ?? const [])) t as String};
+  for (final t in tombs) {
+    r.addTombstone(t);
+  }
   ((m['logs'] as Map?) ?? const {}).forEach((mid, list) {
     for (final d in (list as List)) {
       final j = (d as Map);
+      final ts = j['ts'] as String?;
+      if (ts != null && tombs.contains('$mid@$ts')) continue;
       r.saveLog(mid as String, Log(mid, (j['v'] as num).toDouble(),
-          bodyweight: (j['bw'] as num?)?.toDouble(), ts: j['ts'] as String?));
+          bodyweight: (j['bw'] as num?)?.toDouble(), ts: ts));
     }
   });
   for (final h in ((m['habits'] as List?) ?? const [])) {
@@ -215,6 +241,17 @@ void repoImport(Repository r, Map<String, dynamic> m) {
 /// logs by metric+timestamp, food/workouts/habits by id, completions set-union, pins
 /// by key. (Deletes don't propagate via union — a later refinement if needed.)
 void repoMerge(Repository r, Map<String, dynamic> m) {
+  // Union tombstones first, so deletions from EITHER device win over the other's copy.
+  for (final t in ((m['tombstones'] as List?) ?? const [])) {
+    r.addTombstone(t as String);
+  }
+  final tombs = r.loadTombstones();
+  // Purge any local logs that are now tombstoned (a delete that happened on another device).
+  r.loadLogs().forEach((mid, list) {
+    for (var i = list.length - 1; i >= 0; i--) {
+      if (tombs.contains(logKey(mid, list[i]))) r.deleteLog(mid, i);
+    }
+  });
   final existingLogs = r.loadLogs();
   ((m['logs'] as Map?) ?? const {}).forEach((mid, list) {
     final haveTs = {for (final l in (existingLogs[mid] ?? const <Log>[])) l.ts};
@@ -222,6 +259,7 @@ void repoMerge(Repository r, Map<String, dynamic> m) {
       final j = (d as Map);
       final ts = j['ts'] as String?;
       if (ts != null && haveTs.contains(ts)) continue;
+      if (ts != null && tombs.contains('$mid@$ts')) continue; // deleted — don't resurrect
       r.saveLog(mid as String, Log(mid, (j['v'] as num).toDouble(),
           bodyweight: (j['bw'] as num?)?.toDouble(), ts: ts));
     }

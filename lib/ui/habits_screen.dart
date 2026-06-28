@@ -42,7 +42,10 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         habitGoalMet(h, day, logs: logs, food: food, workouts: workouts);
     double? measured(Habit h, String day) =>
         habitMeasured(h, day, logs: logs, food: food, workouts: workouts);
-    bool done(Habit h, String day) => met(h, day) || st.completions[h.id]?.contains(day) == true;
+    // Evidence-only: auto-verifiable habits are done ONLY from real data (no manual tick);
+    // manual habits are done when ticked.
+    bool done(Habit h, String day) => habitDoneOn(h, day,
+        logs: logs, food: food, workouts: workouts, ticked: st.completions[h.id]);
 
     // Time-ordered: timed habits first (by clock), then untimed.
     int byTime(Habit a, Habit b) {
@@ -116,33 +119,28 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               for (final h in dueToday)
                 _habitTile(context, ref, h,
                     done: done(h, todayKey()),
-                    streak: currentStreak(_doneDaysOf(h, st, met)),
-                    status: met(h, todayKey())
-                        ? HabitStatus.verified
-                        : (st.doneToday(h.id) ? HabitStatus.manual : HabitStatus.notDone),
+                    streak: currentStreak(_doneDaysOf(h, done)),
+                    status: h.verify == 'manual'
+                        ? (st.doneToday(h.id) ? HabitStatus.manual : HabitStatus.notDone)
+                        : (met(h, todayKey()) ? HabitStatus.verified : HabitStatus.notDone),
                     measuredToday: measured(h, todayKey()),
                     last7: lastNDays(7),
-                    doneDays: _doneDaysOf(h, st, met)),
+                    doneDays: _doneDaysOf(h, done)),
             // Habits scheduled on other days only (not today) — for awareness.
             for (final h in (habits.where((h) => !isDueToday(h)).toList()..sort(byTime)))
               _habitTile(context, ref, h,
-                  done: done(h, todayKey()), streak: currentStreak(_doneDaysOf(h, st, met)),
+                  done: done(h, todayKey()), streak: currentStreak(_doneDaysOf(h, done)),
                   status: HabitStatus.notDone, measuredToday: null, last7: lastNDays(7),
-                  doneDays: _doneDaysOf(h, st, met), dimmed: true),
+                  doneDays: _doneDaysOf(h, done), dimmed: true),
           ],
         ],
       ),
     );
   }
 
-  // Days counted "done" over the last 60: manually ticked OR the goal was met from data.
-  Set<String> _doneDaysOf(Habit h, HabitsState st, bool Function(Habit, String) met) {
-    final out = {...st.doneFor(h.id)};
-    for (final day in lastNDays(60)) {
-      if (met(h, day)) out.add(day);
-    }
-    return out;
-  }
+  // Days counted "done" over the last 60 (auto habits = data-earned, manual = ticked).
+  Set<String> _doneDaysOf(Habit h, bool Function(Habit, String) done) =>
+      {for (final day in lastNDays(60)) if (done(h, day)) day};
 
   // ── Today's accountability recap: done / total · verified, + what's still missed ──
   Widget _summaryCard(int done, int total, {required int verified, required List<Habit> missed}) {
@@ -367,7 +365,15 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           color: _card,
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
-            onTap: dimmed ? null : () => ref.read(habitsProvider.notifier).toggleToday(h.id),
+            // Manual habits toggle on tap; auto-verified ones are earned from data only.
+            onTap: dimmed
+                ? null
+                : (h.verify == 'manual'
+                    ? () => ref.read(habitsProvider.notifier).toggleToday(h.id)
+                    : () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        duration: const Duration(seconds: 3),
+                        content: Text('"${h.title}" is verified from your data — '
+                            'log the activity (or sync) to check it off.')))),
             child: IntrinsicHeight(
               child: Row(children: [
                 Container(width: 4, color: cc),
@@ -375,7 +381,10 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     child: Row(children: [
-                      Icon(done ? Icons.check_circle : Icons.circle_outlined,
+                      Icon(
+                          done
+                              ? Icons.check_circle
+                              : (h.verify == 'manual' ? Icons.circle_outlined : Icons.sensors),
                           color: done ? _teal : _muted, size: 26),
                       const SizedBox(width: 10),
                       Expanded(

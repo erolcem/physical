@@ -73,10 +73,12 @@ Future<SyncResult> syncNow(WidgetRef ref) async {
 /// metric + timestamp). Returns how many were newly added. Pure & testable.
 int mergeSamples(Repository repo, List<Map<String, dynamic>> samples) {
   final existing = repo.loadLogs();
+  final tombs = repo.loadTombstones();
   var added = 0;
   for (final s in samples) {
     final mid = s['metric_id'] as String;
     final ts = s['ts'] as String;
+    if (tombs.contains('$mid@$ts')) continue; // deleted locally — don't let Google re-add it
     final list = existing[mid] ??= <Log>[];
     if (list.any((l) => l.ts == ts)) continue; // already have this day's value
     final log = Log(mid, (s['value'] as num).toDouble(),

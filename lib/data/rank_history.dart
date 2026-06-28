@@ -38,9 +38,12 @@ Map<String, Map<String, double>> rankSeries(Map<String, List<Log>> logs) {
       (byCat[m.category] ??= []).add(best);
     }
     if (byCat.isEmpty) continue;
-    (out['overall_rank'] ??= {})[day] = eng.overallByCategory(byCat).rankValue;
+    // Full-roster scoring (unlogged = worst), matching the displayed overall/category ranks.
+    final totals = rankedCountByCategory;
+    (out['overall_rank'] ??= {})[day] = eng.overallByCategoryFull(byCat, totals).rankValue;
     byCat.forEach((cat, catLogs) {
-      (out['${cat}_rank'] ??= {})[day] = eng.overall(catLogs).rankValue;
+      (out['${cat}_rank'] ??= {})[day] =
+          eng.overallFull(catLogs, totals[cat] ?? catLogs.length).rankValue;
     });
   }
   return out;

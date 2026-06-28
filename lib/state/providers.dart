@@ -62,7 +62,9 @@ final overallProvider = Provider<eng.RankResult>((ref) {
     if (!eng.standards.containsKey(l.metricId)) continue;
     (byCat[metricById(l.metricId).category] ??= <Log>[]).add(l);
   }
-  return eng.overallByCategory(byCat);
+  // Full roster: unlogged metrics + unfilled categories count as worst-case, so partial
+  // logging can't yield a disproportionately high overall.
+  return eng.overallByCategoryFull(byCat, rankedCountByCategory);
 });
 
 /// Per-category rank (z-space average of the latest logged ranked metric in
@@ -75,7 +77,11 @@ final categoryRanksProvider = Provider<Map<String, eng.RankResult>>((ref) {
     if (!eng.standards.containsKey(l.metricId)) continue;
     (byCat[metricById(l.metricId).category] ??= []).add(l);
   }
-  return {for (final e in byCat.entries) e.key: eng.overall(e.value)};
+  // Every ranked category appears (Wood until logged); unlogged metrics count as worst.
+  return {
+    for (final e in rankedCountByCategory.entries)
+      e.key: eng.overallFull(byCat[e.key] ?? const <Log>[], e.value)
+  };
 });
 
 /// Rank for a single metric's latest log (null if never logged).

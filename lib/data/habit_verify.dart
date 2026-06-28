@@ -63,6 +63,21 @@ double? habitMeasured(
   }
 }
 
+/// Whether a habit counts as DONE on [day]. Auto-verifiable habits (metric/diet/workout)
+/// can ONLY be earned from real data — a manual tick never satisfies them. Truly manual
+/// habits (aesthetics/misc) are done when ticked.
+bool habitDoneOn(
+  Habit h,
+  String day, {
+  required Map<String, List<Log>> logs,
+  required List<FoodEntry> food,
+  required List<WorkoutSession> workouts,
+  Set<String>? ticked,
+}) {
+  if (h.verify == 'manual') return ticked?.contains(day) ?? false;
+  return habitGoalMet(h, day, logs: logs, food: food, workouts: workouts);
+}
+
 /// Is the habit's goal met on [day]? Target habits compare the measured value; binary
 /// habits (no target / manual) pass when any corroborating data exists that day.
 bool habitGoalMet(

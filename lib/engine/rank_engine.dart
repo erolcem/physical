@@ -377,6 +377,46 @@ RankResult _resultFromZs(List<double> zs) => zs.isEmpty
     ? RankResult('Wood', 'I', 99.9, 0.1, 0.0)
     : _resultFromZbar(zs.reduce((a, b) => a + b) / zs.length);
 
+/// An unrated (unlogged) ranked metric is assumed worst-case (~bottom of Wood). Averaging
+/// these floors in means cherry-picking a few strong metrics can't inflate the rank — you
+/// "earn up" from the bottom as you log + improve more of the roster.
+const double unratedZ = -2.0;
+
+double _categoryZFull(List<Log> logs, int total) {
+  var sum = 0.0;
+  var logged = 0;
+  for (final log in logs) {
+    if (!standards.containsKey(log.metricId)) continue;
+    final p = percentile(log.metricId, log.value, log.bodyweight).clamp(1e-6, 1 - 1e-6);
+    sum += _normInv(p, 0, 1);
+    logged++;
+  }
+  final n = total > logged ? total : logged;
+  if (n == 0) return unratedZ;
+  sum += (n - logged) * unratedZ; // unlogged metrics floor the mean
+  return sum / n;
+}
+
+/// A category rank over its FULL roster of [total] ranked metrics — unlogged ones count
+/// as worst-case. Use for the displayed category/overall ranks (not the parity engine).
+RankResult overallFull(List<Log> logs, int total) =>
+    _resultFromZbar(_categoryZFull(logs, total));
+
+/// Overall over every ranked category's full roster (unfilled categories + unlogged
+/// metrics count as worst), so partial completion yields an honestly low overall rank.
+RankResult overallByCategoryFull(
+    Map<String, List<Log>> logsByCategory, Map<String, int> totalByCategory) {
+  var acc = 0.0, wsum = 0.0;
+  totalByCategory.forEach((cat, total) {
+    if (total <= 0) return;
+    final catZ = _categoryZFull(logsByCategory[cat] ?? const <Log>[], total);
+    final w = categoryWeights[cat] ?? 1.0;
+    acc += w * catZ;
+    wsum += w;
+  });
+  return wsum == 0 ? RankResult('Wood', 'I', 99.9, 0.1, 0.0) : _resultFromZbar(acc / wsum);
+}
+
 RankResult _resultFromZbar(double zbar) {
   final pbar = _normCdf(zbar, 0, 1);
   final rv = _rankValueFromP(pbar);

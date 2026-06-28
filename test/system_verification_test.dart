@@ -157,39 +157,35 @@ void main() {
   });
 
   group('Category ranks', () {
-    test('computed for seeded ranked categories; tracked excluded', () {
+    test('every ranked category appears (full roster, Wood until logged)', () {
       final c = ProviderContainer();
       addTearDown(c.dispose);
       final cats = c.read(categoryRanksProvider);
-      // Demo seed logs strength (bench/squat/ohp), performance (vo2max/plank/vert)
-      // and recovery (resting_hr).
-      expect(cats.containsKey('strength'), isTrue);
-      expect(cats.containsKey('performance'), isTrue);
-      expect(cats.containsKey('recovery'), isTrue);
-      expect(cats.containsKey('aesthetics'), isFalse, reason: 'no aesthetic logged in the seed');
+      // Full-roster scoring shows ALL four ranked categories, even unfilled ones.
+      for (final id in ['strength', 'performance', 'recovery', 'aesthetics']) {
+        expect(cats.containsKey(id), isTrue);
+      }
       for (final r in cats.values) {
         expect(eng.tiers.contains(r.tier), isTrue);
         expect(r.percentile, inInclusiveRange(0, 100));
       }
     });
 
-    test('overall averages categories equally — aesthetics is one of the four', () {
+    test('unfilled categories drag the overall below a single partially-filled one', () {
       final repo = InMemoryRepository();
       repo.saveLog('eye', Log('eye', -0.1, ts: '2026-06-27T12:00:00'));
       final c = ProviderContainer(
           overrides: [repositoryProvider.overrideWithValue(repo)]);
       addTearDown(c.dispose);
-      // Aesthetics now ranks as a category AND feeds the overall. With only the
-      // aesthetics category logged, overall == that category's rank.
       final cats = c.read(categoryRanksProvider);
       expect(cats.containsKey('aesthetics'), isTrue);
-      expect(c.read(overallProvider).rankValue,
-          closeTo(cats['aesthetics']!.rankValue, 1e-9));
+      // With only one aesthetic metric logged, the unfilled categories (worst-case) pull
+      // the overall BELOW the aesthetics category rank — partial logging can't inflate it.
+      expect(c.read(overallProvider).rankValue, lessThan(cats['aesthetics']!.rankValue));
+      expect(c.read(overallProvider).rankValue, greaterThanOrEqualTo(0));
     });
 
-    test('overall is category-weighted, not strength-heavy', () {
-      // Adding many strength lifts must NOT swamp a single strong aesthetic — categories
-      // blend by weight, not metric count. Overall stays between the two category ranks.
+    test('unrated metrics floor the score — one elite metric cannot inflate the overall', () {
       final repo = InMemoryRepository();
       repo.saveLog('eye', Log('eye', -0.25, ts: '2026-06-27T12:00:00')); // elite vision
       for (final id in ['bench', 'squat', 'ohp', 'pullup']) {
@@ -200,11 +196,10 @@ void main() {
       addTearDown(c.dispose);
       final cats = c.read(categoryRanksProvider);
       final ov = c.read(overallProvider).rankValue;
-      final lo = cats['strength']!.rankValue, hi = cats['aesthetics']!.rankValue;
-      // Overall sits between the weak-strength and strong-aesthetics category ranks —
-      // i.e. the 4 strength metrics didn't dominate the single aesthetic one.
-      expect(ov, greaterThan(lo));
-      expect(ov, lessThan(hi));
+      // The elite eye can't drag the overall up to its category level: the mostly-unfilled
+      // roster + weak lifts floor it. And strength stays clearly weak.
+      expect(ov, lessThan(cats['aesthetics']!.rankValue));
+      expect(cats['strength']!.rankValue, lessThan(cats['aesthetics']!.rankValue));
     });
   });
 

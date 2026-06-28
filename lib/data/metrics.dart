@@ -154,6 +154,16 @@ MetricDef metricById(String id) => metrics.firstWhere((m) => m.id == id);
 List<MetricDef> get rankedMetrics =>
     metrics.where((m) => m.tier == MetricTier.ranked).toList();
 
+/// How many ranked metrics each category has — the denominator for "unrated = worst"
+/// scoring, so a category/overall rank reflects the FULL roster, not just what's logged.
+Map<String, int> get rankedCountByCategory {
+  final out = <String, int>{};
+  for (final m in rankedMetrics) {
+    out[m.category] = (out[m.category] ?? 0) + 1;
+  }
+  return out;
+}
+
 // Tier colours (from the prototype's rank palette).
 const Map<String, Color> tierColors = {
   'Wood': Color(0xFF9E643A),
