@@ -18,11 +18,17 @@ const _accent = Color(0xFF5B6AF8);
 const _teal = Color(0xFF4CE0C3);
 const _muted = Color(0xFF7880A8);
 
-class HabitsTab extends ConsumerWidget {
+class HabitsTab extends ConsumerStatefulWidget {
   const HabitsTab({super.key});
+  @override
+  ConsumerState<HabitsTab> createState() => _HabitsTabState();
+}
+
+class _HabitsTabState extends ConsumerState<HabitsTab> {
+  bool _week = false; // Day (false) / Week (true)
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final st = ref.watch(habitsProvider);
     final logs = ref.watch(logsProvider);
     final workouts = ref.watch(workoutProvider);
@@ -37,7 +43,16 @@ class HabitsTab extends ConsumerWidget {
         habitMeasured(h, day, logs: logs, food: food, workouts: workouts);
     bool done(Habit h, String day) => met(h, day) || st.completions[h.id]?.contains(day) == true;
 
-    final dueToday = habits.where((h) => isDueToday(h)).toList();
+    // Time-ordered: timed habits first (by clock), then untimed.
+    int byTime(Habit a, Habit b) {
+      final ta = a.time, tb = b.time;
+      if (ta == null && tb == null) return a.title.compareTo(b.title);
+      if (ta == null) return 1;
+      if (tb == null) return -1;
+      return ta.compareTo(tb);
+    }
+
+    final dueToday = habits.where((h) => isDueToday(h)).toList()..sort(byTime);
     final doneCount = dueToday.where((h) => done(h, todayKey())).length;
 
     return Container(
@@ -45,12 +60,19 @@ class HabitsTab extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
-          _summaryCard(doneCount, dueToday.length),
-          if (habits.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _weekRoster(habits),
-          ],
-          const SizedBox(height: 4),
+          // Day / Week toggle.
+          Center(
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: false, label: Text('Day'), icon: Icon(Icons.today, size: 16)),
+                ButtonSegment(value: true, label: Text('Week'), icon: Icon(Icons.calendar_view_week, size: 16)),
+              ],
+              selected: {_week},
+              onSelectionChanged: (s) => setState(() => _week = s.first),
+              showSelectedIcon: false,
+            ),
+          ),
+          const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton.icon(
@@ -62,7 +84,15 @@ class HabitsTab extends ConsumerWidget {
           ),
           if (habits.isEmpty)
             _empty()
+          else if (_week)
+            _weekView(habits, st, met, done)
           else ...[
+            _summaryCard(doneCount, dueToday.length,
+                verified: dueToday.where((h) => met(h, todayKey())).length,
+                missed: [for (final h in dueToday) if (!done(h, todayKey())) h]),
+            const SizedBox(height: 12),
+            if (dueToday.isNotEmpty) _dayPartBar(dueToday),
+            const SizedBox(height: 12),
             const Text('TODAY', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
             const SizedBox(height: 6),
             if (dueToday.isEmpty)
@@ -83,7 +113,7 @@ class HabitsTab extends ConsumerWidget {
                     last7: lastNDays(7),
                     doneDays: _doneDaysOf(h, st, met)),
             // Habits scheduled on other days only (not today) — for awareness.
-            for (final h in habits.where((h) => !isDueToday(h)))
+            for (final h in (habits.where((h) => !isDueToday(h)).toList()..sort(byTime)))
               _habitTile(context, ref, h,
                   done: done(h, todayKey()), streak: currentStreak(_doneDaysOf(h, st, met)),
                   status: HabitStatus.notDone, measuredToday: null, last7: lastNDays(7),
@@ -103,84 +133,171 @@ class HabitsTab extends ConsumerWidget {
     return out;
   }
 
-  // ── Today's completion ──
-  Widget _summaryCard(int done, int total) {
+  // ── Today's accountability recap: done / total · verified, + what's still missed ──
+  Widget _summaryCard(int done, int total, {required int verified, required List<Habit> missed}) {
     final frac = total == 0 ? 0.0 : done / total;
+    final allDone = done == total && total > 0;
     return Card(
       color: _card,
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('TODAY', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+          Row(children: [
+            const Text('TODAY', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+            const Spacer(),
+            if (verified > 0)
+              Text('$verified auto-verified', style: const TextStyle(fontSize: 11, color: _teal, fontWeight: FontWeight.w700)),
+          ]),
           const SizedBox(height: 6),
-          Text(total == 0 ? 'Nothing due today' : '$done / $total done',
+          Text(total == 0 ? 'Nothing due today' : (allDone ? 'All $total done 🎉' : '$done / $total done'),
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
           const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
             child: LinearProgressIndicator(
                 value: frac, minHeight: 8,
-                color: done == total && total > 0 ? _teal : _accent,
+                color: allDone ? _teal : _accent,
                 backgroundColor: Colors.white.withValues(alpha: 0.08)),
           ),
+          if (missed.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text('Still to do', style: TextStyle(fontSize: 10, letterSpacing: 1.5, color: _muted.withValues(alpha: 0.8))),
+            const SizedBox(height: 6),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final h in missed)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Color(sectionOf(h.section).color).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text('${sectionOf(h.section).emoji} ${h.title}',
+                      style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                ),
+            ]),
+          ],
         ]),
       ),
     );
   }
 
-  // ── Weekly schedule (which habits land on which day) ──
-  Widget _weekRoster(List<Habit> habits) {
-    final todayWd = DateTime.now().weekday;
+  // ── Time-of-day distribution: where the day's habits land (a 4-bucket bar chart) ──
+  Widget _dayPartBar(List<Habit> due) {
+    const parts = [('Morning', 5, 12), ('Afternoon', 12, 17), ('Evening', 17, 22), ('Night', 22, 29)];
+    int hourOf(Habit h) {
+      if (h.time == null) return -1;
+      final hh = int.tryParse(h.time!.split(':').first) ?? 0;
+      return hh;
+    }
+    final counts = [
+      for (final (_, lo, hi) in parts)
+        due.where((h) {
+          final hr = hourOf(h);
+          if (hr < 0) return false;
+          final adj = hr < 5 ? hr + 24 : hr; // night wraps past midnight
+          return adj >= lo && adj < hi;
+        }).length
+    ];
+    final untimed = due.where((h) => h.time == null).length;
+    final maxC = [...counts, 1].reduce((a, b) => a > b ? a : b);
     return Card(
       color: _card,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('THIS WEEK', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              for (var wd = 1; wd <= 7; wd++)
-                _dayColumn(wd, todayWd,
-                    habits.where((h) => isDueOn(h, _dateForWeekday(wd))).length),
-            ],
-          ),
+          Row(children: [
+            const Text('THROUGH THE DAY', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+            const Spacer(),
+            if (untimed > 0) Text('$untimed anytime', style: const TextStyle(fontSize: 10.5, color: _muted)),
+          ]),
+          const SizedBox(height: 14),
+          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            for (var i = 0; i < parts.length; i++)
+              Expanded(
+                child: Column(children: [
+                  Text(counts[i] > 0 ? '${counts[i]}' : '',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: _accent)),
+                  const SizedBox(height: 4),
+                  Container(
+                    height: 6 + 46 * (counts[i] / maxC),
+                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: counts[i] > 0 ? _accent : Colors.white.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(parts[i].$1, style: const TextStyle(fontSize: 9.5, color: _muted)),
+                ]),
+              ),
+          ]),
         ]),
       ),
     );
   }
 
-  // A date this week with the given weekday (for isDueOn checks).
-  DateTime _dateForWeekday(int wd) {
+  // ── Week view: a 7-day calendar grid with each day's habits as section-coloured chips ──
+  Widget _weekView(List<Habit> habits, HabitsState st,
+      bool Function(Habit, String) met, bool Function(Habit, String) done) {
     final now = DateTime.now();
-    return now.add(Duration(days: wd - now.weekday));
-  }
-
-  Widget _dayColumn(int wd, int today, int count) {
-    final isToday = wd == today;
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      Container(
-        width: 30,
-        height: 30 + (count > 0 ? (count.clamp(1, 4)) * 6 : 0).toDouble(),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: count > 0
-              ? (isToday ? _accent : _accent.withValues(alpha: 0.3))
-              : Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(count > 0 ? '$count' : '',
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    return Card(
+      color: _card,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('THIS WEEK', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+          const SizedBox(height: 10),
+          for (var i = 0; i < 7; i++) ...[
+            () {
+              final date = DateTime(monday.year, monday.month, monday.day + i);
+              final key = dateKey(date);
+              final isToday = key == todayKey();
+              final dayHabits = habits.where((h) => isDueOn(h, date)).toList();
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  SizedBox(
+                    width: 34,
+                    child: Column(children: [
+                      Text(weekdayShort[i].substring(0, 1),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
+                              color: isToday ? _accent : Colors.white)),
+                      Text('${date.day}', style: TextStyle(fontSize: 10, color: isToday ? _accent : _muted)),
+                    ]),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: dayHabits.isEmpty
+                        ? Text('—', style: TextStyle(color: _muted.withValues(alpha: 0.5)))
+                        : Wrap(spacing: 5, runSpacing: 5, children: [
+                            for (final h in dayHabits)
+                              () {
+                                final d = done(h, key);
+                                final c = Color(sectionOf(h.section).color);
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: d ? c.withValues(alpha: 0.25) : Colors.white.withValues(alpha: 0.04),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: d ? c : Colors.white.withValues(alpha: 0.08)),
+                                  ),
+                                  child: Text(
+                                      '${sectionOf(h.section).emoji} ${h.title}${d ? ' ✓' : ''}',
+                                      style: TextStyle(fontSize: 10.5,
+                                          color: d ? Colors.white : Colors.white60)),
+                                );
+                              }(),
+                          ]),
+                  ),
+                ]),
+              );
+            }(),
+            if (i < 6) Divider(color: Colors.white.withValues(alpha: 0.05), height: 12),
+          ],
+        ]),
       ),
-      const SizedBox(height: 4),
-      Text(weekdayShort[wd - 1][0],
-          style: TextStyle(
-              fontSize: 10,
-              color: isToday ? _accent : _muted,
-              fontWeight: isToday ? FontWeight.w800 : FontWeight.w600)),
-    ]);
+    );
   }
 
   Widget _empty() => const Padding(
