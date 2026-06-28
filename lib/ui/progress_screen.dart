@@ -12,7 +12,7 @@ import 'diet_screen.dart';
 import 'sleep_screen.dart';
 import 'exercise_screen.dart' show openExerciseScreen;
 import '../data/diet.dart' show todayDiet;
-import '../data/workout.dart' show sortedByRecent, typeEmoji, sessionsOverDays;
+import '../data/workout.dart' show sortedByRecent, sessionsOverDays;
 import '../data/readiness.dart' show readinessLabel, readinessColorValue;
 import '../state/log_providers.dart' show workoutProvider, dailyReadinessProvider, dietProvider;
 import 'package:fl_chart/fl_chart.dart';
@@ -235,7 +235,6 @@ class _ExerciseCard extends ConsumerWidget {
                   Text(subtitle, style: const TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
                 ]),
               ),
-              if (last != null) Text(typeEmoji(last.type), style: const TextStyle(fontSize: 22)),
               const Icon(Icons.chevron_right, color: _muted),
             ]),
           ),
@@ -569,7 +568,10 @@ class CategoryGraphPage extends StatelessWidget {
 // scroll) AND embedded inline inside other screens (e.g. the Sleep screen).
 class GraphArea extends ConsumerStatefulWidget {
   final List<MetricDef> candidates;
-  const GraphArea(this.candidates, {super.key});
+  // When set, plots from this map instead of logsProvider (diet/exercise derived daily
+  // series) and treats the series as read-only — same chart, axes, timeframes incl. All.
+  final Map<String, List<Log>>? logsOverride;
+  const GraphArea(this.candidates, {this.logsOverride, super.key});
   @override
   ConsumerState<GraphArea> createState() => _GraphAreaState();
 }
@@ -578,9 +580,13 @@ class _GraphAreaState extends ConsumerState<GraphArea> {
   final Set<String> _selectedIds = {};
   String _timeframe = 'All';
 
+  // Candidate-first lookup so derived (non-registry) diet/exercise metrics resolve too.
+  MetricDef _def(String id) =>
+      widget.candidates.firstWhere((m) => m.id == id, orElse: () => metricById(id));
+
   @override
   Widget build(BuildContext context) {
-    final logsMap = ref.watch(logsProvider);
+    final Map<String, List<Log>> logsMap = widget.logsOverride ?? ref.watch(logsProvider);
     if (_selectedIds.isEmpty) _selectedIds.add(widget.candidates.first.id);
 
     return Column(
@@ -677,10 +683,10 @@ class _GraphAreaState extends ConsumerState<GraphArea> {
     int colorIdx = 0;
 
     bool hasAnyData = false;
-    final m = metricById(_selectedIds.first); // header metric
+    final m = _def(_selectedIds.first); // header metric
 
     for (final metricId in _selectedIds) {
-      final met = metricById(metricId);
+      final met = _def(metricId);
       final isRanked = eng.standards.containsKey(metricId);
       // Rank-over-time series carry the rank value directly — render them tier-coloured
       // on the same 0–8 rank axis as a ranked metric (their value IS the percentile band).
@@ -843,8 +849,9 @@ class _GraphAreaState extends ConsumerState<GraphArea> {
       subColor = _accent;
     }
 
-    // Rank-over-time series can't be logged — they're computed from your metric history.
-    if (!hasAnyData && _selectedIds.length == 1 && m.category == 'rank' &&
+    // Rank-over-time + derived (diet/exercise) series can't be logged — they're computed.
+    if (!hasAnyData && _selectedIds.length == 1 &&
+        (m.category == 'rank' || widget.logsOverride != null) &&
         (logsMap[m.id] ?? []).isEmpty) {
       return Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
         Text(m.label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
@@ -852,10 +859,13 @@ class _GraphAreaState extends ConsumerState<GraphArea> {
         Container(
           height: 260, alignment: Alignment.center,
           decoration: BoxDecoration(color: _bg3, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32),
-            child: Text('This rank plots itself as you log metrics over several days.',
-                textAlign: TextAlign.center, style: TextStyle(color: _muted)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+                m.category == 'rank'
+                    ? 'This rank plots itself as you log metrics over several days.'
+                    : 'No data yet for this period.',
+                textAlign: TextAlign.center, style: const TextStyle(color: _muted)),
           ),
         ),
       ]);

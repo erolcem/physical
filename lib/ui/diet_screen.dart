@@ -6,11 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../data/diet.dart';
 import '../data/habits.dart' show todayKey, lastNDays;
+import '../data/metrics.dart' show MetricDef, MetricTier;
 import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart' show activeCaloriesOn;
 import '../engine/rank_engine.dart' show Log;
 import '../state/log_providers.dart';
 import '../state/providers.dart' show latestLogsProvider, logsProvider;
+import 'progress_screen.dart' show GraphArea;
 
 const _bg = Color(0xFF08091A);
 const _card = Color(0xFF12152E);
@@ -398,136 +400,57 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
       ]);
 }
 
-// Extended diet graph: any single diet quantity (macros + health axes) over a
-// timeframe — the "all important metrics" view, like the Sleep screen's bottom graph.
-class _DietMetricGraph extends ConsumerStatefulWidget {
-  const _DietMetricGraph();
-  @override
-  ConsumerState<_DietMetricGraph> createState() => _DietMetricGraphState();
+// Extended diet graph: any diet quantity (weight, macros + health axes) over time —
+// driven by the shared GraphArea so it matches every other section (timeframes incl. All,
+// overlay, axes, tooltips). Series are derived from the food log + bodyweight logs.
+const List<MetricDef> _dietCandidates = [
+  // Calories first so the graph defaults to a series that's present whenever you've eaten;
+  // Weight is right after it for the weight-vs-diet comparison.
+  MetricDef('d_calories', 'Calories', 'diet', MetricTier.background, 'kcal'),
+  MetricDef('d_weight', 'Weight', 'diet', MetricTier.background, 'kg'),
+  MetricDef('d_protein', 'Protein', 'diet', MetricTier.background, 'g'),
+  MetricDef('d_carbs', 'Carbs', 'diet', MetricTier.background, 'g'),
+  MetricDef('d_fat', 'Fat', 'diet', MetricTier.background, 'g'),
+  MetricDef('d_fibre', 'Fibre', 'diet', MetricTier.background, 'g'),
+  MetricDef('d_health', 'Health score', 'diet', MetricTier.background, '/100'),
+  MetricDef('d_micronutrients', 'Micronutrients', 'diet', MetricTier.background, '/100'),
+  MetricDef('d_gut_health', 'Gut Health', 'diet', MetricTier.background, '/100'),
+  MetricDef('d_antioxidants', 'Antioxidants', 'diet', MetricTier.background, '/100'),
+  MetricDef('d_healthy_fats', 'Healthy Fats', 'diet', MetricTier.background, '/100'),
+  MetricDef('d_whole_food', 'Whole-food', 'diet', MetricTier.background, '/100'),
+];
+
+Map<String, List<Log>> _buildDietSeries(List<FoodEntry> entries, List<Log> weightLogs) {
+  final out = {for (final m in _dietCandidates) m.id: <Log>[]};
+  final days = entries.map((e) => e.dateKey).toSet().toList()..sort();
+  for (final day in days) {
+    final t = dietTotals(entries, day);
+    if (t.items == 0) continue;
+    final ts = '${day}T12:00:00';
+    out['d_calories']!.add(Log('d_calories', t.calories, ts: ts));
+    out['d_protein']!.add(Log('d_protein', t.protein, ts: ts));
+    out['d_carbs']!.add(Log('d_carbs', t.carbs, ts: ts));
+    out['d_fat']!.add(Log('d_fat', t.fat, ts: ts));
+    out['d_fibre']!.add(Log('d_fibre', t.fibre, ts: ts));
+    out['d_health']!.add(Log('d_health', t.healthScore, ts: ts));
+    for (final k in ['micronutrients', 'gut_health', 'antioxidants', 'healthy_fats', 'whole_food']) {
+      out['d_$k']!.add(Log('d_$k', t.health[k] ?? 0, ts: ts));
+    }
+  }
+  out['d_weight'] = [for (final l in weightLogs) Log('d_weight', l.value, ts: l.ts)];
+  return out;
 }
 
-class _DietMetricGraphState extends ConsumerState<_DietMetricGraph> {
-  int _days = 30;
-  int _sel = 0;
-  static const _frames = [(7, '1W'), (30, '1M'), (90, '3M'), (180, '6M')];
-  static const _weightLabel = 'Weight (kg)';
-  static final List<(String, Color, double Function(DietTotals))> _metrics = [
-    // Weight sits first so you can read body-weight change against the diet that drives
-    // it. It's sourced from the bodyweight logs (handled specially below), not DietTotals.
-    (_weightLabel, const Color(0xFFB07BF8), (t) => 0.0),
-    ('Calories', _gold, (t) => t.calories),
-    ('Protein', _teal, (t) => t.protein),
-    ('Carbs', _accent, (t) => t.carbs),
-    ('Fat', _pink, (t) => t.fat),
-    ('Fibre (g)', _gold, (t) => t.fibre),
-    ('Health score', _teal, (t) => t.healthScore),
-    ('Micronutrients', _accent, (t) => t.health['micronutrients'] ?? 0),
-    ('Fibre (score)', _teal, (t) => t.health['fibre'] ?? 0),
-    ('Gut Health', _pink, (t) => t.health['gut_health'] ?? 0),
-    ('Antioxidants', _accent, (t) => t.health['antioxidants'] ?? 0),
-    ('Healthy Fats', _gold, (t) => t.health['healthy_fats'] ?? 0),
-    ('Whole-food', _teal, (t) => t.health['whole_food'] ?? 0),
-  ];
-
-  // Latest body-weight on/before each day (carry-forward), so weight reads as a line
-  // even on days without a weigh-in. Leading days fall back to the first known weight.
-  List<double> _weightSeries(List<String> days, List<Log> wlogs) {
-    if (wlogs.isEmpty) return [for (final _ in days) 0];
-    final sorted = [...wlogs]..sort((a, b) => a.ts.compareTo(b.ts));
-    final first = sorted.first.value;
-    return [
-      for (final d in days)
-        () {
-          double? v;
-          for (final l in sorted) {
-            if (l.ts.substring(0, 10).compareTo(d) <= 0) {
-              v = l.value;
-            } else {
-              break;
-            }
-          }
-          return v ?? first;
-        }()
-    ];
-  }
-
+class _DietMetricGraph extends ConsumerWidget {
+  const _DietMetricGraph();
   @override
-  Widget build(BuildContext context) {
-    final entries = ref.watch(dietProvider);
-    final days = lastNDays(_days);
-    final (label, color, fn) = _metrics[_sel];
-    final isWeight = label == _weightLabel;
-    final series = isWeight
-        ? _weightSeries(days, ref.watch(logsProvider)['bodyweight'] ?? const <Log>[])
-        : [for (final d in days) fn(dietTotals(entries, d))];
-    // Weight uses a zoomed baseline (a 2 kg swing shouldn't look flat on a 0-based axis).
-    var minV = double.infinity, maxV = 1.0;
-    for (final v in series) {
-      if (v > maxV) maxV = v;
-      if (v > 0 && v < minV) minV = v;
-    }
-    final loY = isWeight && minV.isFinite ? minV - 2 : 0.0;
-    final hiY = isWeight ? maxV + 2 : maxV * 1.15;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final logs = _buildDietSeries(ref.watch(dietProvider), ref.watch(logsProvider)['bodyweight'] ?? const []);
     return Card(
       color: _card,
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Expanded(child: Text('ALL DIET METRICS',
-                style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted))),
-            for (final (d, t) in _frames)
-              GestureDetector(
-                onTap: () => setState(() => _days = d),
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 10),
-                  child: Text(t, style: TextStyle(fontSize: 11,
-                      fontWeight: _days == d ? FontWeight.w800 : FontWeight.w500,
-                      color: _days == d ? _teal : _muted)),
-                ),
-              ),
-          ]),
-          const SizedBox(height: 10),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-            for (var i = 0; i < _metrics.length; i++)
-              GestureDetector(
-                onTap: () => setState(() => _sel = i),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: _sel == i ? _metrics[i].$2.withValues(alpha: 0.18) : _bg,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _sel == i ? _metrics[i].$2 : const Color(0x18FFFFFF)),
-                  ),
-                  child: Text(_metrics[i].$1,
-                      style: TextStyle(fontSize: 11,
-                          color: _sel == i ? _metrics[i].$2 : _muted,
-                          fontWeight: _sel == i ? FontWeight.w700 : FontWeight.w500)),
-                ),
-              ),
-          ]),
-          const SizedBox(height: 14),
-          SizedBox(
-            height: 150,
-            child: LineChart(LineChartData(
-              minY: loY, maxY: hiY,
-              titlesData: const FlTitlesData(show: false),
-              gridData: const FlGridData(show: false),
-              borderData: FlBorderData(show: false),
-              lineTouchData: const LineTouchData(enabled: false),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: [for (var i = 0; i < series.length; i++) FlSpot(i.toDouble(), series[i])],
-                  isCurved: true, color: color, barWidth: 2, dotData: const FlDotData(show: false),
-                  belowBarData: BarAreaData(show: true, color: color.withValues(alpha: 0.12)),
-                ),
-              ],
-            )),
-          ),
-          const SizedBox(height: 4),
-          Center(child: Text('$label · last ${_days}d',
-              style: const TextStyle(fontSize: 10.5, color: _muted))),
-        ]),
+        child: GraphArea(_dietCandidates, logsOverride: logs),
       ),
     );
   }

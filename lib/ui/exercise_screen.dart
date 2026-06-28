@@ -5,11 +5,12 @@
 // the coach + habit verification.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fl_chart/fl_chart.dart';
-import '../data/habits.dart' show lastNDays;
+import '../data/metrics.dart' show MetricDef, MetricTier;
 import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart';
+import '../engine/rank_engine.dart' show Log;
 import '../state/log_providers.dart';
+import 'progress_screen.dart' show GraphArea;
 
 const _bg = Color(0xFF08091A);
 const _card = Color(0xFF12152E);
@@ -113,7 +114,7 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
         else ...[
           _lastCard(sessions.first),
           const SizedBox(height: 12),
-          _ExerciseMetricGraph(sessions),
+          const _ExerciseMetricGraph(),
           const SizedBox(height: 16),
           Text('RECENT · ${sessions.length}', style: const TextStyle(fontSize: 11, letterSpacing: 2, color: _muted)),
           const SizedBox(height: 6),
@@ -415,121 +416,49 @@ class SessionDetailScreen extends ConsumerWidget {
   }
 }
 
-// Multi-timeframe exercise plot: pick a metric (cardio load, volume, active kcal,
-// sessions, duration) and a window (1W/1M/3M/6M); headline shows the window total —
-// mirrors the Diet metric graph so every section reads the same way.
-class _ExerciseMetricGraph extends StatefulWidget {
-  final List<WorkoutSession> sessions;
-  const _ExerciseMetricGraph(this.sessions);
-  @override
-  State<_ExerciseMetricGraph> createState() => _ExerciseMetricGraphState();
+// Exercise plot — driven by the shared GraphArea so it matches every other section
+// (timeframes incl. All, overlay, axes, tooltips). Daily series derived from sessions.
+const List<MetricDef> _exCandidates = [
+  MetricDef('ex_cardio', 'Cardio load', 'exercise', MetricTier.background, ''),
+  MetricDef('ex_volume', 'Volume', 'exercise', MetricTier.background, ''),
+  MetricDef('ex_kcal', 'Active kcal', 'exercise', MetricTier.background, 'kcal'),
+  MetricDef('ex_sessions', 'Sessions', 'exercise', MetricTier.background, ''),
+  MetricDef('ex_duration', 'Duration', 'exercise', MetricTier.background, 'min'),
+];
+
+Map<String, List<Log>> _buildExerciseSeries(List<WorkoutSession> sessions) {
+  final byDay = <String, List<double>>{}; // [cardio, volume, kcal, sessions, duration]
+  for (final s in sessions) {
+    final d = byDay.putIfAbsent(s.dateKey, () => [0, 0, 0, 0, 0]);
+    d[0] += s.cardioLoad ?? 0;
+    d[1] += s.volume;
+    d[2] += s.summary['calories'] ?? 0;
+    d[3] += 1;
+    d[4] += (s.durationMins ?? 0).toDouble();
+  }
+  final out = {for (final m in _exCandidates) m.id: <Log>[]};
+  for (final day in byDay.keys.toList()..sort()) {
+    final ts = '${day}T12:00:00';
+    final d = byDay[day]!;
+    out['ex_cardio']!.add(Log('ex_cardio', d[0], ts: ts));
+    out['ex_volume']!.add(Log('ex_volume', d[1], ts: ts));
+    out['ex_kcal']!.add(Log('ex_kcal', d[2], ts: ts));
+    out['ex_sessions']!.add(Log('ex_sessions', d[3], ts: ts));
+    out['ex_duration']!.add(Log('ex_duration', d[4], ts: ts));
+  }
+  return out;
 }
 
-class _ExerciseMetricGraphState extends State<_ExerciseMetricGraph> {
-  int _days = 30;
-  int _sel = 0;
-  static const _gold = Color(0xFFF6CF3E);
-  static const _pink = Color(0xFFF85B88);
-  static const _purple = Color(0xFFB07BF8);
-  static const _frames = [(7, '1W'), (30, '1M'), (90, '3M'), (180, '6M')];
-  // (label, colour, per-session value, unit, integer-total?)
-  static final List<(String, Color, double Function(WorkoutSession), String, bool)> _metrics = [
-    ('Cardio load', _teal, (s) => s.cardioLoad ?? 0, '', true),
-    ('Volume', _accent, (s) => s.volume, '', true),
-    ('Active kcal', _gold, (s) => s.summary['calories'] ?? 0, 'kcal', true),
-    ('Sessions', _pink, (s) => 1, '', true),
-    ('Duration', _purple, (s) => (s.durationMins ?? 0).toDouble(), 'min', true),
-  ];
-
-  List<double> _perDay(List<String> days, double Function(WorkoutSession) f) {
-    final byDay = <String, double>{};
-    for (final s in widget.sessions) {
-      byDay[s.dateKey] = (byDay[s.dateKey] ?? 0) + f(s);
-    }
-    return [for (final d in days) byDay[d] ?? 0.0];
-  }
-
+class _ExerciseMetricGraph extends ConsumerWidget {
+  const _ExerciseMetricGraph();
   @override
-  Widget build(BuildContext context) {
-    final days = lastNDays(_days);
-    final (label, color, fn, unit, _) = _metrics[_sel];
-    final series = _perDay(days, fn);
-    final total = series.fold(0.0, (a, v) => a + v);
-    var maxV = 1.0;
-    for (final v in series) {
-      if (v > maxV) maxV = v;
-    }
+  Widget build(BuildContext context, WidgetRef ref) {
+    final logs = _buildExerciseSeries(ref.watch(workoutProvider));
     return Card(
       color: _card,
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Headline stat (window total of the selected metric).
-          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('${total.round()}',
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: color)),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 5),
-                child: Text('$label${unit.isEmpty ? '' : ' ($unit)'} · last ${_days}d',
-                    style: const TextStyle(fontSize: 12, color: _muted, fontWeight: FontWeight.w600)),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          Row(children: [
-            const Spacer(),
-            for (final (d, t) in _frames)
-              GestureDetector(
-                onTap: () => setState(() => _days = d),
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: Text(t, style: TextStyle(fontSize: 11,
-                      fontWeight: _days == d ? FontWeight.w800 : FontWeight.w500,
-                      color: _days == d ? _teal : _muted)),
-                ),
-              ),
-          ]),
-          const SizedBox(height: 10),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-            for (var i = 0; i < _metrics.length; i++)
-              GestureDetector(
-                onTap: () => setState(() => _sel = i),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: _sel == i ? _metrics[i].$2.withValues(alpha: 0.18) : _bg,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _sel == i ? _metrics[i].$2 : const Color(0x18FFFFFF)),
-                  ),
-                  child: Text(_metrics[i].$1,
-                      style: TextStyle(fontSize: 11,
-                          color: _sel == i ? _metrics[i].$2 : _muted,
-                          fontWeight: _sel == i ? FontWeight.w700 : FontWeight.w500)),
-                ),
-              ),
-          ]),
-          const SizedBox(height: 14),
-          SizedBox(
-            height: 150,
-            child: LineChart(LineChartData(
-              minY: 0, maxY: maxV * 1.15,
-              titlesData: const FlTitlesData(show: false),
-              gridData: const FlGridData(show: false),
-              borderData: FlBorderData(show: false),
-              lineTouchData: const LineTouchData(enabled: false),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: [for (var i = 0; i < series.length; i++) FlSpot(i.toDouble(), series[i])],
-                  isCurved: true, curveSmoothness: 0.3, color: color, barWidth: 2,
-                  dotData: const FlDotData(show: false),
-                  belowBarData: BarAreaData(show: true, color: color.withValues(alpha: 0.12)),
-                ),
-              ],
-            )),
-          ),
-        ]),
+        child: GraphArea(_exCandidates, logsOverride: logs),
       ),
     );
   }
