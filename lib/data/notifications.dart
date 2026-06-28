@@ -87,5 +87,21 @@ class NotificationService {
         matchDateTimeComponents: DateTimeComponents.time, // repeat daily
       );
     }
+    // A daily end-of-day accountability nudge to review the checklist (only if any habits).
+    if (habits.isNotEmpty) {
+      final now = tz.TZDateTime.now(tz.local);
+      var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, 21, 0);
+      if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
+      await _plugin.zonedSchedule(
+        _recapId, 'Daily recap', 'How did today go? Review your habit checklist.',
+        when, details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+    }
   }
+
+  static const int _recapId = 990001; // fixed id for the daily recap reminder
 }

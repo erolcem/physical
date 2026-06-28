@@ -401,10 +401,13 @@ def context_sections(samples, habits=None, profile=None, diet=None, training=Non
         "trends": _trend_lines(trends), "correlations": _correlation_lines(correlations),
         "diet": _diet_line(diet), "training": _training_line(training),
         "sets": _sets_lines(workout_sets), "aesthetics": _aesthetics_line(aesthetics),
-        "habits": [],
+        "coverage": None, "habits": [],
         "note": ("Only this data is sent to your AI coach. Your email, name, and "
                  "account id are never shared."),
     }
+    if ranks and (ranks.get("coverage") or {}).get("overall"):
+        ov = ranks["coverage"]["overall"]
+        out["coverage"] = f"{ov.get('logged', 0)}/{ov.get('total', 0)} ranked metrics logged"
     if profile:
         bits = []
         if profile.get("age"):

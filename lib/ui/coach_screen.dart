@@ -311,6 +311,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
           const SizedBox(height: 14),
           if (c['profile'] != null) row('Profile', c['profile'] as String),
           if (c['overall'] != null) row('Overall', c['overall'] as String),
+          if (c['coverage'] != null) row('Coverage', c['coverage'] as String),
           if (cats.isNotEmpty)
             row('Categories', cats.entries.map((e) => '${e.key}: ${e.value}').join('\n')),
           if (c['weakest'] != null) row('Weakest', c['weakest'] as String),
