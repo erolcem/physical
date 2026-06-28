@@ -8,6 +8,7 @@ import '../state/habit_providers.dart' show habitsProvider;
 import '../state/log_providers.dart' show dietProvider, workoutProvider, pinsProvider;
 import '../state/providers.dart';
 import 'api_client.dart';
+import 'rank_history.dart' show backfillRankLogs;
 import 'readiness.dart' show backfillReadinessLogs;
 import 'repository.dart';
 
@@ -119,6 +120,7 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
   final samples = await api.fetchSamples(source: 'google_health');
   final added = mergeSamples(repo, samples);
   backfillReadinessLogs(repo); // recompute readiness now that recovery data updated
+  backfillRankLogs(repo); // log today's overall + category ranks for the rank graphs
   ref.read(logsProvider.notifier).reload();
   // Google Health food logs (nutrition-log) → the Diet section, deduped by id; then
   // ask the AI to fill the diet-health radar for foods that lack health axes.

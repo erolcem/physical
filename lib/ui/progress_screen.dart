@@ -524,7 +524,21 @@ class CategoryGraphPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cands = candidates ?? [for (final m in metrics) if (m.category == categoryId) m];
+    final base = candidates ?? [for (final m in metrics) if (m.category == categoryId) m];
+    // Lead each category's graph with its rank-over-time series; the Compare graph leads
+    // with Overall rank, then every category rank, so it defaults to the overall rank.
+    final List<MetricDef> cands;
+    if (categoryId == '*') {
+      cands = [
+        metricById('overall_rank'),
+        for (final c in rankSeriesCategories) metricById('${c}_rank'),
+        ...base.where((m) => m.category != 'rank'),
+      ];
+    } else if (rankSeriesCategories.contains(categoryId)) {
+      cands = [metricById('${categoryId}_rank'), ...base];
+    } else {
+      cands = base;
+    }
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(

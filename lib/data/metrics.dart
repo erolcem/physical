@@ -132,7 +132,19 @@ const List<MetricDef> metrics = [
       exercise: 'Scales every strength rank'),
   MetricDef('height', 'Height', 'general', MetricTier.background, 'cm', autoSync: true),
   MetricDef('age', 'Age', 'general', MetricTier.background, 'yr', autoSync: true),
+
+  // ── Rank-over-time (category 'rank' = hidden from every grid; graphable only).
+  // Backfilled per day by rank_history.dart from the metric logs — the stored value
+  // IS the rank (0–9 tier scale), so these carry no engine standard.
+  MetricDef('overall_rank', 'Overall Rank', 'rank', MetricTier.background, '/8'),
+  MetricDef('strength_rank', 'Strength Rank', 'rank', MetricTier.background, '/8'),
+  MetricDef('performance_rank', 'Performance Rank', 'rank', MetricTier.background, '/8'),
+  MetricDef('recovery_rank', 'Recovery Rank', 'rank', MetricTier.background, '/8'),
+  MetricDef('aesthetics_rank', 'Aesthetics Rank', 'rank', MetricTier.background, '/8'),
 ];
+
+// Ranked categories that get a plottable rank-over-time series.
+const List<String> rankSeriesCategories = ['strength', 'performance', 'recovery', 'aesthetics'];
 
 MetricDef metricById(String id) => metrics.firstWhere((m) => m.id == id);
 List<MetricDef> get rankedMetrics =>
