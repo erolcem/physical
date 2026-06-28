@@ -209,3 +209,46 @@ void repoImport(Repository r, Map<String, dynamic> m) {
     r.addPin(PinnedCorrelation.fromJson((p as Map).cast<String, dynamic>()));
   }
 }
+
+/// MERGE a snapshot into the existing store (union, never clears) — for multi-device
+/// sync so two devices converge instead of one clobbering the other. Dedup rules:
+/// logs by metric+timestamp, food/workouts/habits by id, completions set-union, pins
+/// by key. (Deletes don't propagate via union — a later refinement if needed.)
+void repoMerge(Repository r, Map<String, dynamic> m) {
+  final existingLogs = r.loadLogs();
+  ((m['logs'] as Map?) ?? const {}).forEach((mid, list) {
+    final haveTs = {for (final l in (existingLogs[mid] ?? const <Log>[])) l.ts};
+    for (final d in (list as List)) {
+      final j = (d as Map);
+      final ts = j['ts'] as String?;
+      if (ts != null && haveTs.contains(ts)) continue;
+      r.saveLog(mid as String, Log(mid, (j['v'] as num).toDouble(),
+          bodyweight: (j['bw'] as num?)?.toDouble(), ts: ts));
+    }
+  });
+  final haveHabits = {for (final h in r.loadHabits()) h.id};
+  for (final h in ((m['habits'] as List?) ?? const [])) {
+    final j = (h as Map).cast<String, dynamic>();
+    if (!haveHabits.contains(j['id'])) r.saveHabit(Habit.fromJson(j));
+  }
+  ((m['completions'] as Map?) ?? const {}).forEach((hid, days) {
+    for (final d in (days as List)) {
+      r.setCompletion(hid as String, d as String, true);
+    }
+  });
+  final haveFood = {for (final f in r.loadFood()) f.id};
+  for (final f in ((m['food'] as List?) ?? const [])) {
+    final j = (f as Map).cast<String, dynamic>();
+    if (!haveFood.contains(j['id'])) r.saveFood(FoodEntry.fromJson(j));
+  }
+  final haveWorkouts = {for (final w in r.loadWorkouts()) w.id};
+  for (final w in ((m['workouts'] as List?) ?? const [])) {
+    final j = (w as Map).cast<String, dynamic>();
+    if (!haveWorkouts.contains(j['id'])) r.saveWorkout(WorkoutSession.fromJson(j));
+  }
+  final havePins = {for (final p in r.loadPins()) p.key};
+  for (final p in ((m['pins'] as List?) ?? const [])) {
+    final pin = PinnedCorrelation.fromJson((p as Map).cast<String, dynamic>());
+    if (!havePins.contains(pin.key)) r.addPin(pin);
+  }
+}

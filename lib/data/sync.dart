@@ -128,9 +128,19 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
     // the sync; dietProvider updates reactively as foods are enriched.
     unawaited(ref.read(dietProvider.notifier).enrichFoodHealth(api));
   } catch (_) {/* food import + enrichment are best-effort */}
-  // Full-data backup: mirror the ENTIRE local store (logs, food, workouts, habits,
-  // pins…) to the cloud so it transfers to a new device. Best-effort.
+  // Full-data sync: MERGE the cloud snapshot into local (so the other device's data
+  // arrives without clobbering), then push the merged result back. Both devices
+  // converge over syncs — no last-write-wins data loss. Best-effort.
   try {
+    final cloud = await api.pullBackup();
+    if (cloud != null) {
+      repoMerge(repo, cloud);
+      ref.read(logsProvider.notifier).reload();
+      ref.invalidate(dietProvider);
+      ref.invalidate(workoutProvider);
+      ref.invalidate(habitsProvider);
+      ref.invalidate(pinsProvider);
+    }
     await api.pushBackup(repoExport(repo));
   } catch (_) {/* backup is best-effort */}
   return CloudSyncResult(added, note, needsReconnect: needsReconnect);

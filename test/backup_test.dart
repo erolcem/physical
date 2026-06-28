@@ -8,6 +8,7 @@ import 'package:physical/data/correlation.dart';
 import 'package:physical/engine/rank_engine.dart' show Log;
 
 void main() {
+  _mergeTests();
   test('repoExport/repoImport round-trips all entities', () {
     final a = InMemoryRepository();
     a.saveLog('bench', Log('bench', 100, bodyweight: 80, ts: '2026-06-27T10:00:00'));
@@ -37,5 +38,27 @@ void main() {
     expect(b.loadFood().single.health['fibre'], 20);
     expect(b.loadWorkouts().single.summary['calories'], 400);
     expect(b.loadPins().single.a, 'sleep_score');
+  });
+}
+
+void _mergeTests() {
+  test('repoMerge unions without clobbering or duplicating', () {
+    // Device A (cloud snapshot): bench@t1 + food fA.
+    final a = InMemoryRepository();
+    a.saveLog('bench', Log('bench', 100, ts: 't1'));
+    a.saveFood(const FoodEntry(id: 'fA', dateKey: 'd', name: 'A'));
+    final cloud = repoExport(a);
+
+    // Device B (local): bench@t1 (same) + bench@t2 (new) + food fB.
+    final b = InMemoryRepository();
+    b.saveLog('bench', Log('bench', 100, ts: 't1'));
+    b.saveLog('bench', Log('bench', 120, ts: 't2'));
+    b.saveFood(const FoodEntry(id: 'fB', dateKey: 'd', name: 'B'));
+
+    repoMerge(b, cloud);
+
+    // bench has t1 (deduped, not doubled) + t2; both foods survive.
+    expect(b.loadLogs()['bench']!.length, 2);
+    expect(b.loadFood().map((f) => f.id).toSet(), {'fA', 'fB'});
   });
 }
