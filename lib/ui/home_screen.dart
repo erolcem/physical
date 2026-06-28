@@ -860,15 +860,26 @@ class _AestheticsStrip extends ConsumerWidget {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
+                // Top-lit radial sheen (round, centred) so the light fits the rounded
+                // box instead of a corner-anchored linear fill bleeding past the corners.
                 gradient: hasData
-                    ? LinearGradient(
-                        begin: Alignment.topLeft, end: Alignment.bottomRight,
-                        colors: [color.withValues(alpha: 0.18), const Color(0xFF161830)])
+                    ? RadialGradient(
+                        center: const Alignment(-0.3, -0.45),
+                        radius: 1.1,
+                        colors: [
+                          Color.lerp(color, Colors.white, 0.22)!.withValues(alpha: 0.45),
+                          color.withValues(alpha: 0.16),
+                          const Color(0xFF161830),
+                        ],
+                        stops: const [0.0, 0.5, 1.0],
+                      )
                     : null,
                 color: hasData ? null : const Color(0xFF161830),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: hasData ? color.withValues(alpha: 0.6) : const Color(0x12FFFFFF)),
-                boxShadow: hasData ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 10)] : [],
+                boxShadow: hasData
+                    ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 10, spreadRadius: -2)]
+                    : [],
               ),
               child: InkWell(
                 onTap: () => openDetailSheet(parentContext, m.id),

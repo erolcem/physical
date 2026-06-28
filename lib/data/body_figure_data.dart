@@ -78,6 +78,8 @@ const List<BodyRegion> backRegions = [
   BodyRegion('lats', [
     '44,65 32,85 40,125 54,140 58,90',
     '104,65 116,85 108,125 94,140 90,90',
+    // Mid-upper back (spine corridor) so the lats also light the centre, not just the sides.
+    '58,70 90,70 87,104 74,114 61,104',
   ]),
   BodyRegion('lower_back', [
     '74,85 90,90 94,140 74,160 54,140 58,90',

@@ -168,20 +168,18 @@ class _BodyPainter extends CustomPainter {
         final pth = path(parsePoly(ps));
 
         if (isRanked) {
-          // Three-layer bloom (tight → mid → wide) for a richer, softer glow.
+          // Two-layer bloom (tight → wide), tighter than before for a sleeker glow.
           canvas.drawPath(pth, Paint()
             ..color = c.withValues(alpha: 0.5)
             ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
           canvas.drawPath(pth, Paint()
-            ..color = c.withValues(alpha: 0.3)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 13));
-          canvas.drawPath(pth, Paint()
-            ..color = c.withValues(alpha: 0.14)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24));
+            ..color = c.withValues(alpha: 0.22)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16));
         }
 
         // Fill — glossy top-lit gradient for lit muscles; faint for the rest.
         if (isRanked) {
+          final b = pth.getBounds();
           canvas.drawPath(
             pth,
             Paint()
@@ -193,8 +191,20 @@ class _BodyPainter extends CustomPainter {
                   Color.lerp(c, Colors.black, 0.18)!,
                 ],
                 stops: const [0.0, 0.55, 1.0],
-              ).createShader(pth.getBounds()),
+              ).createShader(b),
           );
+          // Specular sheen across the top — the same glossy shine the rank bars use.
+          canvas.save();
+          canvas.clipPath(pth);
+          canvas.drawRect(
+            Rect.fromLTRB(b.left, b.top, b.right, b.top + b.height * 0.5),
+            Paint()
+              ..shader = LinearGradient(
+                begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                colors: [Colors.white.withValues(alpha: 0.30), Colors.white.withValues(alpha: 0.0)],
+              ).createShader(Rect.fromLTRB(b.left, b.top, b.right, b.top + b.height * 0.5)),
+          );
+          canvas.restore();
         } else {
           canvas.drawPath(pth, Paint()..color = c.withValues(alpha: 0.15));
         }
