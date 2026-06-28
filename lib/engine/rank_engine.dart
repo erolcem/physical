@@ -338,11 +338,15 @@ RankResult overall(List<Log> logs) {
 // metric count. Performance (VO₂max/cardio) and recovery (sleep/HRV/RHR/body-fat) are the
 // strongest longevity signals, strength close behind, aesthetics least health-determining.
 // Tunable. Keep in sync with the Python engine.
+// Evidence-weighted by whole-person health/longevity (see STANDARDS_METHODOLOGY):
+// cardiorespiratory fitness (performance) is the single strongest mortality predictor,
+// muscular strength is comparably strong, recovery (sleep/HRV/RHR/body-fat) solid, and
+// aesthetics is health-adjacent rather than a mortality driver.
 const Map<String, double> categoryWeights = {
   'performance': 0.30,
-  'strength': 0.27,
+  'strength': 0.28,
   'recovery': 0.27,
-  'aesthetics': 0.16,
+  'aesthetics': 0.15,
 };
 
 /// Overall rank that blends CATEGORIES by [categoryWeights] (not per-metric), so a

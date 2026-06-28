@@ -303,9 +303,9 @@ def overall(logs):
 # Keep in sync with rank_engine.dart `categoryWeights`.
 CATEGORY_WEIGHTS = {
     "performance": 0.30,
-    "strength": 0.27,
+    "strength": 0.28,
     "recovery": 0.27,
-    "aesthetics": 0.16,
+    "aesthetics": 0.15,
 }
 
 

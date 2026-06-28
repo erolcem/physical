@@ -4,10 +4,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../data/api_client.dart';
 import '../data/diet.dart';
 import '../data/habits.dart' show todayKey, lastNDays;
-import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart' show activeCaloriesOn;
 import '../engine/rank_engine.dart' show Log;
 import '../state/log_providers.dart';
@@ -36,13 +34,7 @@ class DietScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(backgroundColor: _bg, title: const Text('Diet')),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: _gold,
-        foregroundColor: Colors.black,
-        onPressed: () => _addDialog(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('Log food'),
-      ),
+      // No manual "Log food" — food is auto-imported from Google Health (nutrition-log).
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
         _totals(t),
         const SizedBox(height: 12),
@@ -257,135 +249,6 @@ class DietScreen extends ConsumerWidget {
         ),
       );
 
-  Future<void> _addDialog(BuildContext context, WidgetRef ref) async {
-    final name = TextEditingController();
-    final kcal = TextEditingController();
-    final p = TextEditingController();
-    final c = TextEditingController();
-    final f = TextEditingController();
-    final fib = TextEditingController();
-    var micros = <String, double>{};
-    var health = <String, double>{};
-    var busy = false;
-
-    Widget num(TextEditingController ctrl, String label) => Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: TextField(
-              controller: ctrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-            ),
-          ),
-        );
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          // Estimate macros + micros from the typed description via Gemini.
-          Future<void> autofill() async {
-            final desc = name.text.trim();
-            if (desc.isEmpty) {
-              ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('Type a food first, e.g. "2 eggs and toast"')));
-              return;
-            }
-            setLocal(() => busy = true);
-            try {
-              final api = ref.read(apiClientProvider);
-              await api.loadPersistedToken(); // ensure the auth header is set
-              final n = await api.inferNutrition(desc);
-              kcal.text = n.calories.round().toString();
-              p.text = n.protein.round().toString();
-              c.text = n.carbs.round().toString();
-              f.text = n.fat.round().toString();
-              fib.text = n.fibre.round().toString();
-              micros = n.micros;
-              health = n.health;
-              setLocal(() => busy = false);
-            } catch (e) {
-              setLocal(() => busy = false);
-              final msg = switch (e) {
-                ApiException(status: 503) => 'Auto-fill needs the AI key set up — enter values manually.',
-                ApiException(status: 401) => 'Sign in with Google (☁) to use AI auto-fill.',
-                _ => "Couldn't estimate that — enter values manually.",
-              };
-              if (ctx.mounted) {
-                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
-              }
-            }
-          }
-
-          return AlertDialog(
-            backgroundColor: _card,
-            title: const Text('Log food'),
-            content: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                TextField(
-                  controller: name, autofocus: true,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => autofill(),
-                  decoration: const InputDecoration(
-                      hintText: 'e.g. Chicken & rice', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: busy ? null : autofill,
-                    icon: busy
-                        ? const SizedBox(
-                            width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.auto_awesome, size: 18),
-                    label: Text(busy ? 'Estimating…' : 'Auto-fill nutrition with AI'),
-                    style: OutlinedButton.styleFrom(foregroundColor: _teal),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(children: [num(kcal, 'kcal'), num(fib, 'Fibre')]),
-                const SizedBox(height: 10),
-                Row(children: [num(p, 'Protein'), num(c, 'Carbs'), num(f, 'Fat')]),
-                if (micros.values.any((v) => v > 0)) ...[
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Micros: ${[
-                        for (final k in microLabels.keys)
-                          if ((micros[k] ?? 0) > 0)
-                            '${microLabels[k]} ${micros[k]!.round()}${microUnit(k)}'
-                      ].join(' · ')}',
-                      style: const TextStyle(fontSize: 11, color: _muted),
-                    ),
-                  ),
-                ],
-              ]),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-              FilledButton(
-                onPressed: () {
-                  ref.read(dietProvider.notifier).add(
-                        name: name.text,
-                        calories: double.tryParse(kcal.text) ?? 0,
-                        protein: double.tryParse(p.text) ?? 0,
-                        carbs: double.tryParse(c.text) ?? 0,
-                        fat: double.tryParse(f.text) ?? 0,
-                        fibre: double.tryParse(fib.text) ?? 0,
-                        micros: micros,
-                        health: health,
-                      );
-                  Navigator.pop(ctx);
-                },
-                child: const Text('Add'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
 }
 
 // Energy trend: calories IN (food) vs OUT (BMR + active) and weight, over a timeframe.

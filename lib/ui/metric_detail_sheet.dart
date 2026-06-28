@@ -245,6 +245,25 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
                 _ladderRow(m, _ladderTiers[i], i + 1, curIdx, bw),
             ],
 
+            // Auto-synced metrics come from Google Health — no manual logging.
+            if (m.autoSync) ...[
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0E1124),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0x14FFFFFF)),
+                ),
+                child: const Row(children: [
+                  Icon(Icons.cloud_done_outlined, size: 18, color: Color(0xFF4CE0C3)),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('Synced automatically from Google Health — '
+                      'logged on each ☁ sync, no manual entry.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF8A90B0)))),
+                ]),
+              ),
+            ] else ...[
             // ── Log form (above the history, so logging is the first thing) ──
             const SizedBox(height: 18),
             Text('LOG ${m.exercise.isEmpty ? m.label : m.exercise}'.toUpperCase(),
@@ -293,6 +312,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
             ],
             const SizedBox(height: 12),
             _grandButton('Save', ranked ? c : const Color(0xFF5B6AF8), _save),
+            ],
 
             // ── History (newest first by date) ──
             if (logs.isNotEmpty) ...[
