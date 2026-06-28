@@ -1,8 +1,11 @@
 // state/habit_providers.dart — Riverpod wiring for the Habits layer. One notifier
 // holds both the habit list and the per-day completion set so they stay in sync;
 // it reads/writes through the same Repository seam as logs.
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/habits.dart';
+import '../data/notifications.dart';
 import '../data/repository.dart';
 import 'providers.dart';
 
@@ -91,6 +94,9 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
     _reload();
   }
 
-  void _reload() =>
-      state = HabitsState(repo.loadHabits(), repo.loadCompletions());
+  void _reload() {
+    state = HabitsState(repo.loadHabits(), repo.loadCompletions());
+    // Keep the daily habit reminders in step with the current set (no-op off iOS/Android).
+    unawaited(NotificationService.instance.syncHabitReminders(state.habits));
+  }
 }

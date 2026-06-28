@@ -86,7 +86,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               icon: _calBusy
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.event_available, size: 18),
-              label: const Text('Add to Calendar'),
+              label: const Text('Calendar'),
               style: TextButton.styleFrom(foregroundColor: _muted),
             ),
             TextButton.icon(

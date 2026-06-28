@@ -6,7 +6,7 @@
 import 'correlation.dart' show alignByDay, pearson;
 import 'habit_verify.dart';
 import 'habits.dart';
-import 'metrics.dart' show metricById, metrics;
+import 'metrics.dart' show metricById, metrics, rankedCountByCategory;
 import 'workout.dart';
 import 'diet.dart' show FoodEntry;
 import '../engine/rank_engine.dart' as eng;
@@ -58,10 +58,27 @@ Map<String, dynamic> coachRanks({
       });
     } catch (_) {/* e.g. a strength log missing its bodyweight snapshot */}
   }
+  // Coverage: how much of the ranked roster is actually logged. With "unrated = worst"
+  // scoring, a low rank can mean UNTESTED rather than weak — the coach uses this to tell
+  // the difference and to prioritise logging the gaps.
+  final totals = rankedCountByCategory;
+  final loggedByCat = <String, int>{};
+  for (final m in out) {
+    final cat = metricById(m['id'] as String).category;
+    loggedByCat[cat] = (loggedByCat[cat] ?? 0) + 1;
+  }
+  final coverage = {
+    for (final e in totals.entries)
+      e.key: {'logged': loggedByCat[e.key] ?? 0, 'total': e.value}
+  };
+  final totalAll = totals.values.fold(0, (a, b) => a + b);
+  final loggedAll = loggedByCat.values.fold(0, (a, b) => a + b);
+
   return {
     'overall': _rr(overall),
     'categories': {for (final e in categories.entries) e.key: _rr(e.value)},
     'metrics': out,
+    'coverage': {'overall': {'logged': loggedAll, 'total': totalAll}, ...coverage},
   };
 }
 

@@ -48,7 +48,12 @@ class CoachTab extends ConsumerStatefulWidget {
   ConsumerState<CoachTab> createState() => _CoachTabState();
 }
 
-class _CoachTabState extends ConsumerState<CoachTab> {
+class _CoachTabState extends ConsumerState<CoachTab>
+    with AutomaticKeepAliveClientMixin {
+  // Keep the chat alive across tab switches so the conversation persists for the session.
+  @override
+  bool get wantKeepAlive => true;
+
   final _input = TextEditingController();
   final _scroll = ScrollController();
   final List<_Msg> _messages = [];
@@ -348,6 +353,7 @@ class _CoachTabState extends ConsumerState<CoachTab> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // required by AutomaticKeepAliveClientMixin
     return Container(
       color: _bg,
       child: SafeArea(

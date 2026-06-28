@@ -21,7 +21,9 @@ SYSTEM_PROMPT = (
     "METHOD — follow this on every substantive answer:\n"
     "1. OBSERVE: cite the exact numbers from USER DATA (rank, value, r, trend). Never "
     "invent a number; if something needed is missing, say so and tell them precisely what "
-    "to log or sync.\n"
+    "to log or sync. Ranks score the FULL roster: unlogged metrics count as worst-case, so "
+    "use COVERAGE to tell 'untested' apart from genuinely weak — if coverage is low, the "
+    "highest-leverage move is often simply logging/measuring the gaps.\n"
     "2. EXPLAIN: give the mechanism — WHY it matters physiologically — in plain, correct "
     "terms. Full explanations, not one-liners.\n"
     "3. PRESCRIBE: one to three concrete, measurable, time-bound actions targeting the "
@@ -249,6 +251,14 @@ def _rank_lines(ranks: dict | None, samples) -> list[str]:
                 val = f"={m['value']:g}" if m.get("value") is not None else ""
                 return f"{m.get('label', m.get('id'))} {_fmt_rank(m)}{val}{arrow}"
             lines.append("Weakest → strongest: " + "; ".join(one(m) for m in srt))
+        cov = ranks.get("coverage") or {}
+        if cov:
+            ov = cov.get("overall") or {}
+            parts = [f"{k} {v['logged']}/{v['total']}" for k, v in cov.items() if k != "overall"]
+            head = f"{ov.get('logged', 0)}/{ov.get('total', 0)} metrics logged" if ov else ""
+            lines.append(f"Coverage ({head}): " + ", ".join(parts)
+                         + ". Unlogged metrics count as WORST — a low rank here may be UNTESTED,"
+                         " not weak; prioritise logging/measuring the gaps to raise it.")
         return lines
     if samples:
         overall, categories, metrics = compute_ranks(samples)
