@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/habits.dart';
+import '../data/habit_verify.dart';
 import '../state/habit_providers.dart';
 import '../state/log_providers.dart';
 import '../state/providers.dart' show logsProvider;
@@ -28,14 +29,16 @@ class HabitsTab extends ConsumerWidget {
     final food = ref.watch(dietProvider);
     final habits = st.habits;
 
-    // Verify rule → corroborated by the day's data (manual or auto-synced logs).
-    final workoutDays = {for (final w in workouts) w.dateKey};
-    final foodDays = {for (final e in food) e.dateKey};
-    bool corroborated(Habit h, String day) => corroboratedOn(h, day,
-        logs: logs, workoutDays: workoutDays, foodDays: foodDays);
+    // Target-aware verification: a habit's goal is "met" when the day's data satisfies
+    // its target (auto-measured habits self-complete); manual habits need a tick.
+    bool met(Habit h, String day) =>
+        habitGoalMet(h, day, logs: logs, food: food, workouts: workouts);
+    double? measured(Habit h, String day) =>
+        habitMeasured(h, day, logs: logs, food: food, workouts: workouts);
+    bool done(Habit h, String day) => met(h, day) || st.completions[h.id]?.contains(day) == true;
 
     final dueToday = habits.where((h) => isDueToday(h)).toList();
-    final doneCount = dueToday.where((h) => st.doneToday(h.id)).length;
+    final doneCount = dueToday.where((h) => done(h, todayKey())).length;
 
     return Container(
       color: _bg,
@@ -71,23 +74,33 @@ class HabitsTab extends ConsumerWidget {
             else
               for (final h in dueToday)
                 _habitTile(context, ref, h,
-                    done: st.doneToday(h.id),
-                    streak: currentStreak(st.doneFor(h.id)),
-                    status: statusFor(h,
-                        doneToday: st.doneToday(h.id),
-                        corroborated: corroborated(h, todayKey())),
+                    done: done(h, todayKey()),
+                    streak: currentStreak(_doneDaysOf(h, st, met)),
+                    status: met(h, todayKey())
+                        ? HabitStatus.verified
+                        : (st.doneToday(h.id) ? HabitStatus.manual : HabitStatus.notDone),
+                    measuredToday: measured(h, todayKey()),
                     last7: lastNDays(7),
-                    doneDays: st.doneFor(h.id)),
+                    doneDays: _doneDaysOf(h, st, met)),
             // Habits scheduled on other days only (not today) — for awareness.
             for (final h in habits.where((h) => !isDueToday(h)))
               _habitTile(context, ref, h,
-                  done: st.doneToday(h.id), streak: currentStreak(st.doneFor(h.id)),
-                  status: HabitStatus.notDone, last7: lastNDays(7),
-                  doneDays: st.doneFor(h.id), dimmed: true),
+                  done: done(h, todayKey()), streak: currentStreak(_doneDaysOf(h, st, met)),
+                  status: HabitStatus.notDone, measuredToday: null, last7: lastNDays(7),
+                  doneDays: _doneDaysOf(h, st, met), dimmed: true),
           ],
         ],
       ),
     );
+  }
+
+  // Days counted "done" over the last 60: manually ticked OR the goal was met from data.
+  Set<String> _doneDaysOf(Habit h, HabitsState st, bool Function(Habit, String) met) {
+    final out = {...st.doneFor(h.id)};
+    for (final day in lastNDays(60)) {
+      if (met(h, day)) out.add(day);
+    }
+    return out;
   }
 
   // ── Today's completion ──
@@ -187,6 +200,7 @@ class HabitsTab extends ConsumerWidget {
       {required bool done,
       required int streak,
       required HabitStatus status,
+      required double? measuredToday,
       required List<String> last7,
       required Set<String> doneDays,
       bool dimmed = false}) {
@@ -233,6 +247,11 @@ class HabitsTab extends ConsumerWidget {
                                       color: done ? _muted : Colors.white)),
                             ),
                           ]),
+                          if (h.target != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: _progress(h, measuredToday, status == HabitStatus.verified),
+                            ),
                           if (_pills(h).isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
@@ -267,6 +286,32 @@ class HabitsTab extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  // Target progress: a thin bar + "measured / target unit", teal when the goal is met.
+  Widget _progress(Habit h, double? measured, bool met) {
+    final tgt = h.target!;
+    final m = measured ?? 0;
+    final frac = (h.compare == 'lte'
+            ? (measured == null ? 0.0 : (m <= tgt ? 1.0 : (tgt <= 0 ? 0.0 : tgt / m)))
+            : (tgt <= 0 ? 0.0 : m / tgt))
+        .clamp(0.0, 1.0);
+    final c = met ? _teal : _accent;
+    String n(double v) => v == v.roundToDouble() ? v.round().toString() : v.toStringAsFixed(1);
+    final unit = h.unit.isEmpty || h.unit.startsWith('/') ? '' : ' ${h.unit}';
+    return Row(children: [
+      Expanded(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: LinearProgressIndicator(
+              value: frac, minHeight: 4, color: c,
+              backgroundColor: Colors.white.withValues(alpha: 0.08)),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Text('${measured == null ? '–' : n(m)} ${h.compare == 'lte' ? '≤' : '/'} ${n(tgt)}$unit',
+          style: TextStyle(fontSize: 11, color: c, fontWeight: FontWeight.w700)),
+    ]);
   }
 
   List<Widget> _pills(Habit h) => [
@@ -310,6 +355,11 @@ class HabitsTab extends ConsumerWidget {
     HabitPreset? preset;
     final titleCtrl = TextEditingController();
     final durCtrl = TextEditingController();
+    final targetCtrl = TextEditingController();
+    final productsCtrl = TextEditingController();
+    String compare = 'gte';
+    String? goalKey;
+    String unit = '';
     String? time;
     String cadence = 'daily';
     final days = <int>{};
@@ -336,6 +386,8 @@ class HabitsTab extends ConsumerWidget {
                         section = s.id;
                         preset = null;
                         titleCtrl.clear();
+                        targetCtrl.clear();
+                        goalKey = null; unit = ''; compare = 'gte';
                       }),
                     ),
                 ]),
@@ -351,6 +403,14 @@ class HabitsTab extends ConsumerWidget {
                       onSelected: (_) => setLocal(() {
                         preset = p;
                         titleCtrl.text = p.title;
+                        targetCtrl.text = p.target == null
+                            ? ''
+                            : (p.target == p.target!.roundToDouble()
+                                ? p.target!.round().toString()
+                                : p.target.toString());
+                        compare = p.compare;
+                        goalKey = p.goalKey;
+                        unit = p.unit;
                       }),
                     ),
                   ChoiceChip(
@@ -359,6 +419,8 @@ class HabitsTab extends ConsumerWidget {
                     onSelected: (_) => setLocal(() {
                       preset = null;
                       titleCtrl.clear();
+                      targetCtrl.clear();
+                      goalKey = null; unit = ''; compare = 'gte';
                     }),
                   ),
                 ]),
@@ -367,6 +429,42 @@ class HabitsTab extends ConsumerWidget {
                   controller: titleCtrl,
                   decoration: const InputDecoration(labelText: 'Habit', border: OutlineInputBorder()),
                 ),
+                // Quantitative target (Table 2) — only for auto-measured sections.
+                if (section != 'aesthetics' && section != 'misc') ...[
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    ToggleButtons(
+                      isSelected: [compare == 'gte', compare == 'lte'],
+                      onPressed: (i) => setLocal(() => compare = i == 0 ? 'gte' : 'lte'),
+                      borderRadius: BorderRadius.circular(8),
+                      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                      children: const [Text('≥'), Text('≤')],
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: targetCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          labelText: 'Target${unit.isEmpty ? ' (optional)' : ' ($unit)'}',
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ]),
+                ],
+                // Aesthetics: record the products/items used in this routine (for the AI).
+                if (section == 'aesthetics') ...[
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: productsCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Products used (comma-separated)',
+                      hintText: 'e.g. CeraVe cleanser, 2% BHA, SPF50',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Row(children: [
                   ChoiceChip(
@@ -423,11 +521,19 @@ class HabitsTab extends ConsumerWidget {
                 onPressed: () {
                   final verify = preset?.verify ??
                       (section == 'exercise' ? 'workout' : section == 'diet' ? 'diet' : 'manual');
+                  final products = section == 'aesthetics'
+                      ? [for (final p in productsCtrl.text.split(',')) if (p.trim().isNotEmpty) p.trim()]
+                      : const <String>[];
                   ref.read(habitsProvider.notifier).addHabit(
                         titleCtrl.text,
                         section: section,
                         verify: verify,
                         linkedMetricId: preset?.linkedMetricId,
+                        target: double.tryParse(targetCtrl.text.trim()),
+                        compare: compare,
+                        goalKey: goalKey,
+                        unit: unit,
+                        products: products,
                         time: time,
                         durationMins: int.tryParse(durCtrl.text) ?? 0,
                         cadence: cadence,

@@ -45,30 +45,51 @@ class HabitPreset {
   final String title;
   final String verify; // metric|workout|diet|manual
   final String? linkedMetricId; // when verify == 'metric'
-  const HabitPreset(this.section, this.title, this.verify, {this.linkedMetricId});
+  final double? target; // default Table-2 target (editable in the UI)
+  final String compare;
+  final String? goalKey;
+  final String unit;
+  const HabitPreset(this.section, this.title, this.verify,
+      {this.linkedMetricId, this.target, this.compare = 'gte', this.goalKey, this.unit = ''});
 }
 
 const List<HabitPreset> habitPresets = [
-  // sleep — verified by a sleep_score log that day
-  HabitPreset('sleep', 'Sleep 8 hours', 'metric', linkedMetricId: 'sleep_score'),
-  HabitPreset('sleep', 'In bed on time', 'metric', linkedMetricId: 'sleep_score'),
+  // ── sleep — verified against the night's sleep data (auto-synced) ──
+  HabitPreset('sleep', 'Sleep score', 'metric', linkedMetricId: 'sleep_score', target: 80, unit: '/100'),
+  HabitPreset('sleep', 'Sleep duration', 'metric', linkedMetricId: 'sleep_duration', target: 8, unit: 'h'),
+  HabitPreset('sleep', 'Deep sleep', 'metric', linkedMetricId: 'deep_sleep', target: 90, unit: 'min'),
+  HabitPreset('sleep', 'In bed by', 'metric', linkedMetricId: 'sleep_score'),
   HabitPreset('sleep', 'No screens before bed', 'manual'),
-  // exercise — verified by a workout session that day
+  // ── exercise / strength — from the day's workout sets (volume / named lift) ──
   HabitPreset('exercise', 'Train', 'workout'),
+  HabitPreset('exercise', 'Training volume', 'workout', target: 8000, unit: 'vol'),
+  HabitPreset('exercise', 'Chest sets', 'workout', goalKey: 'bench,chest,press,fly', target: 12, unit: 'sets'),
+  HabitPreset('exercise', 'Back sets', 'workout', goalKey: 'row,pull,lat,deadlift', target: 12, unit: 'sets'),
+  HabitPreset('exercise', 'Leg sets', 'workout', goalKey: 'squat,leg,lunge,calf,rdl', target: 12, unit: 'sets'),
   HabitPreset('exercise', 'Cardio session', 'workout'),
+  // ── performance — endurance / mobility / cardio / explosiveness + activity ──
+  HabitPreset('exercise', 'Steps', 'metric', linkedMetricId: 'steps', target: 8000, unit: 'steps'),
+  HabitPreset('exercise', 'Active zone minutes', 'metric', linkedMetricId: 'active_zone', target: 30, unit: 'min'),
+  HabitPreset('exercise', 'Plank hold', 'metric', linkedMetricId: 'plank', target: 120, unit: 's'),
+  HabitPreset('exercise', '5k pace', 'metric', linkedMetricId: 'run5k_kmh', target: 10, unit: 'km/h'),
   HabitPreset('exercise', 'Mobility / stretch', 'manual'),
-  // diet — verified by a food log that day
-  HabitPreset('diet', 'Hit protein goal', 'diet'),
+  // ── diet — from the day's food log (macros + diet-health) ──
+  HabitPreset('diet', 'Protein', 'diet', goalKey: 'protein', target: 150, unit: 'g'),
+  HabitPreset('diet', 'Calories (cut)', 'diet', goalKey: 'calories', compare: 'lte', target: 2200, unit: 'kcal'),
+  HabitPreset('diet', 'Calories (bulk)', 'diet', goalKey: 'calories', target: 2800, unit: 'kcal'),
+  HabitPreset('diet', 'Fibre', 'diet', goalKey: 'fibre', target: 30, unit: 'g'),
+  HabitPreset('diet', 'Diet-health score', 'diet', goalKey: 'health', target: 60, unit: '/100'),
   HabitPreset('diet', 'Log all meals', 'diet'),
-  HabitPreset('diet', 'Stay under calorie goal', 'diet'),
-  // aesthetics — manual ticks
+  // ── aesthetics — manual routines (record products used) ──
   HabitPreset('aesthetics', 'Skincare (AM)', 'manual'),
   HabitPreset('aesthetics', 'Skincare (PM)', 'manual'),
   HabitPreset('aesthetics', 'Brush & floss', 'manual'),
+  HabitPreset('aesthetics', 'Hair care', 'manual'),
   HabitPreset('aesthetics', 'Sunscreen', 'manual'),
-  // recovery
+  // ── recovery ──
   HabitPreset('recovery', 'Meditate', 'manual'),
   HabitPreset('recovery', 'Cold shower', 'manual'),
+  HabitPreset('recovery', 'HRV', 'metric', linkedMetricId: 'hrv', target: 50, unit: 'ms'),
   // misc → custom only (handled by the 'Custom' option in the UI)
 ];
 
@@ -82,6 +103,13 @@ class Habit {
   final String section; // sleep|exercise|diet|aesthetics|recovery|misc
   final String verify; // metric|workout|diet|manual
   final String? linkedMetricId; // when verify == 'metric'
+  // Quantitative target (Table 2): the day's measured value must satisfy it to verify.
+  // null target → binary (any relevant log that day corroborates, e.g. a routine done).
+  final double? target;
+  final String compare; // 'gte' (≥, default) | 'lte' (≤, e.g. calories/body-fat)
+  final String? goalKey; // diet field (protein/calories/…), or an exercise-name filter
+  final String unit; // display unit for the target (g, kcal, sets, /100, …)
+  final List<String> products; // aesthetics: products/items used in this routine
   final String? time; // ideal time 'HH:MM' (drives calendar + reminder)
   final int durationMins;
   final String cadence; // 'daily' | 'weekly'
@@ -94,6 +122,11 @@ class Habit {
     this.section = 'misc',
     this.verify = 'manual',
     this.linkedMetricId,
+    this.target,
+    this.compare = 'gte',
+    this.goalKey,
+    this.unit = '',
+    this.products = const [],
     this.time,
     this.durationMins = 0,
     this.cadence = 'daily',
@@ -104,9 +137,20 @@ class Habit {
   // The section drives the card colour/emoji; alias kept for old call sites.
   String get category => section;
 
+  /// Human-readable target, e.g. "≥ 80", "≤ 2200 kcal", or '' when binary.
+  String get targetLabel => target == null
+      ? ''
+      : '${compare == 'lte' ? '≤' : '≥'} ${target! == target!.roundToDouble() ? target!.round() : target}${unit.isEmpty ? '' : (unit.startsWith('/') ? unit : ' $unit')}';
+
   Map<String, dynamic> toJson() => {
         'id': id, 'title': title, 'cat': section, 'verify': verify,
-        'metric': linkedMetricId, 'time': time, 'dur': durationMins,
+        'metric': linkedMetricId,
+        if (target != null) 'target': target,
+        if (compare != 'gte') 'cmp': compare,
+        if (goalKey != null) 'goalKey': goalKey,
+        if (unit.isNotEmpty) 'unit': unit,
+        if (products.isNotEmpty) 'products': products,
+        'time': time, 'dur': durationMins,
         'cadence': cadence, 'days': days, 'created': createdAt,
       };
 
@@ -118,6 +162,11 @@ class Habit {
       section: habitSections.containsKey(section) ? section : 'misc',
       verify: j['verify'] as String? ?? sectionOf(section).verify,
       linkedMetricId: j['metric'] as String?,
+      target: (j['target'] as num?)?.toDouble(),
+      compare: j['cmp'] as String? ?? 'gte',
+      goalKey: j['goalKey'] as String?,
+      unit: j['unit'] as String? ?? '',
+      products: [for (final p in (j['products'] as List? ?? const [])) p as String],
       time: j['time'] as String?,
       durationMins: (j['dur'] as num?)?.toInt() ?? 0,
       cadence: j['cadence'] as String? ?? 'daily',
@@ -125,6 +174,13 @@ class Habit {
       createdAt: j['created'] as String? ?? DateTime.now().toIso8601String(),
     );
   }
+}
+
+/// Does a measured value satisfy a target? No target → any measurement corroborates.
+bool meetsTarget({double? target, String compare = 'gte', double? measured}) {
+  if (target == null) return measured != null;
+  if (measured == null) return false;
+  return compare == 'lte' ? measured <= target : measured >= target;
 }
 
 /// Verification state of a habit for a day.
