@@ -30,7 +30,7 @@ void main() {
   });
 
   test('coachWorkoutSets exposes per-exercise sets + volume', () {
-    final w = WorkoutSession(id: 'w', type: 'strength', start: '2026-06-28T18:00:00', sets: const [
+    const w = WorkoutSession(id: 'w', type: 'strength', start: '2026-06-28T18:00:00', sets: [
       WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 80, reps: 8),
       WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 80, reps: 7),
     ]);
