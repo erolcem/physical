@@ -62,3 +62,13 @@ class GoogleHealthToken(Base):
     refresh_token: Mapped[str] = mapped_column(String)
     expires_at: Mapped[dt.datetime] = mapped_column(DateTime)
     scope: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class Backup(Base):
+    """A full JSON snapshot of a user's local app data (logs, habits, food, workouts,
+    pins…) so sign-in on a new device restores everything. One row per user."""
+    __tablename__ = "backups"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    data: Mapped[str] = mapped_column(String)  # JSON blob
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime)

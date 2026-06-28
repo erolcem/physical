@@ -4,7 +4,8 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../engine/rank_engine.dart' show Log;
-import '../state/log_providers.dart' show dietProvider;
+import '../state/habit_providers.dart' show habitsProvider;
+import '../state/log_providers.dart' show dietProvider, workoutProvider, pinsProvider;
 import '../state/providers.dart';
 import 'api_client.dart';
 import 'readiness.dart' show backfillReadinessLogs;
@@ -127,5 +128,28 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
     // the sync; dietProvider updates reactively as foods are enriched.
     unawaited(ref.read(dietProvider.notifier).enrichFoodHealth(api));
   } catch (_) {/* food import + enrichment are best-effort */}
+  // Full-data backup: mirror the ENTIRE local store (logs, food, workouts, habits,
+  // pins…) to the cloud so it transfers to a new device. Best-effort.
+  try {
+    await api.pushBackup(repoExport(repo));
+  } catch (_) {/* backup is best-effort */}
   return CloudSyncResult(added, note, needsReconnect: needsReconnect);
+}
+
+/// Pull the cloud snapshot and REPLACE all local data with it (new-device restore).
+/// Returns true if a backup existed and was restored. Reloads every data provider.
+Future<bool> restoreFromCloud(WidgetRef ref) async {
+  final api = ref.read(apiClientProvider);
+  final repo = ref.read(repositoryProvider);
+  await api.loadPersistedToken();
+  final snapshot = await api.pullBackup();
+  if (snapshot == null) return false;
+  repoImport(repo, snapshot);
+  // Re-read every provider from the freshly-restored repo.
+  ref.read(logsProvider.notifier).reload();
+  ref.invalidate(dietProvider);
+  ref.invalidate(workoutProvider);
+  ref.invalidate(habitsProvider);
+  ref.invalidate(pinsProvider);
+  return true;
 }

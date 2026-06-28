@@ -160,3 +160,52 @@ void applyDemoSeed(Repository r) {
   addProg('plank', [90, 105, 120, 135, 150]);
   addProg('vert', [45, 47, 49, 50, 52]);
 }
+
+// ── Full backup / restore ───────────────────────────────────────────────────
+// A complete JSON snapshot of every local entity, for cloud backup + transfer to a
+// new device. Pure (works on any Repository via its public load/save API).
+
+Map<String, dynamic> repoExport(Repository r) => {
+      'v': 1,
+      'logs': {
+        for (final e in r.loadLogs().entries)
+          e.key: [
+            for (final l in e.value)
+              {'v': l.value, if (l.bodyweight != null) 'bw': l.bodyweight, 'ts': l.ts}
+          ]
+      },
+      'habits': [for (final h in r.loadHabits()) h.toJson()],
+      'completions': {for (final e in r.loadCompletions().entries) e.key: e.value.toList()},
+      'food': [for (final f in r.loadFood()) f.toJson()],
+      'workouts': [for (final w in r.loadWorkouts()) w.toJson()],
+      'pins': [for (final p in r.loadPins()) p.toJson()],
+    };
+
+/// Replace ALL local data with a snapshot from [repoExport]. No-op-safe on junk.
+void repoImport(Repository r, Map<String, dynamic> m) {
+  r.clear();
+  ((m['logs'] as Map?) ?? const {}).forEach((mid, list) {
+    for (final d in (list as List)) {
+      final j = (d as Map);
+      r.saveLog(mid as String, Log(mid, (j['v'] as num).toDouble(),
+          bodyweight: (j['bw'] as num?)?.toDouble(), ts: j['ts'] as String?));
+    }
+  });
+  for (final h in ((m['habits'] as List?) ?? const [])) {
+    r.saveHabit(Habit.fromJson((h as Map).cast<String, dynamic>()));
+  }
+  ((m['completions'] as Map?) ?? const {}).forEach((hid, days) {
+    for (final d in (days as List)) {
+      r.setCompletion(hid as String, d as String, true);
+    }
+  });
+  for (final f in ((m['food'] as List?) ?? const [])) {
+    r.saveFood(FoodEntry.fromJson((f as Map).cast<String, dynamic>()));
+  }
+  for (final w in ((m['workouts'] as List?) ?? const [])) {
+    r.saveWorkout(WorkoutSession.fromJson((w as Map).cast<String, dynamic>()));
+  }
+  for (final p in ((m['pins'] as List?) ?? const [])) {
+    r.addPin(PinnedCorrelation.fromJson((p as Map).cast<String, dynamic>()));
+  }
+}

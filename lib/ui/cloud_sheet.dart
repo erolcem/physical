@@ -145,6 +145,32 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
     }
   }
 
+  Future<void> _restore() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF12152E),
+        title: const Text('Restore from cloud?'),
+        content: const Text('This replaces ALL data on this device with your last cloud '
+            'backup (logs, food, workouts, habits…). Use it on a new device.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Restore')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() { _busy = true; _msg = null; });
+    try {
+      final restored = await restoreFromCloud(ref);
+      if (mounted) setState(() => _msg = restored ? 'Restored from cloud ✓' : 'No cloud backup found yet');
+    } catch (_) {
+      if (mounted) setState(() => _msg = "Couldn't restore — check your connection.");
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<String?> _askForCode(String url) {
     final ctrl = TextEditingController();
     return showDialog<String>(
@@ -241,6 +267,14 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
                 label: const Text('Sync now'),
                 style: FilledButton.styleFrom(backgroundColor: _accent, minimumSize: const Size.fromHeight(46)),
               ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _restore,
+              icon: const Icon(Icons.cloud_download_outlined, size: 18),
+              label: const Text('Restore all data from cloud'),
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: _teal, minimumSize: const Size.fromHeight(46)),
+            ),
             const SizedBox(height: 8),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               TextButton.icon(

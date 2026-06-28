@@ -250,6 +250,27 @@ class ApiClient {
     }
   }
 
+  /// Push a full local-data snapshot to the cloud (PUT /me/backup). Returns bytes stored.
+  Future<int> pushBackup(Map<String, dynamic> snapshot) async {
+    final r = await _client
+        .put(Uri.parse('$baseUrl/me/backup'),
+            headers: _headers({'Content-Type': 'application/json'}),
+            body: jsonEncode(snapshot))
+        .timeout(const Duration(seconds: 30));
+    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
+    return ((jsonDecode(r.body) as Map)['bytes'] as num?)?.toInt() ?? 0;
+  }
+
+  /// Pull the cloud snapshot (GET /me/backup), or null if none exists yet.
+  Future<Map<String, dynamic>?> pullBackup() async {
+    final r = await _client
+        .get(Uri.parse('$baseUrl/me/backup'), headers: _headers())
+        .timeout(const Duration(seconds: 30));
+    if (r.statusCode == 404) return null;
+    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
+    return (jsonDecode(r.body) as Map<String, dynamic>)['data'] as Map<String, dynamic>;
+  }
+
   /// Upload a recorded voice clip (WAV) for clinical voice-quality analysis.
   /// Returns the backend result (score + jitter/shimmer/HNR/pitch). Throws on failure.
   Future<Map<String, dynamic>> measureVoice(String filePath) async {
