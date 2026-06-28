@@ -70,11 +70,16 @@ class CoachTurn(BaseModel):
 class CoachChatIn(BaseModel):
     message: str
     history: list[CoachTurn] = []
-    habits: list[dict] = []  # app-supplied: {title, category?, done_today?, streak?}
+    habits: list[dict] = []  # rich: {title, section, target, unit, measured, met, streak, …}
     profile: dict | None = None
     diet: dict | None = None        # today's totals: {calories, protein, carbs, fat, items}
     training: dict | None = None    # {weekly_volume, sessions, exercises: [...]}
     aesthetics: dict | None = None  # {skin: 80, oral: 90, ...}
+    # App-computed analytical context (the app is authoritative + holds the full data).
+    ranks: dict | None = None       # {overall, categories:{}, metrics:[{id,label,tier,top_pct,value,trend}]}
+    trends: dict | None = None      # {metric_id: {change, direction, recent:[..]}}
+    correlations: list[dict] = []   # [{a, b, r, n}] strong day-aligned correlations
+    workout_sets: list[dict] = []   # [{date, type, exercises:[{name, sets:[{w,r}], volume}]}]
 
 
 class CoachChatOut(BaseModel):
@@ -88,6 +93,10 @@ class CoachContextIn(BaseModel):
     diet: dict | None = None
     training: dict | None = None
     aesthetics: dict | None = None
+    ranks: dict | None = None
+    trends: dict | None = None
+    correlations: list[dict] = []
+    workout_sets: list[dict] = []
 
 
 class NutritionIn(BaseModel):

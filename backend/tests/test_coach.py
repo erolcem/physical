@@ -120,3 +120,38 @@ def test_coach_requires_auth():
     from app.main import app
     with TestClient(app) as c:
         assert c.post("/me/coach/chat", json={"message": "hi"}).status_code == 401
+
+
+# ── Rich app-supplied context (ranks / correlations / sets / trends / habits) ──
+from app.coach import build_context, parse_actions  # noqa: E402
+
+
+def test_build_context_prefers_app_ranks_and_includes_analysis():
+    ranks = {
+        "overall": {"tier": "Gold", "sub": "II", "top_pct": 22},
+        "categories": {"strength": {"tier": "Silver", "sub": "I", "top_pct": 40}},
+        "metrics": [
+            {"id": "bench", "label": "Bench", "tier": "Silver", "sub": "I", "top_pct": 40, "value": 90, "rank_value": 2.2, "trend": "up"},
+            {"id": "vo2max", "label": "VO2max", "tier": "Gold", "sub": "III", "top_pct": 18, "value": 52, "rank_value": 3.7, "trend": "flat"},
+        ],
+    }
+    corr = [{"a": "deep_sleep", "b": "bench", "r": 0.62, "n": 14}]
+    trends = {"sleep_score": {"direction": "down", "change": -6, "recent": [82, 79, 74]}}
+    sets = [{"date": "2026-06-27", "type": "strength",
+             "exercises": [{"name": "Bench Press", "sets": [{"w": 80, "r": 8}, {"w": 80, "r": 7}]}]}]
+    habits = [{"title": "Protein", "section": "diet", "target": 150, "unit": "g",
+               "compare": "gte", "measured": 120, "met": False, "streak": 4, "adherence": 70}]
+    ctx = build_context([], habits=habits, ranks=ranks, correlations=corr, trends=trends, workout_sets=sets)
+    assert "Overall rank: Gold II" in ctx
+    assert "deep_sleep ↔ bench: r=+0.62 (n=14)" in ctx
+    assert "sleep_score" in ctx and "↓" in ctx          # trend arrow
+    assert "Bench Press (80×8, 80×7)" in ctx             # individual sets
+    assert "120≥150g" in ctx and "70% adherence" in ctx  # rich habit
+
+
+def test_parse_adjust_habit_target_action():
+    txt = ('Bump it up.\n```action\n{"type":"adjust_habit_target","title":"Protein",'
+           '"target":170,"compare":"gte"}\n```')
+    clean, actions = parse_actions(txt)
+    assert "Bump it up." in clean and "```" not in clean
+    assert actions == [{"type": "adjust_habit_target", "title": "Protein", "target": 170.0, "compare": "gte"}]

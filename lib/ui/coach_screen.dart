@@ -4,14 +4,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/api_client.dart';
+import '../data/coach_context.dart';
 import '../data/diet.dart' show todayDiet;
-import '../data/habits.dart' show currentStreak;
 import '../data/metrics.dart' show metricById, metrics, MetricTier;
 import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart' show exercisesOverDays, sessionsOverDays, sortedByRecent, volumeOverDays;
 import '../state/habit_providers.dart';
 import '../state/log_providers.dart';
-import '../state/providers.dart' show currentBodyweightProvider, latestLogsProvider;
+import '../state/providers.dart'
+    show categoryRanksProvider, currentBodyweightProvider, latestLogsProvider, logsProvider, overallProvider;
 
 const _bg = Color(0xFF08091A);
 const _card = Color(0xFF12152E);
@@ -87,18 +88,31 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     }
   }
 
+  // Rich habit context: target, measured-vs-target, met, streak, adherence, products.
   List<Map<String, dynamic>> _habitsCtx() {
     final hs = ref.read(habitsProvider);
-    return [
-      for (final h in hs.habits)
-        {
-          'title': h.title,
-          'category': h.category,
-          'done_today': hs.doneToday(h.id),
-          'streak': currentStreak(hs.doneFor(h.id)),
-        }
-    ];
+    return coachHabits(hs.habits, hs.completions,
+        logs: ref.read(logsProvider),
+        food: ref.read(dietProvider),
+        workouts: ref.read(workoutProvider));
   }
+
+  // App-computed ranks (the app holds the full data + canonical engine), or null if empty.
+  Map<String, dynamic>? _ranksCtx() {
+    final latest = ref.read(latestLogsProvider);
+    if (latest.isEmpty) return null;
+    final cats = ref.read(categoryRanksProvider);
+    return coachRanks(
+      overall: ref.read(overallProvider),
+      categories: {for (final e in cats.entries) e.key: e.value},
+      latest: latest,
+      logs: ref.read(logsProvider),
+    );
+  }
+
+  Map<String, dynamic> _trendsCtx() => coachTrends(ref.read(logsProvider));
+  List<Map<String, dynamic>> _correlationsCtx() => coachCorrelations(ref.read(logsProvider));
+  List<Map<String, dynamic>> _setsCtx() => coachWorkoutSets(ref.read(workoutProvider));
 
   // Stats are auto-sourced (no manual profile page): age from Google, height/weight/
   // body-fat from synced logs. Gender defaults to the app's young-male cohort.
@@ -162,7 +176,9 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     try {
       final res = await api.coachChat(
           message: text, history: history, habits: _habitsCtx(), profile: _profileCtx(),
-          diet: _dietCtx(), training: _trainingCtx(), aesthetics: _aestheticsCtx());
+          diet: _dietCtx(), training: _trainingCtx(), aesthetics: _aestheticsCtx(),
+          ranks: _ranksCtx(), trends: _trendsCtx(),
+          correlations: _correlationsCtx(), workoutSets: _setsCtx());
       final reply = (res['reply'] as String?) ?? '';
       final actions =
           ((res['actions'] as List?) ?? const []).cast<Map<String, dynamic>>();
@@ -217,6 +233,10 @@ class _CoachTabState extends ConsumerState<CoachTab> {
     final diet = _dietCtx();
     final training = _trainingCtx();
     final aesthetics = _aestheticsCtx();
+    final ranks = _ranksCtx();
+    final trends = _trendsCtx();
+    final correlations = _correlationsCtx();
+    final sets = _setsCtx();
     if (!mounted) return;
     showModalBottomSheet(
       context: context,
@@ -226,7 +246,8 @@ class _CoachTabState extends ConsumerState<CoachTab> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => FutureBuilder<Map<String, dynamic>>(
         future: api.coachContext(
-            habits: habits, profile: profile, diet: diet, training: training, aesthetics: aesthetics),
+            habits: habits, profile: profile, diet: diet, training: training, aesthetics: aesthetics,
+            ranks: ranks, trends: trends, correlations: correlations, workoutSets: sets),
         builder: (ctx, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const SizedBox(height: 220, child: Center(child: CircularProgressIndicator()));
@@ -269,8 +290,11 @@ class _CoachTabState extends ConsumerState<CoachTab> {
           if (c['strongest'] != null) row('Strongest', c['strongest'] as String),
           if (recent.isNotEmpty)
             row('Recent', recent.entries.map((e) => '${e.key}: ${e.value}').join(', ')),
+          if (c['trends'] != null) row('Trends', c['trends'] as String),
+          if (c['correlations'] != null) row('Correlations', c['correlations'] as String),
           if (c['diet'] != null) row('Diet', c['diet'] as String),
           if (c['training'] != null) row('Training', c['training'] as String),
+          if (c['sets'] != null) row('Sets', c['sets'] as String),
           if (c['aesthetics'] != null) row('Aesthetics', c['aesthetics'] as String),
           row('Habits', habits.isEmpty ? '—' : habits.join('\n')),
           const SizedBox(height: 14),
@@ -429,6 +453,10 @@ class _CoachTabState extends ConsumerState<CoachTab> {
           '${a['category'] != null ? ' · ${a['category']}' : ''}'
           '${a['durationMins'] != null ? ' · ${a['durationMins']}min' : ''}'
           '${a['time'] != null ? ' · ${a['time']}' : ''}';
+    } else if (type == 'adjust_habit_target') {
+      icon = Icons.tune;
+      final cmp = a['compare'] == 'lte' ? '≤' : '≥';
+      desc = 'Set target: $title $cmp ${a['target']}';
     } else if (type == 'pin_correlation') {
       icon = Icons.push_pin_outlined;
       desc = 'Pin insight: ${_exLabel(a['a'] as String? ?? '')} ↔ ${_exLabel(a['b'] as String? ?? '')}';
@@ -471,6 +499,9 @@ class _CoachTabState extends ConsumerState<CoachTab> {
           section: (a['category'] as String?) ?? 'misc',
           time: a['time'] as String?,
           durationMins: (a['durationMins'] as num?)?.toInt() ?? 0);
+    } else if (a['type'] == 'adjust_habit_target') {
+      notifier.adjustTarget(a['title'] as String? ?? '',
+          (a['target'] as num?)?.toDouble() ?? 0, compare: a['compare'] as String?);
     } else if (a['type'] == 'remove_habit') {
       final title = (a['title'] as String? ?? '').toLowerCase();
       final hs = ref.read(habitsProvider);

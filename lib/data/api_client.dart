@@ -367,6 +367,10 @@ class ApiClient {
     Map<String, dynamic>? diet,
     Map<String, dynamic>? training,
     Map<String, dynamic>? aesthetics,
+    Map<String, dynamic>? ranks,
+    Map<String, dynamic>? trends,
+    List<Map<String, dynamic>> correlations = const [],
+    List<Map<String, dynamic>> workoutSets = const [],
   }) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/coach/chat'),
@@ -379,8 +383,12 @@ class ApiClient {
               if (diet != null) 'diet': diet,
               if (training != null) 'training': training,
               if (aesthetics != null) 'aesthetics': aesthetics,
+              if (ranks != null) 'ranks': ranks,
+              if (trends != null) 'trends': trends,
+              if (correlations.isNotEmpty) 'correlations': correlations,
+              if (workoutSets.isNotEmpty) 'workout_sets': workoutSets,
             }))
-        .timeout(const Duration(seconds: 60));
+        .timeout(const Duration(seconds: 90));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
@@ -430,6 +438,10 @@ class ApiClient {
     Map<String, dynamic>? diet,
     Map<String, dynamic>? training,
     Map<String, dynamic>? aesthetics,
+    Map<String, dynamic>? ranks,
+    Map<String, dynamic>? trends,
+    List<Map<String, dynamic>> correlations = const [],
+    List<Map<String, dynamic>> workoutSets = const [],
   }) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/coach/context'),
@@ -440,6 +452,10 @@ class ApiClient {
               if (diet != null) 'diet': diet,
               if (training != null) 'training': training,
               if (aesthetics != null) 'aesthetics': aesthetics,
+              if (ranks != null) 'ranks': ranks,
+              if (trends != null) 'trends': trends,
+              if (correlations.isNotEmpty) 'correlations': correlations,
+              if (workoutSets.isNotEmpty) 'workout_sets': workoutSets,
             }))
         .timeout(const Duration(seconds: 15));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);

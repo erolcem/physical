@@ -30,7 +30,8 @@ def context(body: CoachContextIn,
     """Exactly what the coach sees — for the transparency view. No model call."""
     samples = list(db.scalars(select(Sample).where(Sample.user_id == user_id)))
     return context_sections(samples, body.habits, body.profile,
-                            body.diet, body.training, body.aesthetics)
+                            body.diet, body.training, body.aesthetics,
+                            body.ranks, body.trends, body.correlations, body.workout_sets)
 
 
 @router.post("/chat", response_model=CoachChatOut)
@@ -41,7 +42,8 @@ def chat(body: CoachChatIn,
         raise HTTPException(503, "AI coach isn't configured on the server yet")
     samples = list(db.scalars(select(Sample).where(Sample.user_id == user_id)))
     system = compose_system(samples, body.habits, body.profile,
-                            body.diet, body.training, body.aesthetics)
+                            body.diet, body.training, body.aesthetics,
+                            body.ranks, body.trends, body.correlations, body.workout_sets)
     turns = [{"role": t.role, "text": t.text} for t in body.history]
     turns.append({"role": "user", "text": body.message})
     try:

@@ -70,6 +70,21 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
     _reload();
   }
 
+  /// Retune an existing habit's quantitative target (the coach's adjust action).
+  void adjustTarget(String title, double target, {String? compare}) {
+    final matches = state.habits.where((h) => h.title.toLowerCase() == title.toLowerCase());
+    if (matches.isEmpty) return;
+    final o = matches.first;
+    repo.saveHabit(Habit(
+      id: o.id, title: o.title, section: o.section, verify: o.verify,
+      linkedMetricId: o.linkedMetricId, target: target, compare: compare ?? o.compare,
+      goalKey: o.goalKey, unit: o.unit, products: o.products, time: o.time,
+      durationMins: o.durationMins, cost: o.cost, cadence: o.cadence, days: o.days,
+      createdAt: o.createdAt,
+    ));
+    _reload();
+  }
+
   /// Toggle today's check-off for a habit.
   void toggleToday(String id) {
     repo.setCompletion(id, todayKey(), !state.doneToday(id));

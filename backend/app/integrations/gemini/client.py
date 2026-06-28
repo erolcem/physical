@@ -21,7 +21,7 @@ def configured() -> bool:
 
 
 def generate(system: str, turns: list[dict], *, model: str | None = None,
-             temperature: float = 0.6) -> str:
+             temperature: float = 0.5) -> str:
     """`turns` is [{"role": "user"|"model", "text": "..."}]. Returns the reply text.
 
     Raises GeminiError if the coach isn't configured or the API errors — callers
@@ -35,7 +35,7 @@ def generate(system: str, turns: list[dict], *, model: str | None = None,
         "contents": [
             {"role": t["role"], "parts": [{"text": t["text"]}]} for t in turns
         ],
-        "generationConfig": {"temperature": temperature, "maxOutputTokens": 800},
+        "generationConfig": {"temperature": temperature, "maxOutputTokens": 2048},
     }
     url = f"{BASE}/models/{mdl}:generateContent?key={settings.gemini_api_key}"
     try:
