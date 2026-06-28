@@ -237,6 +237,19 @@ class ApiClient {
   }
 
   /// Recent Google Health food logs (nutrition-log, parsed) for the Diet section.
+  /// The user's personal habit-calendar subscription URL (https), or null if signed out.
+  Future<String?> calendarFeedUrl() async {
+    try {
+      final r = await _client
+          .get(Uri.parse('$baseUrl/me/calendar-feed'), headers: _headers())
+          .timeout(const Duration(seconds: 15));
+      if (r.statusCode != 200) return null;
+      return (jsonDecode(r.body) as Map<String, dynamic>)['url'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> googleFoods() async {
     try {
       final r = await _client

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/habits.dart';
 import '../data/habit_verify.dart';
+import '../data/sync.dart' show apiClientProvider;
 import '../state/habit_providers.dart';
 import '../state/log_providers.dart';
 import '../state/providers.dart' show logsProvider;
@@ -73,15 +74,20 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
             ),
           ),
           const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            TextButton.icon(
+              onPressed: () => _subscribeCalendar(context, ref),
+              icon: const Icon(Icons.event_available, size: 18),
+              label: const Text('Subscribe'),
+              style: TextButton.styleFrom(foregroundColor: _muted),
+            ),
+            TextButton.icon(
               onPressed: () => _showAddDialog(context, ref),
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add habit'),
               style: TextButton.styleFrom(foregroundColor: _accent),
             ),
-          ),
+          ]),
           if (habits.isEmpty)
             _empty()
           else if (_week)
@@ -464,6 +470,22 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
   Future<void> _addToCalendar(Habit h) async {
     final url = googleCalendarUrl(h);
     if (url != null) await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+
+  // One-time subscription: opens the user's personal habit ICS feed in their calendar
+  // app (webcal://). All habits + future edits then appear + auto-refresh — no per-habit
+  // taps. Needs the user signed in + synced (the feed reads their backup).
+  Future<void> _subscribeCalendar(BuildContext context, WidgetRef ref) async {
+    final url = await ref.read(apiClientProvider).calendarFeedUrl();
+    if (!context.mounted) return;
+    if (url == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Sign in and ☁ sync first to get your habit calendar feed.')));
+      return;
+    }
+    // webcal:// makes the calendar app offer to subscribe (auto-refreshing).
+    final webcal = url.replaceFirst(RegExp(r'^https?://'), 'webcal://');
+    await launchUrl(Uri.parse(webcal), mode: LaunchMode.externalApplication);
   }
 
   // ── Add habit: section → preset (or custom) → cadence/time/duration ──
