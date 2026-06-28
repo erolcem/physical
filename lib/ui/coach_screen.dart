@@ -27,9 +27,11 @@ const _coachFunctions = <(String, String)>[
   ('🥗 Diet review', 'Review my diet — calories, protein and macros vs my weight/body-fat — and suggest concrete adjustments.'),
   ('💪 Training review', 'Review my training: recent volume, sessions, and which lifts/ranks lag. What should I prioritise this week?'),
   ('✨ Aesthetics', 'Review my aesthetics routine and scores; suggest evidence-based improvements for skin/hair/oral health.'),
-  ('🎯 Set a goal', 'Help me set one emphasised goal: ask what I want to prioritise, then tailor my habits toward it.'),
-  ('🏆 My progress', 'Discuss my progress and any milestones across my ranks — what to celebrate and what is next.'),
-  ('📈 What should I improve?', 'Across all my data, what is my single highest-leverage thing to improve right now, and how?'),
+  ('🔗 Find correlations', 'Analyse my day-aligned correlations: surface the strongest real patterns in my data, explain the likely mechanism, state the causation caveat and the sample size, and suggest one experiment to test the most useful one — then pin it.'),
+  ('🗓 Weekly review', 'Give me a disciplined weekly review across sleep, training, diet, recovery and habit adherence: cite the numbers, name what improved vs regressed, identify the single biggest issue, and set my plan + habit adjustments for next week.'),
+  ('🎯 Set a goal', 'Help me set one emphasised goal: ask what I want to prioritise, then tailor my habits and targets toward it.'),
+  ('🏆 My progress', 'Discuss my progress and any milestones across my ranks and trends — what to celebrate and what is next.'),
+  ('📈 What should I improve?', 'Across all my data, what is my single highest-leverage thing to improve right now, and exactly how?'),
 ];
 
 class _Msg {
