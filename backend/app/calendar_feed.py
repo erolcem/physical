@@ -31,6 +31,50 @@ def verify_token(token: str) -> str | None:
     return user_id if hmac.compare_digest(sig, expected) else None
 
 
+def _rrule(cadence: str, days: list) -> str:
+    if cadence == "weekly" and days:
+        byday = ",".join(_BYDAY[d - 1] for d in days if 1 <= d <= 7)
+        return f"RRULE:FREQ=WEEKLY;BYDAY={byday}" if byday else "RRULE:FREQ=DAILY"
+    return "RRULE:FREQ=DAILY"
+
+
+def habit_event(h: dict, *, tz: str | None = None, now: dt.datetime | None = None) -> dict:
+    """A Google Calendar API event body for a habit (recurring; tagged so re-pushes
+    update rather than duplicate). Timed → a timed event in [tz]; untimed → all-day."""
+    now = now or dt.datetime.now()
+    title = str(h.get("title") or "Habit")
+    section = str(h.get("cat") or h.get("section") or "misc")
+    time = h.get("time")
+    dur = int(h.get("dur") or h.get("durationMins") or 0)
+    desc = f"Physical habit · {section}"
+    if h.get("target") is not None:
+        cmp = "≤" if (h.get("compare") or h.get("cmp")) == "lte" else "≥"
+        t = h["target"]
+        t = int(t) if float(t).is_integer() else t
+        desc += f" · target {cmp} {t}{h.get('unit', '')}"
+    if time:
+        try:
+            hh, mm = (int(x) for x in str(time).split(":")[:2])
+        except Exception:
+            hh, mm = 7, 0
+        start = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        end = start + dt.timedelta(minutes=dur if dur > 0 else 30)
+        tzkw = {"timeZone": tz} if tz else {}
+        start_obj = {"dateTime": start.strftime("%Y-%m-%dT%H:%M:%S"), **tzkw}
+        end_obj = {"dateTime": end.strftime("%Y-%m-%dT%H:%M:%S"), **tzkw}
+    else:
+        start_obj = {"date": now.strftime("%Y-%m-%d")}
+        end_obj = {"date": (now + dt.timedelta(days=1)).strftime("%Y-%m-%d")}
+    return {
+        "summary": title,
+        "description": desc,
+        "start": start_obj,
+        "end": end_obj,
+        "recurrence": [_rrule(h.get("cadence") or "daily", h.get("days") or [])],
+        "extendedProperties": {"private": {"app": "physical", "habit": str(h.get("id") or title)}},
+    }
+
+
 def _esc(s: str) -> str:
     return s.replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\n", " ")
 
@@ -77,11 +121,7 @@ def build_ics(habits: list[dict], *, now: dt.datetime | None = None) -> str:
             dstart = f"DTSTART;VALUE=DATE:{now.strftime('%Y%m%d')}"
             dend = f"DTEND;VALUE=DATE:{(now + dt.timedelta(days=1)).strftime('%Y%m%d')}"
 
-        if cadence == "weekly" and days:
-            byday = ",".join(_BYDAY[d - 1] for d in days if 1 <= d <= 7)
-            rrule = f"RRULE:FREQ=WEEKLY;BYDAY={byday}" if byday else "RRULE:FREQ=DAILY"
-        else:
-            rrule = "RRULE:FREQ=DAILY"
+        rrule = _rrule(cadence, days)
 
         desc = f"Physical habit · {section}"
         if h.get("target") is not None:

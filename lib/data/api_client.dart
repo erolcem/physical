@@ -237,6 +237,20 @@ class ApiClient {
   }
 
   /// Recent Google Health food logs (nutrition-log, parsed) for the Diet section.
+  /// Push habits straight into the user's Google Calendar (upsert + prune). Returns the
+  /// {added, updated, removed} counts. Throws ApiException(401/403) if calendar consent is
+  /// needed (reconnect Google).
+  Future<Map<String, dynamic>> pushCalendar(
+      List<Map<String, dynamic>> habits, String? tz) async {
+    final r = await _client
+        .post(Uri.parse('$baseUrl/me/calendar/push'),
+            headers: _headers({'Content-Type': 'application/json'}),
+            body: jsonEncode({'habits': habits, if (tz != null) 'tz': tz}))
+        .timeout(const Duration(seconds: 45));
+    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
   /// The user's personal habit-calendar subscription URL (https), or null if signed out.
   Future<String?> calendarFeedUrl() async {
     try {

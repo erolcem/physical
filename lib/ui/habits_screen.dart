@@ -5,7 +5,9 @@
 // streaks. Local-first.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../data/api_client.dart' show ApiException;
 import '../data/habits.dart';
 import '../data/habit_verify.dart';
 import '../data/sync.dart' show apiClientProvider;
@@ -27,6 +29,7 @@ class HabitsTab extends ConsumerStatefulWidget {
 
 class _HabitsTabState extends ConsumerState<HabitsTab> {
   bool _week = false; // Day (false) / Week (true)
+  bool _calBusy = false; // calendar push in flight
 
   @override
   Widget build(BuildContext context) {
@@ -79,9 +82,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             TextButton.icon(
-              onPressed: () => _subscribeCalendar(context, ref),
-              icon: const Icon(Icons.event_available, size: 18),
-              label: const Text('Subscribe'),
+              onPressed: _calBusy ? null : () => _pushCalendar(context, ref),
+              icon: _calBusy
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.event_available, size: 18),
+              label: const Text('Add to Calendar'),
               style: TextButton.styleFrom(foregroundColor: _muted),
             ),
             TextButton.icon(
@@ -504,20 +509,31 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     if (url != null) await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
-  // One-time subscription: opens the user's personal habit ICS feed in their calendar
-  // app (webcal://). All habits + future edits then appear + auto-refresh — no per-habit
-  // taps. Needs the user signed in + synced (the feed reads their backup).
-  Future<void> _subscribeCalendar(BuildContext context, WidgetRef ref) async {
-    final url = await ref.read(apiClientProvider).calendarFeedUrl();
-    if (!context.mounted) return;
-    if (url == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Sign in and ☁ sync first to get your habit calendar feed.')));
-      return;
+  // Write habits straight into the user's Google Calendar via the Calendar API (upsert +
+  // prune, no duplicates). Needs the calendar scope — prompts a reconnect if missing.
+  Future<void> _pushCalendar(BuildContext context, WidgetRef ref) async {
+    setState(() => _calBusy = true);
+    final habits = [for (final h in ref.read(habitsProvider).habits) h.toJson()];
+    String? tz;
+    try {
+      tz = await FlutterTimezone.getLocalTimezone();
+    } catch (_) {/* fall back to floating times */}
+    String msg;
+    try {
+      final r = await ref.read(apiClientProvider).pushCalendar(habits, tz);
+      final n = (r['added'] ?? 0) + (r['updated'] ?? 0);
+      msg = '$n habit${n == 1 ? '' : 's'} synced to Google Calendar'
+          '${(r['removed'] ?? 0) != 0 ? ' · ${r['removed']} removed' : ''}.';
+    } on ApiException catch (e) {
+      msg = (e.status == 401 || e.status == 403)
+          ? 'Reconnect Google (Cloud ☁) to grant calendar access, then try again.'
+          : 'Calendar sync failed — try again in a moment.';
+    } catch (_) {
+      msg = 'Couldn’t reach the calendar service.';
     }
-    // webcal:// makes the calendar app offer to subscribe (auto-refreshing).
-    final webcal = url.replaceFirst(RegExp(r'^https?://'), 'webcal://');
-    await launchUrl(Uri.parse(webcal), mode: LaunchMode.externalApplication);
+    if (!context.mounted) return;
+    setState(() => _calBusy = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   // ── Add habit: section → preset (or custom) → cadence/time/duration ──

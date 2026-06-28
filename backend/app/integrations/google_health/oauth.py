@@ -25,6 +25,9 @@ SCOPES = [
     # Nutrition (food/macros) + hydration — needs its own scope. Adding it means users
     # must RE-CONSENT (reconnect Google) for nutrition-log to return data.
     "https://www.googleapis.com/auth/googlehealth.nutrition.readonly",
+    # Calendar — write habits straight into the user's Google Calendar (automatic, not a
+    # subscription link). Also requires RE-CONSENT.
+    "https://www.googleapis.com/auth/calendar.events",
 ]
 
 

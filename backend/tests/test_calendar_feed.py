@@ -28,3 +28,20 @@ def test_build_ics_timed_and_untimed():
     assert "DTSTART;VALUE=DATE:20260628" in ics       # untimed → all-day
     assert "SUMMARY:Sleep score" in ics
     assert "target ≥ 80/100" in ics
+
+
+def test_habit_event_timed_and_untimed():
+    from app.calendar_feed import habit_event
+    import datetime as dt
+    now = dt.datetime(2026, 6, 28, 9, 0, 0)
+    timed = habit_event({"id": "h1", "title": "Train", "cat": "exercise", "time": "07:30",
+                         "dur": 60, "cadence": "weekly", "days": [1, 3, 5], "target": 12,
+                         "unit": "sets", "cmp": "gte"}, tz="Europe/London", now=now)
+    assert timed["summary"] == "Train"
+    assert timed["start"]["dateTime"] == "2026-06-28T07:30:00"
+    assert timed["start"]["timeZone"] == "Europe/London"
+    assert timed["recurrence"] == ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"]
+    assert timed["extendedProperties"]["private"] == {"app": "physical", "habit": "h1"}
+    untimed = habit_event({"id": "h2", "title": "Skincare", "cadence": "daily"}, now=now)
+    assert "date" in untimed["start"]
+    assert untimed["recurrence"] == ["RRULE:FREQ=DAILY"]
