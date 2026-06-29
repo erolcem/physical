@@ -202,10 +202,14 @@ class _CoachTabState extends ConsumerState<CoachTab>
       if (mounted) setState(() => _messages.add(_Msg('model', reply, actions: actions)));
     } on ApiException catch (e) {
       if (mounted) {
+        // Surface a short server detail so a persistent failure is diagnosable.
+        final detail = e.message.replaceAll('\n', ' ').trim();
+        final hint = detail.isEmpty || detail.length > 180
+            ? '' : '\n($detail)';
         setState(() => _messages.add(_Msg('model',
             e.status == 503
                 ? "I'm not set up on the server yet — add a GEMINI_API_KEY and I'll be right here."
-                : "That one didn't go through — tap send to retry (your message is still in the box).")));
+                : "That one didn't go through — tap send to retry (your message is still in the box).$hint")));
         // Keep the user's text so a retry is one tap away.
         _input.text = text;
       }
@@ -407,17 +411,24 @@ class _CoachTabState extends ConsumerState<CoachTab>
         ]),
       ),
       Expanded(
-        child: _messages.isEmpty
-            ? _welcome()
-            : ListView.builder(
-                controller: _scroll,
-                padding: const EdgeInsets.all(14),
-                itemCount: _messages.length + (_sending ? 1 : 0),
-                itemBuilder: (_, i) {
-                  if (i >= _messages.length) return _bubble(_Msg('model', '…'));
-                  return _messageWidget(_messages[i]);
-                },
-              ),
+        // Tap the conversation (or drag it) to dismiss the keyboard — fixes iOS where the
+        // keyboard otherwise stays up with no way to close it.
+        child: GestureDetector(
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+          behavior: HitTestBehavior.translucent,
+          child: _messages.isEmpty
+              ? _welcome()
+              : ListView.builder(
+                  controller: _scroll,
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.all(14),
+                  itemCount: _messages.length + (_sending ? 1 : 0),
+                  itemBuilder: (_, i) {
+                    if (i >= _messages.length) return _bubble(_Msg('model', '…'));
+                    return _messageWidget(_messages[i]);
+                  },
+                ),
+        ),
       ),
       _inputBar(),
     ]);

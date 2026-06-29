@@ -120,7 +120,12 @@ class PersistentRepository implements Repository {
 
   @override
   void saveFood(FoodEntry entry) {
-    _food.add(entry);
+    final i = _food.indexWhere((f) => f.id == entry.id);
+    if (i >= 0) {
+      _food[i] = entry; // upsert — re-saving an enriched food must not duplicate it
+    } else {
+      _food.add(entry);
+    }
     _persistFood();
   }
 

@@ -108,7 +108,14 @@ class InMemoryRepository implements Repository {
   List<FoodEntry> loadFood() => List.of(_food);
 
   @override
-  void saveFood(FoodEntry entry) => _food.add(entry);
+  void saveFood(FoodEntry entry) {
+    final i = _food.indexWhere((f) => f.id == entry.id);
+    if (i >= 0) {
+      _food[i] = entry; // upsert — re-saving an enriched food must not duplicate it
+    } else {
+      _food.add(entry);
+    }
+  }
 
   @override
   void deleteFood(String id) => _food.removeWhere((e) => e.id == id);

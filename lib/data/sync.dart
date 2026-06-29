@@ -3,6 +3,7 @@
 // the same logs up so the backend (and, later, Google Health) share one store.
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import '../engine/rank_engine.dart' show Log;
 import '../state/habit_providers.dart' show habitsProvider;
 import '../state/log_providers.dart' show dietProvider, workoutProvider, pinsProvider;
@@ -150,6 +151,18 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
     }
     await api.pushBackup(repoExport(repo));
   } catch (_) {/* backup is best-effort */}
+  // Best-effort: mirror habits into Google Calendar automatically (no-op without the
+  // calendar scope — the user reconnects Google once to grant it). Idempotent upsert.
+  try {
+    final habits = [for (final h in ref.read(habitsProvider).habits) h.toJson()];
+    if (habits.isNotEmpty) {
+      String? tzName;
+      try {
+        tzName = await FlutterTimezone.getLocalTimezone();
+      } catch (_) {/* floating times */}
+      unawaited(api.pushCalendar(habits, tzName).catchError((_) => <String, dynamic>{}));
+    }
+  } catch (_) {/* calendar mirror is best-effort */}
   return CloudSyncResult(added, note, needsReconnect: needsReconnect);
 }
 

@@ -42,12 +42,15 @@ final currentBodyweightProvider = Provider<double?>((ref) {
   return (bw != null && bw.isNotEmpty) ? bw.last.value : null;
 });
 
-/// Latest log per metric (the value that currently counts).
+/// Latest log per metric (the value that currently counts) — the one with the newest
+/// timestamp, NOT the last-inserted (logs can be stored out of order after a sync/merge).
 final latestLogsProvider = Provider<Map<String, Log>>((ref) {
   final logs = ref.watch(logsProvider);
+  Log newest(List<Log> ls) =>
+      ls.reduce((a, b) => b.ts.compareTo(a.ts) > 0 ? b : a);
   return {
     for (final e in logs.entries)
-      if (e.value.isNotEmpty) e.key: e.value.last
+      if (e.value.isNotEmpty) e.key: newest(e.value)
   };
 });
 

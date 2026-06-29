@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/achievements.dart';
+import '../data/rank_history.dart' show rankSeries;
 import '../data/metrics.dart';
 import '../data/body_figure_data.dart';
 import '../data/correlation.dart';
@@ -416,7 +417,13 @@ class _OverallBreakdownSheet extends ConsumerWidget {
 
   // Trophy Room — every new overall-rank personal best (tier + I/II/III), newest first.
   Widget _trophyRoom(WidgetRef ref) {
-    final trophies = overallAchievements(ref.watch(logsProvider)['overall_rank'] ?? const []);
+    // Computed LIVE from the current logs (not the persisted backfill), so it correctly
+    // resets/updates when data is deleted — it mirrors the live overall-rank trajectory.
+    final series = rankSeries(ref.watch(logsProvider))['overall_rank'] ?? const {};
+    final overallLogs = [
+      for (final e in series.entries) Log('overall_rank', e.value, ts: '${e.key}T12:00:00')
+    ];
+    final trophies = overallAchievements(overallLogs);
     if (trophies.isEmpty) return const SizedBox.shrink();
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SizedBox(height: 24),
@@ -426,7 +433,7 @@ class _OverallBreakdownSheet extends ConsumerWidget {
           style: const TextStyle(fontSize: 11, color: _muted2)),
       const SizedBox(height: 14),
       SizedBox(
-        height: 116,
+        height: 128,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           padding: EdgeInsets.zero,
@@ -441,8 +448,9 @@ class _OverallBreakdownSheet extends ConsumerWidget {
                 RankBadge(tier: a.tier, sub: a.sub, size: 54),
                 const SizedBox(height: 6),
                 Text('${a.tier} ${a.sub}', textAlign: TextAlign.center,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: col)),
-                Text(_prettyDate(a.date),
+                Text(_prettyDate(a.date), maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 9.5, color: _muted)),
               ]),
             );

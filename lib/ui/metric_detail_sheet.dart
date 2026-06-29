@@ -136,7 +136,10 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
   Widget build(BuildContext context) {
     final m = metricById(widget.metricId);
     final logs = ref.watch(logsProvider)[m.id] ?? const [];
-    final latest = logs.isNotEmpty ? logs.last : null;
+    // Newest by timestamp (logs may be stored out of order after a sync), not last-inserted.
+    final latest = logs.isEmpty
+        ? null
+        : logs.reduce((a, b) => b.ts.compareTo(a.ts) > 0 ? b : a);
     final ranked = latest != null && eng.standards.containsKey(m.id);
     final r = ranked ? eng.scoreLog(latest) : null;
     final c = r != null ? tierColor(r.tier) : const Color(0xFF5A6072);
