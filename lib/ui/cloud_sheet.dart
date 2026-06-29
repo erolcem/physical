@@ -132,10 +132,14 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
       final r = await cloudSync(ref);
       if (mounted) {
         setState(() {
-          _needsReconnect = r.needsReconnect;
-          _msg = r.pulled > 0
+          // Either Google Health expiry OR a missing Calendar scope wants a reconnect.
+          _needsReconnect = r.needsReconnect || r.calendarNeedsReconnect;
+          final base = r.pulled > 0
               ? 'Pulled ${r.pulled} new readings · ${r.note}'
               : 'Up to date · ${r.note}';
+          _msg = r.calendarNeedsReconnect
+              ? '$base\nReconnect Google to auto-add habits to your calendar.'
+              : base;
         });
       }
     } catch (_) {

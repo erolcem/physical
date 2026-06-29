@@ -97,7 +97,9 @@ class CloudSyncResult {
   final int pulled;
   final String note; // short status for the Google leg
   final bool needsReconnect; // the Google Health token expired (7-day testing limit)
-  CloudSyncResult(this.pulled, this.note, {this.needsReconnect = false});
+  final bool calendarNeedsReconnect; // habits couldn't write to Calendar (scope not granted)
+  CloudSyncResult(this.pulled, this.note,
+      {this.needsReconnect = false, this.calendarNeedsReconnect = false});
 }
 
 /// Button action: ask the backend to refresh from Google (best effort), then
@@ -153,8 +155,9 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
     }
     await api.pushBackup(repoExport(repo));
   } catch (_) {/* backup is best-effort */}
-  // Best-effort: mirror habits into Google Calendar automatically (no-op without the
-  // calendar scope — the user reconnects Google once to grant it). Idempotent upsert.
+  // Mirror habits into Google Calendar automatically (idempotent upsert). Awaited so we
+  // know if it needs the calendar scope (then we can prompt a reconnect).
+  var calendarNeedsReconnect = false;
   try {
     final habits = [for (final h in ref.read(habitsProvider).habits) h.toJson()];
     if (habits.isNotEmpty) {
@@ -162,7 +165,11 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
       try {
         tzName = await FlutterTimezone.getLocalTimezone();
       } catch (_) {/* floating times */}
-      unawaited(api.pushCalendar(habits, tzName).catchError((_) => <String, dynamic>{}));
+      try {
+        await api.pushCalendar(habits, tzName);
+      } on ApiException catch (e) {
+        if (e.status == 401 || e.status == 403) calendarNeedsReconnect = true;
+      }
     }
   } catch (_) {/* calendar mirror is best-effort */}
   // AI-personalised notifications — a morning (day ahead) and an evening (how it went)
@@ -187,7 +194,8 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
     unawaited(sched('morning', NotificationService.nudgeMorningId, 8));
     unawaited(sched('evening', NotificationService.nudgeEveningId, 20));
   } catch (_) {/* nudges are best-effort */}
-  return CloudSyncResult(added, note, needsReconnect: needsReconnect);
+  return CloudSyncResult(added, note,
+      needsReconnect: needsReconnect, calendarNeedsReconnect: calendarNeedsReconnect);
 }
 
 /// Pull the cloud snapshot and REPLACE all local data with it (new-device restore).
