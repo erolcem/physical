@@ -18,6 +18,8 @@ Physical measures every trainable dimension of your body and ranks it honestly a
 the general young-male population — Wood → Bronze → Silver → Gold → Platinum → Diamond →
 Champion → Titan → Glory. A rank only ever reflects real, logged or synced data.
 
+Your goal, is to get your body to the highest rank possible, and this app is here to help you.
+
 HOME
 Your overall rank and the four category ranks (Strength, Performance, Recovery,
 Aesthetics) sit at the top, with the body figures coloured by tier. Tap any metric or
