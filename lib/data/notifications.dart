@@ -89,13 +89,14 @@ class NotificationService {
         matchDateTimeComponents: DateTimeComponents.time, // repeat daily
       );
     }
-    // A daily end-of-day accountability nudge to review the checklist (only if any habits).
-    if (habits.isNotEmpty) {
+    await _scheduleAllNudges(); // re-apply cached AI nudges (cancelAll dropped them)
+    // Fallback recap at 9pm only if no AI evening nudge is set (so the user still gets one).
+    if (habits.isNotEmpty && !_nudges.containsKey(nudgeEveningId)) {
       final now = tz.TZDateTime.now(tz.local);
       var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, 21, 0);
       if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
       await _plugin.zonedSchedule(
-        _recapId, 'Daily recap', 'How did today go? Review your habit checklist.',
+        nudgeEveningId, 'Daily recap', 'How did today go? Review your habit checklist.',
         when, details,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
@@ -103,32 +104,36 @@ class NotificationService {
         matchDateTimeComponents: DateTimeComponents.time,
       );
     }
-    await _scheduleNudge(); // re-apply the cached AI nudge (cancelAll dropped it)
   }
 
-  static const int _recapId = 990001; // fixed id for the daily recap reminder
-  static const int _nudgeId = 990002; // fixed id for the AI personalised nudge
-  String? _lastNudge; // cached so syncHabitReminders' cancelAll doesn't drop it
-  int _nudgeHour = 8;
+  // AI nudge slots — morning (the day ahead) + evening (how today went).
+  static const int nudgeMorningId = 990002;
+  static const int nudgeEveningId = 990003;
+  final Map<int, (String, int)> _nudges = {}; // id → (text, hour); cached across cancelAll
 
-  /// Schedule a ONE-OFF AI-personalised nudge for the next [hour] (refreshed each sync
-  /// with fresh text, so it never shows stale advice). No-op off iOS/Android or if empty.
-  Future<void> scheduleAiNudge(String text, {int hour = 8}) async {
+  /// Schedule a ONE-OFF AI-personalised nudge for the next [hour] under a slot [id]
+  /// (refreshed each sync, so it never shows stale advice). No-op off iOS/Android or empty.
+  Future<void> scheduleAiNudge(int id, String text, int hour) async {
     if (text.trim().isEmpty) return;
-    _lastNudge = text.trim();
-    _nudgeHour = hour;
-    await _scheduleNudge();
+    _nudges[id] = (text.trim(), hour);
+    await _scheduleNudge(id);
   }
 
-  Future<void> _scheduleNudge() async {
-    final t = _lastNudge;
-    if (!_supported || t == null) return;
+  Future<void> _scheduleAllNudges() async {
+    for (final id in _nudges.keys.toList()) {
+      await _scheduleNudge(id);
+    }
+  }
+
+  Future<void> _scheduleNudge(int id) async {
+    final n = _nudges[id];
+    if (!_supported || n == null) return;
     if (!_ready) await init();
     final now = tz.TZDateTime.now(tz.local);
-    var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, _nudgeHour);
+    var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, n.$2);
     if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
     await _plugin.zonedSchedule(
-      _nudgeId, 'Physical', t, when, _details,
+      id, 'Physical', n.$1, when, _details,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,

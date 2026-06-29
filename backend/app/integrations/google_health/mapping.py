@@ -59,9 +59,14 @@ def _sample(metric_id, day, value, raw):
 
 # ── per-metric value extractors (operate on the type-named container) ──
 def _hrv(c):
-    # Prefer the real overnight RMSSD; the 'average' field is often 0 on Fitbit.
-    return (_to_float(c.get("deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds"))
-            or _to_float(c.get("averageHeartRateVariabilityMilliseconds")))
+    # Match what the Google Health / Fitbit app SHOWS: the whole-night average RMSSD.
+    # Deep-sleep-only RMSSD reads higher (deep sleep has higher HRV) — that mismatch is
+    # why our value looked off. Fall back to deep-sleep RMSSD only when the average is the
+    # known Fitbit-zero quirk, so we still get a number.
+    avg = _to_float(c.get("averageHeartRateVariabilityMilliseconds"))
+    if avg and avg > 0:
+        return avg
+    return _to_float(c.get("deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds"))
 
 
 def _bodyweight(c):

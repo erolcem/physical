@@ -33,6 +33,18 @@ class InferredNutrition {
   });
 }
 
+/// JSON-encode, replacing any non-finite double (NaN / ±Infinity) with null. Dart's
+/// jsonEncode otherwise writes `NaN`/`Infinity` literals → INVALID JSON the server
+/// rejects, a device-data-dependent failure (e.g. the AI coach "didn't go through" on one
+/// device but not another, because only its data produced such a value).
+String _safeEncode(Object? o) => jsonEncode(_finiteOnly(o));
+Object? _finiteOnly(Object? v) {
+  if (v is double) return v.isFinite ? v : null;
+  if (v is Map) return {for (final e in v.entries) e.key: _finiteOnly(e.value)};
+  if (v is List) return [for (final e in v) _finiteOnly(e)];
+  return v;
+}
+
 class ApiClient {
   final String baseUrl;
   final http.Client _client;
@@ -245,7 +257,7 @@ class ApiClient {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/calendar/push'),
             headers: _headers({'Content-Type': 'application/json'}),
-            body: jsonEncode({'habits': habits, if (tz != null) 'tz': tz}))
+            body: _safeEncode({'habits': habits, if (tz != null) 'tz': tz}))
         .timeout(const Duration(seconds: 45));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
     return jsonDecode(r.body) as Map<String, dynamic>;
@@ -389,7 +401,7 @@ class ApiClient {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/coach/chat'),
             headers: _headers({'Content-Type': 'application/json'}),
-            body: jsonEncode({
+            body: _safeEncode({
               'message': message,
               'history': history,
               'habits': habits,
@@ -408,7 +420,9 @@ class ApiClient {
   }
 
   /// A short, AI-personalised notification line from the user's live context (or null).
+  /// [slot] is 'morning' (day ahead) or 'evening' (reflect on today).
   Future<String?> coachNudge({
+    String slot = 'morning',
     List<Map<String, dynamic>> habits = const [],
     Map<String, dynamic>? ranks,
     Map<String, dynamic>? trends,
@@ -419,8 +433,8 @@ class ApiClient {
       final r = await _client
           .post(Uri.parse('$baseUrl/me/coach/nudge'),
               headers: _headers({'Content-Type': 'application/json'}),
-              body: jsonEncode({
-                'message': 'nudge',
+              body: _safeEncode({
+                'message': slot,
                 'habits': habits,
                 if (ranks != null) 'ranks': ranks,
                 if (trends != null) 'trends': trends,
@@ -489,7 +503,7 @@ class ApiClient {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/coach/context'),
             headers: _headers({'Content-Type': 'application/json'}),
-            body: jsonEncode({
+            body: _safeEncode({
               'habits': habits,
               if (profile != null) 'profile': profile,
               if (diet != null) 'diet': diet,

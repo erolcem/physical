@@ -61,25 +61,31 @@ def chat(body: CoachChatIn,
 
 
 _NUDGE = ("Based ONLY on the USER DATA, write the single most useful one-sentence push "
-          "notification to send this user right now — specific and motivating, grounded in "
-          "their data (today's readiness, a missed habit target, their weakest area, a "
-          "streak, or a notable trend). Max 130 characters, plain text, no markdown, no "
-          "quotes, no emoji. Output ONLY that sentence.")
+          "notification to send this user — specific and motivating, grounded in their data "
+          "(readiness, a missed habit target, their weakest area, a streak, or a notable "
+          "trend). Max 130 characters, plain text, no markdown, no quotes, no emoji. "
+          "Output ONLY that sentence.")
+_SLOTS = {
+    "morning": " Frame it for the MORNING: the day ahead — what to prioritise + the plan.",
+    "evening": " Frame it for the EVENING: reflect on how today went — what was hit/missed.",
+}
 
 
 @router.post("/nudge")
 def nudge(body: CoachChatIn,
           user_id: str = Depends(current_user),
           db: Session = Depends(get_db)):
-    """A short, AI-personalised notification line from the user's live context."""
+    """A short, AI-personalised notification line from the user's live context. The slot
+    ('morning'/'evening', passed in `message`) frames it forward- or backward-looking."""
     if not gemini.configured():
         raise HTTPException(503, "AI coach isn't configured on the server yet")
     samples = list(db.scalars(select(Sample).where(Sample.user_id == user_id)))
     system = compose_system(samples, body.habits, body.profile, body.diet, body.training,
                             body.aesthetics, body.ranks, body.trends, body.correlations,
                             body.workout_sets)
+    instruction = _NUDGE + _SLOTS.get((body.message or "").strip().lower(), "")
     try:
-        reply = gemini.generate(system, [{"role": "user", "text": _NUDGE}])
+        reply = gemini.generate(system, [{"role": "user", "text": instruction}])
     except gemini.GeminiError as e:
         raise HTTPException(502, f"Coach unavailable: {e}")
     line = (reply or "").strip().splitlines()[0].strip().strip('"').strip() if reply else ""

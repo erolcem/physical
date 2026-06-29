@@ -245,7 +245,10 @@ def _rank_lines(ranks: dict | None, samples) -> list[str]:
             lines.append("Categories: " + ", ".join(f"{c} {_fmt_rank(r)}" for c, r in cats.items()))
         mets = ranks.get("metrics") or []
         if mets:
-            srt = sorted(mets, key=lambda m: m.get("rank_value", m.get("top_pct", 100)))
+            def _rv(m):
+                v = m.get("rank_value", m.get("top_pct", 100))
+                return v if isinstance(v, (int, float)) else 100.0  # None-safe sort key
+            srt = sorted(mets, key=_rv)
             def one(m):
                 arrow = _TREND_ARROW.get(m.get("trend", ""), "")
                 val = f"={m['value']:g}" if m.get("value") is not None else ""
@@ -384,8 +387,15 @@ def build_context(samples, habits=None, profile=None, diet=None, training=None,
 def compose_system(samples, habits=None, profile=None, diet=None, training=None,
                    aesthetics=None, ranks=None, trends=None, correlations=None,
                    workout_sets=None) -> str:
-    ctx = build_context(samples, habits, profile, diet, training, aesthetics,
-                        ranks, trends, correlations, workout_sets)
+    # Bulletproof: a malformed value on one device must never crash the coach for it.
+    try:
+        ctx = build_context(samples, habits, profile, diet, training, aesthetics,
+                            ranks, trends, correlations, workout_sets)
+    except Exception:
+        try:
+            ctx = "\n".join(_rank_lines(ranks, samples))  # minimal safe fallback
+        except Exception:
+            ctx = "Data available but could not be summarised; ask the user what to focus on."
     return scrub_pii(f"{SYSTEM_PROMPT}\n\n=== USER DATA ===\n{ctx}")
 
 

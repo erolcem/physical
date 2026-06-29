@@ -165,25 +165,28 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
       unawaited(api.pushCalendar(habits, tzName).catchError((_) => <String, dynamic>{}));
     }
   } catch (_) {/* calendar mirror is best-effort */}
-  // AI-personalised nudge for tomorrow morning's notification (best-effort, refreshed each
-  // sync). Built from the live context the coach also uses.
+  // AI-personalised notifications — a morning (day ahead) and an evening (how it went)
+  // nudge, refreshed each sync from the same live context the coach uses. Best-effort.
   try {
     final logs = ref.read(logsProvider);
     final hs = ref.read(habitsProvider);
-    final nudge = await api.coachNudge(
-      habits: coachHabits(hs.habits, hs.completions,
-          logs: logs, food: ref.read(dietProvider), workouts: ref.read(workoutProvider)),
-      ranks: ref.read(latestLogsProvider).isEmpty
-          ? null
-          : coachRanks(
-              overall: ref.read(overallProvider),
-              categories: ref.read(categoryRanksProvider),
-              latest: ref.read(latestLogsProvider),
-              logs: logs),
-      trends: coachTrends(logs),
-    );
-    if (nudge != null) unawaited(NotificationService.instance.scheduleAiNudge(nudge));
-  } catch (_) {/* nudge is best-effort */}
+    final habitsCtx = coachHabits(hs.habits, hs.completions,
+        logs: logs, food: ref.read(dietProvider), workouts: ref.read(workoutProvider));
+    final ranksCtx = ref.read(latestLogsProvider).isEmpty
+        ? null
+        : coachRanks(
+            overall: ref.read(overallProvider),
+            categories: ref.read(categoryRanksProvider),
+            latest: ref.read(latestLogsProvider),
+            logs: logs);
+    final trendsCtx = coachTrends(logs);
+    Future<void> sched(String slot, int id, int hour) async {
+      final n = await api.coachNudge(slot: slot, habits: habitsCtx, ranks: ranksCtx, trends: trendsCtx);
+      if (n != null) await NotificationService.instance.scheduleAiNudge(id, n, hour);
+    }
+    unawaited(sched('morning', NotificationService.nudgeMorningId, 8));
+    unawaited(sched('evening', NotificationService.nudgeEveningId, 20));
+  } catch (_) {/* nudges are best-effort */}
   return CloudSyncResult(added, note, needsReconnect: needsReconnect);
 }
 
