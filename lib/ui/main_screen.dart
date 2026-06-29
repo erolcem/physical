@@ -5,6 +5,7 @@ import '../data/sync.dart' show apiClientProvider, cloudSync;
 import '../state/habit_providers.dart';
 import 'cloud_sheet.dart';
 import 'coach_screen.dart';
+import 'guide_sheet.dart';
 import 'habits_screen.dart';
 import 'home_screen.dart';
 import 'progress_screen.dart';
@@ -59,6 +60,11 @@ class _MainScreenState extends ConsumerState<MainScreen>
         backgroundColor: const Color(0xFF08091A),
         centerTitle: true,
         toolbarHeight: 64,
+        leading: IconButton(
+          tooltip: 'Guide',
+          onPressed: () => openGuideSheet(context),
+          icon: const Icon(Icons.help_outline),
+        ),
         // Centred logo that fits the toolbar — sits cleanly above the page tabs without
         // overflowing onto them or pushing the body content down.
         title: Image.asset('assets/brand/header.png',
