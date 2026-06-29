@@ -44,7 +44,8 @@ def chat(body: CoachChatIn,
     samples = list(db.scalars(select(Sample).where(Sample.user_id == user_id)))
     system = compose_system(samples, body.habits, body.profile,
                             body.diet, body.training, body.aesthetics,
-                            body.ranks, body.trends, body.correlations, body.workout_sets)
+                            body.ranks, body.trends, body.correlations, body.workout_sets,
+                            body.metric_history, body.energy)
     turns = [{"role": t.role, "text": t.text} for t in body.history]
     turns.append({"role": "user", "text": body.message})
     try:

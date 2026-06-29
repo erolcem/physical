@@ -121,6 +121,15 @@ class _CoachTabState extends ConsumerState<CoachTab>
   Map<String, dynamic> _trendsCtx() => coachTrends(ref.read(logsProvider));
   List<Map<String, dynamic>> _correlationsCtx() => coachCorrelations(ref.read(logsProvider));
   List<Map<String, dynamic>> _setsCtx() => coachWorkoutSets(ref.read(workoutProvider));
+  // Full per-metric history (all metrics incl. background) + energy balance, so the coach
+  // sees the raw data over time and can make its own connections.
+  Map<String, List<double>> _historyCtx() => coachHistory(ref.read(logsProvider));
+  Map<String, dynamic> _energyCtx() {
+    final latest = ref.read(latestLogsProvider);
+    return coachEnergy(ref.read(dietProvider), ref.read(workoutProvider),
+        weightKg: ref.read(currentBodyweightProvider),
+        heightCm: latest['height']?.value, age: _age);
+  }
 
   // Local, LLM-free insights for the welcome screen (instant + offline).
   List<({String title, String body, String ask})> _insights() => coachInsights(
@@ -195,7 +204,8 @@ class _CoachTabState extends ConsumerState<CoachTab>
           message: text, history: history, habits: _habitsCtx(), profile: _profileCtx(),
           diet: _dietCtx(), training: _trainingCtx(), aesthetics: _aestheticsCtx(),
           ranks: _ranksCtx(), trends: _trendsCtx(),
-          correlations: _correlationsCtx(), workoutSets: _setsCtx());
+          correlations: _correlationsCtx(), workoutSets: _setsCtx(),
+          metricHistory: _historyCtx(), energy: _energyCtx());
       final reply = (res['reply'] as String?) ?? '';
       final actions =
           ((res['actions'] as List?) ?? const []).cast<Map<String, dynamic>>();

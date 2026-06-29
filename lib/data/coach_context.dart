@@ -8,9 +8,57 @@ import 'habit_verify.dart';
 import 'habits.dart';
 import 'metrics.dart' show metricById, metrics, rankedCountByCategory;
 import 'workout.dart';
-import 'diet.dart' show FoodEntry;
+import 'diet.dart' show FoodEntry, dietTotals, bmrMifflin;
 import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log, RankResult;
+
+/// Downsampled daily history for EVERY logged metric (ranked AND background) over the last
+/// [window] days, capped to [maxPoints] points each (evenly sampled, newest kept). Lets the
+/// coach see the real data over time and find its own connections. Excludes the derived
+/// rank pseudo-metrics (circular). Compact: {metricId: [oldest … newest]}.
+Map<String, List<double>> coachHistory(Map<String, List<Log>> logs,
+    {int window = 90, int maxPoints = 30}) {
+  final cutoff = DateTime.now().subtract(Duration(days: window));
+  final out = <String, List<double>>{};
+  for (final e in logs.entries) {
+    if (e.key.endsWith('_rank')) continue; // derived/circular
+    final byDay = <String, double>{};
+    for (final l in e.value) {
+      final d = DateTime.tryParse(l.ts);
+      if (d == null || d.isBefore(cutoff)) continue;
+      if (l.ts.length >= 10) byDay[l.ts.substring(0, 10)] = l.value; // last per day
+    }
+    if (byDay.isEmpty) continue;
+    final days = byDay.keys.toList()..sort();
+    var vals = [for (final d in days) byDay[d]!];
+    if (vals.length > maxPoints) {
+      final step = vals.length / maxPoints;
+      vals = [
+        for (var i = 0; i < maxPoints - 1; i++) vals[(i * step).floor()],
+        vals.last, // always keep the newest
+      ];
+    }
+    out[e.key] = [for (final v in vals) double.parse(v.toStringAsFixed(2))];
+  }
+  return out;
+}
+
+/// Daily energy balance over the last [days] days: calories IN (food) and estimated
+/// calories OUT (Mifflin BMR + active calories from sessions). Bodyweight is in history,
+/// so the coach can relate intake/expenditure to weight change and adjust its advice.
+Map<String, dynamic> coachEnergy(List<FoodEntry> entries, List<WorkoutSession> sessions,
+    {double? weightKg, double? heightCm, int? age, int days = 30}) {
+  final keys = lastNDays(days);
+  final inSeries = [for (final d in keys) dietTotals(entries, d).calories.round()];
+  if (inSeries.every((c) => c == 0)) return const {};
+  final out = <String, dynamic>{'in': inSeries};
+  if (weightKg != null && heightCm != null && age != null) {
+    final bmr = bmrMifflin(weightKg, heightCm, age);
+    out['out'] = [for (final d in keys) (bmr + activeCaloriesOn(sessions, d)).round()];
+    out['bmr'] = bmr.round();
+  }
+  return out;
+}
 
 Map<String, dynamic> _rr(RankResult r) =>
     {'tier': r.tier, 'sub': r.sub, 'top_pct': r.topPct, 'rank_value': r.rankValue};

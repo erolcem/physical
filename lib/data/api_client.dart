@@ -397,6 +397,8 @@ class ApiClient {
     Map<String, dynamic>? trends,
     List<Map<String, dynamic>> correlations = const [],
     List<Map<String, dynamic>> workoutSets = const [],
+    Map<String, List<double>> metricHistory = const {},
+    Map<String, dynamic>? energy,
   }) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/coach/chat'),
@@ -413,8 +415,10 @@ class ApiClient {
               if (trends != null) 'trends': trends,
               if (correlations.isNotEmpty) 'correlations': correlations,
               if (workoutSets.isNotEmpty) 'workout_sets': workoutSets,
+              if (metricHistory.isNotEmpty) 'metric_history': metricHistory,
+              if (energy != null && energy.isNotEmpty) 'energy': energy,
             }))
-        .timeout(const Duration(seconds: 90));
+        .timeout(const Duration(seconds: 120));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
     return jsonDecode(r.body) as Map<String, dynamic>;
   }

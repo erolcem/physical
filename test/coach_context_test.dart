@@ -78,4 +78,29 @@ void main() {
     // weak area is the lowest rank_value category (recovery)
     expect(ins.firstWhere((i) => i.title == 'Weakest area').body.contains('recovery'), isTrue);
   });
+
+  test('coachHistory returns downsampled per-metric series incl. background metrics', () {
+    final base = DateTime(2026, 5, 1);
+    final logs = {
+      'bench': [for (var i = 0; i < 50; i++) Log('bench', 100 + i.toDouble(),
+          bodyweight: 80, ts: base.add(Duration(days: i)).toIso8601String())],
+      'steps': [for (var i = 0; i < 5; i++) Log('steps', 8000 + i * 100.0,
+          ts: base.add(Duration(days: i)).toIso8601String())], // background metric
+      'overall_rank': [Log('overall_rank', 3, ts: '2026-06-01T12:00:00')], // excluded
+    };
+    final h = coachHistory(logs, window: 365, maxPoints: 30);
+    expect(h.containsKey('bench'), isTrue);
+    expect(h.containsKey('steps'), isTrue, reason: 'background metrics included');
+    expect(h.containsKey('overall_rank'), isFalse, reason: 'derived series excluded');
+    expect(h['bench']!.length, lessThanOrEqualTo(30)); // downsampled
+  });
+
+  test('coachEnergy gives in/out series from food + sessions', () {
+    final today = todayKey();
+    final food = [FoodEntry(id: 'f', dateKey: today, name: 'meal', calories: 2200, protein: 150)];
+    final e = coachEnergy(food, const [], weightKg: 80, heightCm: 180, age: 28, days: 7);
+    expect((e['in'] as List).last, 2200);
+    expect(e['out'], isNotNull);   // BMR + active
+    expect(e['bmr'], isNotNull);
+  });
 }

@@ -80,6 +80,8 @@ class CoachChatIn(BaseModel):
     trends: dict | None = None      # {metric_id: {change, direction, recent:[..]}}
     correlations: list[dict] = []   # [{a, b, r, n}] strong day-aligned correlations
     workout_sets: list[dict] = []   # [{date, type, exercises:[{name, sets:[{w,r}], volume}]}]
+    metric_history: dict | None = None  # {metric_id: [downsampled daily values, oldest→newest]}
+    energy: dict | None = None      # {in:[daily kcal], out:[daily est kcal], bmr}
 
 
 class CoachChatOut(BaseModel):
