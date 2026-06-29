@@ -3,6 +3,8 @@
 // Verification is automatic from the day's logs (a workout, a food log, or a linked
 // metric). Shows today's roster (actionable), a weekly schedule, and per-habit
 // streaks. Local-first.
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -110,7 +112,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
             const SizedBox(height: 12),
             _budgetCard(habits),
             const SizedBox(height: 12),
-            if (dueToday.isNotEmpty) _densityBar(dueToday),
+            if (dueToday.isNotEmpty) _dayTimeline(context, ref, dueToday, done),
             const SizedBox(height: 12),
             const Text('TODAY', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
             const SizedBox(height: 6),
@@ -218,52 +220,137 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     );
   }
 
-  // ── 24h density bar: how the day's habits are distributed across the clock ──
-  Widget _densityBar(List<Habit> due) {
-    final d = hourDensity(due);
-    final maxC = [...d, 1].reduce((a, b) => a > b ? a : b);
-    final untimed = due.where((h) => h.time == null).length;
-    final nowHour = DateTime.now().hour;
+  // ── Day timeline: a Google-Calendar-style hour grid with habit blocks placed by time ──
+  Widget _dayTimeline(BuildContext context, WidgetRef ref, List<Habit> due,
+      bool Function(Habit, String) done) {
+    int hourOf(Habit h) => int.tryParse(h.time!.split(':').first) ?? 0;
+    int minOf(Habit h) {
+      final p = h.time!.split(':');
+      return p.length > 1 ? (int.tryParse(p[1]) ?? 0) : 0;
+    }
+    final timed = [for (final h in due) if (h.time != null) h]..sort((a, b) => a.time!.compareTo(b.time!));
+    final untimed = [for (final h in due) if (h.time == null) h];
+    final now = DateTime.now();
+
+    const hourH = 44.0;
+    const gutter = 42.0;
+    // Window the grid to the habits (clamped to a sensible 6am–10pm default span).
+    var startH = 6, endH = 22;
+    if (timed.isNotEmpty) {
+      startH = math.min(startH, timed.map(hourOf).reduce(math.min));
+      endH = math.max(endH,
+          timed.map((h) => hourOf(h) + ((h.durationMins > 0 ? h.durationMins : 30) / 60).ceil()).reduce(math.max));
+    }
+    endH = math.min(24, endH);
+    final rows = endH - startH;
+
+    Widget block(Habit h) {
+      final tkey = todayKey();
+      final isDone = done(h, tkey);
+      final c = Color(sectionOf(h.section).color);
+      final top = (hourOf(h) - startH + minOf(h) / 60.0) * hourH;
+      final height = math.max(26.0, (h.durationMins > 0 ? h.durationMins : 30) / 60.0 * hourH - 3);
+      return Positioned(
+        top: top, left: gutter + 6, right: 6, height: height,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: h.verify == 'manual'
+                ? () => ref.read(habitsProvider.notifier).toggleToday(h.id)
+                : () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    duration: const Duration(seconds: 2),
+                    content: Text('"${h.title}" verifies from your data.'))),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: c.withValues(alpha: isDone ? 0.28 : 0.14),
+                borderRadius: BorderRadius.circular(8),
+                border: Border(left: BorderSide(color: c, width: 3)),
+              ),
+              child: Row(children: [
+                Expanded(
+                  child: Text('${sectionOf(h.section).emoji} ${h.title}',
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w700,
+                          color: isDone ? _muted : Colors.white,
+                          decoration: isDone ? TextDecoration.lineThrough : null)),
+                ),
+                if (isDone) const Icon(Icons.check_circle, color: _teal, size: 15),
+              ]),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Card(
       color: _card,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            const Text('THROUGH THE DAY', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+            const Text('TODAY’S TIMELINE', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
             const Spacer(),
-            if (untimed > 0) Text('$untimed anytime', style: const TextStyle(fontSize: 10.5, color: _muted)),
+            if (untimed.isNotEmpty)
+              Text('${untimed.length} anytime', style: const TextStyle(fontSize: 10.5, color: _muted)),
           ]),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           SizedBox(
-            height: 40,
-            child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              for (var h = 0; h < 24; h++)
-                Expanded(
-                  child: Container(
-                    height: d[h] == 0 ? 3 : 6 + 32 * (d[h] / maxC),
-                    margin: const EdgeInsets.symmetric(horizontal: 1),
-                    decoration: BoxDecoration(
-                      color: d[h] > 0
-                          ? (h == nowHour ? _teal : _accent)
-                          : (h == nowHour ? _teal.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.06)),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
+            height: rows * hourH,
+            child: Stack(children: [
+              // Hour gridlines + labels.
+              for (var i = 0; i <= rows; i++)
+                Positioned(
+                  top: i * hourH, left: 0, right: 0,
+                  child: Row(children: [
+                    SizedBox(width: gutter,
+                        child: Text(_hourLabel(startH + i),
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(fontSize: 9.5, color: _muted))),
+                    const SizedBox(width: 6),
+                    Expanded(child: Container(height: 1, color: Colors.white.withValues(alpha: 0.06))),
+                  ]),
                 ),
+              // "Now" line.
+              if (now.hour >= startH && now.hour < endH)
+                Positioned(
+                  top: (now.hour - startH + now.minute / 60.0) * hourH, left: gutter, right: 0,
+                  child: Row(children: [
+                    Container(width: 6, height: 6,
+                        decoration: const BoxDecoration(color: _teal, shape: BoxShape.circle)),
+                    Expanded(child: Container(height: 1.5, color: _teal.withValues(alpha: 0.6))),
+                  ]),
+                ),
+              for (final h in timed) block(h),
             ]),
           ),
-          const SizedBox(height: 4),
-          const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('12a', style: TextStyle(fontSize: 9, color: _muted)),
-            Text('6a', style: TextStyle(fontSize: 9, color: _muted)),
-            Text('12p', style: TextStyle(fontSize: 9, color: _muted)),
-            Text('6p', style: TextStyle(fontSize: 9, color: _muted)),
-            Text('12a', style: TextStyle(fontSize: 9, color: _muted)),
-          ]),
+          if (untimed.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final h in untimed)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Color(sectionOf(h.section).color).withValues(alpha: done(h, todayKey()) ? 0.28 : 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text('${sectionOf(h.section).emoji} ${h.title}${done(h, todayKey()) ? ' ✓' : ''}',
+                      style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                ),
+            ]),
+          ],
         ]),
       ),
     );
+  }
+
+  static String _hourLabel(int h) {
+    final hh = h % 24;
+    final ampm = hh < 12 ? 'a' : 'p';
+    final h12 = hh % 12 == 0 ? 12 : hh % 12;
+    return '$h12$ampm';
   }
 
   // ── Week view: a 7-day calendar grid with each day's habits as section-coloured chips ──
