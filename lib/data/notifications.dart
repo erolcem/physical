@@ -64,17 +64,19 @@ class NotificationService {
     _ready = true;
   }
 
+  static const _details = NotificationDetails(
+    android: AndroidNotificationDetails('habits', 'Habit reminders',
+        channelDescription: 'Daily reminders for your habits',
+        importance: Importance.defaultImportance),
+    iOS: DarwinNotificationDetails(),
+  );
+
   /// Cancel and re-schedule daily reminders to match the current timed habits.
   Future<void> syncHabitReminders(List<Habit> habits) async {
     if (!_supported) return;
     if (!_ready) await init();
     await _plugin.cancelAll();
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails('habits', 'Habit reminders',
-          channelDescription: 'Daily reminders for your habits',
-          importance: Importance.defaultImportance),
-      iOS: DarwinNotificationDetails(),
-    );
+    const details = _details;
     for (final r in habitReminders(habits)) {
       final now = tz.TZDateTime.now(tz.local);
       var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, r.hour, r.minute);
@@ -101,7 +103,35 @@ class NotificationService {
         matchDateTimeComponents: DateTimeComponents.time,
       );
     }
+    await _scheduleNudge(); // re-apply the cached AI nudge (cancelAll dropped it)
   }
 
   static const int _recapId = 990001; // fixed id for the daily recap reminder
+  static const int _nudgeId = 990002; // fixed id for the AI personalised nudge
+  String? _lastNudge; // cached so syncHabitReminders' cancelAll doesn't drop it
+  int _nudgeHour = 8;
+
+  /// Schedule a ONE-OFF AI-personalised nudge for the next [hour] (refreshed each sync
+  /// with fresh text, so it never shows stale advice). No-op off iOS/Android or if empty.
+  Future<void> scheduleAiNudge(String text, {int hour = 8}) async {
+    if (text.trim().isEmpty) return;
+    _lastNudge = text.trim();
+    _nudgeHour = hour;
+    await _scheduleNudge();
+  }
+
+  Future<void> _scheduleNudge() async {
+    final t = _lastNudge;
+    if (!_supported || t == null) return;
+    if (!_ready) await init();
+    final now = tz.TZDateTime.now(tz.local);
+    var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, _nudgeHour);
+    if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
+    await _plugin.zonedSchedule(
+      _nudgeId, 'Physical', t, when, _details,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
 }

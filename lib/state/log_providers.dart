@@ -2,7 +2,7 @@
 // (workout session) logging. Workouts are a training/volume log decoupled from
 // ranks (lifts are logged separately for ranking); both feed the coach + habits.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/api_client.dart' show ApiClient;
+import '../data/api_client.dart' show ApiClient, InferredNutrition;
 import '../data/correlation.dart';
 import '../data/diet.dart';
 import '../data/habits.dart' show todayKey;
@@ -73,24 +73,40 @@ class DietNotifier extends StateNotifier<List<FoodEntry>> {
 
   /// Fill the diet-health radar for foods that have macros but no health axes (mainly
   /// Google-imported food) by asking the AI to infer health points from the food name.
-  /// Best-effort + capped; recent foods first. Returns how many were enriched.
-  Future<int> enrichFoodHealth(ApiClient api, {int max = 25}) async {
-    final pending = [for (final f in state) if (f.health.isEmpty) f]
+  ///
+  /// Fast + resilient: (1) DEDUPES by food name so the same item (e.g. "oatmeal" logged
+  /// daily) is inferred ONCE and applied to every copy; (2) runs the AI calls in PARALLEL
+  /// batches instead of one-at-a-time; (3) writes results + refreshes the radar after each
+  /// batch so it fills PROGRESSIVELY rather than all-at-once at the end. Best-effort.
+  Future<int> enrichFoodHealth(ApiClient api, {int maxNames = 40}) async {
+    final pending = [for (final f in state) if (f.health.isEmpty && f.calories > 0) f]
       ..sort((a, b) => b.dateKey.compareTo(a.dateKey));
+    if (pending.isEmpty) return 0;
+    final byName = <String, List<FoodEntry>>{};
+    for (final f in pending) {
+      (byName[f.name.trim().toLowerCase()] ??= []).add(f);
+    }
+    final names = byName.keys.take(maxNames).toList();
     var done = 0;
-    for (final f in pending.take(max)) {
-      try {
-        final n = await api.inferNutrition(f.name);
-        if (n.health.isNotEmpty) {
-          repo.saveFood(f.copyWith(health: n.health,
-              micros: f.micros.isEmpty ? n.micros : null));
+    const batch = 5; // parallel AI calls per round
+    for (var i = 0; i < names.length; i += batch) {
+      final end = i + batch > names.length ? names.length : i + batch;
+      final results = await Future.wait([
+        for (final name in names.sublist(i, end))
+          api.inferNutrition(byName[name]!.first.name)
+              .then<InferredNutrition?>((n) => n)
+              .catchError((_) => null)
+      ]);
+      for (var k = i; k < end; k++) {
+        final n = results[k - i];
+        if (n == null || n.health.isEmpty) continue;
+        for (final f in byName[names[k]]!) {
+          repo.saveFood(f.copyWith(health: n.health, micros: f.micros.isEmpty ? n.micros : null));
           done++;
         }
-      } catch (_) {/* one failure shouldn't stop the rest */}
+      }
+      if (mounted) state = repo.loadFood(); // progressive radar fill after each batch
     }
-    // `mounted` guard: enrichment runs in the background during sync, which may dispose
-    // this notifier (dietProvider invalidate) before we finish — the caller refreshes.
-    if (done > 0 && mounted) state = repo.loadFood();
     return done;
   }
 }

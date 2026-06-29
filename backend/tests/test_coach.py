@@ -186,3 +186,17 @@ def test_scrub_pii_strips_email_and_long_ids_not_data():
     s = scrub_pii("contact a@b.com id 1234567890 but bench 80x8 sets stay")
     assert "a@b.com" not in s and "1234567890" not in s
     assert "80x8" in s  # set data preserved
+
+
+def test_nudge_endpoint(client, monkeypatch):
+    from app.integrations.gemini import client as gem
+    monkeypatch.setattr(gem, "configured", lambda: True)
+    monkeypatch.setattr(gem, "generate",
+                        lambda system, turns, **kw: 'Readiness 78 — great day to push legs.')
+    r = client.post("/me/coach/nudge", json={
+        "message": "nudge",
+        "habits": [{"title": "Train", "section": "exercise"}],
+        "ranks": {"overall": {"tier": "Gold", "sub": "II", "top_pct": 20}},
+    })
+    assert r.status_code == 200
+    assert r.json()["nudge"] == "Readiness 78 — great day to push legs."

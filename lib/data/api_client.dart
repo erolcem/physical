@@ -407,6 +407,35 @@ class ApiClient {
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
+  /// A short, AI-personalised notification line from the user's live context (or null).
+  Future<String?> coachNudge({
+    List<Map<String, dynamic>> habits = const [],
+    Map<String, dynamic>? ranks,
+    Map<String, dynamic>? trends,
+    Map<String, dynamic>? profile,
+    Map<String, dynamic>? diet,
+  }) async {
+    try {
+      final r = await _client
+          .post(Uri.parse('$baseUrl/me/coach/nudge'),
+              headers: _headers({'Content-Type': 'application/json'}),
+              body: jsonEncode({
+                'message': 'nudge',
+                'habits': habits,
+                if (ranks != null) 'ranks': ranks,
+                if (trends != null) 'trends': trends,
+                if (profile != null) 'profile': profile,
+                if (diet != null) 'diet': diet,
+              }))
+          .timeout(const Duration(seconds: 30));
+      if (r.statusCode != 200) return null;
+      final s = (jsonDecode(r.body) as Map<String, dynamic>)['nudge'] as String?;
+      return (s != null && s.trim().isNotEmpty) ? s.trim() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Whether nutrition auto-fill is available (Gemini configured server-side).
   Future<bool> nutritionConfigured() async {
     try {

@@ -9,6 +9,8 @@ import '../state/habit_providers.dart' show habitsProvider;
 import '../state/log_providers.dart' show dietProvider, workoutProvider, pinsProvider;
 import '../state/providers.dart';
 import 'api_client.dart';
+import 'coach_context.dart' show coachHabits, coachRanks, coachTrends;
+import 'notifications.dart' show NotificationService;
 import 'rank_history.dart' show backfillRankLogs;
 import 'readiness.dart' show backfillReadinessLogs;
 import 'repository.dart';
@@ -163,6 +165,25 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
       unawaited(api.pushCalendar(habits, tzName).catchError((_) => <String, dynamic>{}));
     }
   } catch (_) {/* calendar mirror is best-effort */}
+  // AI-personalised nudge for tomorrow morning's notification (best-effort, refreshed each
+  // sync). Built from the live context the coach also uses.
+  try {
+    final logs = ref.read(logsProvider);
+    final hs = ref.read(habitsProvider);
+    final nudge = await api.coachNudge(
+      habits: coachHabits(hs.habits, hs.completions,
+          logs: logs, food: ref.read(dietProvider), workouts: ref.read(workoutProvider)),
+      ranks: ref.read(latestLogsProvider).isEmpty
+          ? null
+          : coachRanks(
+              overall: ref.read(overallProvider),
+              categories: ref.read(categoryRanksProvider),
+              latest: ref.read(latestLogsProvider),
+              logs: logs),
+      trends: coachTrends(logs),
+    );
+    if (nudge != null) unawaited(NotificationService.instance.scheduleAiNudge(nudge));
+  } catch (_) {/* nudge is best-effort */}
   return CloudSyncResult(added, note, needsReconnect: needsReconnect);
 }
 
