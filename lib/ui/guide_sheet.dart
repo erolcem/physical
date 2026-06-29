@@ -14,37 +14,48 @@ const _muted = Color(0xFF8A90B0);
 /// lines ending in ":". Keep it as one big string.
 const String guideText = '''
 WELCOME TO PHYSICAL
-Physical measures every trainable dimension of your body and ranks it honestly against
-the general young-male population — Wood → Bronze → Silver → Gold → Platinum → Diamond →
-Champion → Titan → Glory. A rank only ever reflects real, logged or synced data.
-
-Your goal, is to get your body to the highest rank possible, and this app is here to help you.
+Physical is a quest; to get your body to the highest rank possible. 
+Ranks are based on every trainable dimension of your body and compared against
+the general young-male population.
+Will you achieve the highest rank your body can be?
 
 HOME
-Your overall rank and the four category ranks (Strength, Performance, Recovery,
-Aesthetics) sit at the top, with the body figures coloured by tier. Tap any metric or
-muscle to open its detail — log a value, see the tier ladder, and read how it's measured.
-Tap the overall rank to open the full breakdown + your Trophy Room.
+Here is where you will see your ranks,
+At the top are the overall rank and the four category ranks (Strength, Performance, Recovery,
+Aesthetics).
+Below are body figures coloured by rank, they house individual ranks. 
+Tap any metric or muscle to open its detail — log a value, see the tier ladder, and read how it's measured.
 
 PROGRESS
-Every metric, graphable over time. Each section also plots its category rank, and the
-Compare tab overlays any two metrics. Exercise and Diet live here too.
+To help on your quest, presented here is everything data related.
+Every metric, graphable over time. 
+This includes metrics that aren't ranked.
+You can plot, compare and also see diet, sleep and exercise here too.
 
 HABITS
-Build a daily/weekly checklist. Auto-verified habits (sleep, training, diet, steps…) tick
-themselves from your real data — you can't just tap them done. Manual habits (skincare,
-journaling…) you tick yourself. The timeline shows your day; "Calendar" pushes habits to
+Helping you stay accountable too, are the habits section.
+Build a daily/weekly checklist. 
+Auto-verified habits (sleep, training, diet, steps…) tick
+themselves from your real data — you can't just tap them done. 
+Manual habits (skincare,journaling…) you tick yourself. 
+The timeline shows your day; "Calendar" pushes habits to
 your Google Calendar; reminders + an AI nudge keep you accountable.
 
 COACH
+To aid you even further, is an AI to iterate on your data and habits.
+It continuously takes initiative to improve your habits for your quest.
 Your AI coach sees your ranks, full history, trends, correlations, workout sets and
-habits — and never your identity. Ask anything, or use a function (sleep review, find
+habits — and never your identity. 
+Ask anything, or use a function (sleep review, find
 correlations, weekly review…). It can propose habit changes you apply in one tap.
 
 SYNC (top-right ☁)
-Sign in with Google to back up everything and pull your Google Health / Fitbit data
-(sleep, HRV, steps, weight, nutrition). Your data stays local-first; sync just keeps your
-devices in step. Reconnect here if Google asks.
+This step 1 connected your account and your smart watch data. 
+Sign in with Google to back up everything and make sure to pull your Google Health / Fitbit data
+(sleep, HRV, steps, weight, nutrition). 
+Your data stays local-first; sync just keeps your devices in step. Reconnect here if Google asks.
+exercise, diet and sleep data, and a lot of recovery data automatically and exclusively comes from google health.
+
 ''';
 
 void openGuideSheet(BuildContext context) {
@@ -106,7 +117,7 @@ class _GuideSheet extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(10)),
-              child: const Text('Tip: edit this guide in lib/ui/guide_sheet.dart (guideText).',
+              child: const Text('Never give up',
                   style: TextStyle(fontSize: 11, color: _muted)),
             ),
           ]),
