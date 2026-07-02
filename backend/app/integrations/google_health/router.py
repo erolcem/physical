@@ -11,6 +11,7 @@ source_id), so re-syncing never double-counts.
 """
 import datetime as dt
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -219,6 +220,23 @@ def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
                                          "sample": pts[0] if pts else None}
         except Exception as e:
             out[f"_probe:{cand}"] = {"error": str(e)[:200]}
+    # Calendar probe: is the SEPARATE calendar token present, and does the
+    # Calendar API answer? (SERVICE_DISABLED here = the API is switched off in
+    # the Cloud console — the usual reason "nothing appears on my calendar".)
+    cal = db.get(GoogleCalendarToken, user_id)
+    if cal is None:
+        out["_calendar"] = {"connected": False}
+    else:
+        try:
+            access = _valid_access_token(db, cal)
+            r = httpx.get(
+                "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+                headers={"Authorization": f"Bearer {access}"},
+                params={"maxResults": 1}, timeout=20)
+            out["_calendar"] = {"connected": True, "status": r.status_code,
+                                "body": r.text[:400] if r.status_code >= 400 else "ok"}
+        except Exception as e:
+            out["_calendar"] = {"connected": True, "error": str(e)[:300]}
     # Confirmed working type IDs: exercise (sessions), steps, heart-rate,
     # active-zone-minutes (all ported by /sync). skin-temperature + cardio-load aren't
     # exposed — cardio load is reconstructed per exercise via Edwards' TRIMP.

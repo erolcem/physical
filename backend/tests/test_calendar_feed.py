@@ -59,3 +59,31 @@ def test_habit_event_timed_always_has_a_timezone():
     # All-day (untimed) events don't need one.
     ev3 = habit_event({"id": "h", "title": "Read"})
     assert "timeZone" not in ev3["start"] and "date" in ev3["start"]
+
+
+def test_calendar_push_flags_disabled_api(client, monkeypatch):
+    """SERVICE_DISABLED from Google (Calendar API off in the Cloud console) must
+    surface as a distinct 412, not a generic 'reconnect' the user can't fix."""
+    import datetime as dt
+    import httpx
+    from app.db import get_db
+    from app.main import app as _app
+    from app.models import GoogleCalendarToken
+    gen = _app.dependency_overrides[get_db]()
+    db = next(gen)
+    db.merge(GoogleCalendarToken(
+        user_id="local-dev", access_token="a", refresh_token="r",
+        expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1),
+        scope="https://www.googleapis.com/auth/calendar.events"))
+    db.commit()
+
+    def fake_get(url, **kw):
+        return httpx.Response(
+            403, text='{"error": {"status": "PERMISSION_DENIED", "details": '
+                      '[{"reason": "SERVICE_DISABLED"}]}}',
+            request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    r = client.post("/me/calendar/push", json={"habits": [{"id": "h", "title": "T"}]})
+    assert r.status_code == 412
+    assert "calendar_api_disabled" in r.json()["detail"]

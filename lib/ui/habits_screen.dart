@@ -66,12 +66,16 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         habitGoalMet(h, day, logs: logs, food: food, workouts: workouts);
     double? measured(Habit h, String day) =>
         habitMeasured(h, day, logs: logs, food: food, workouts: workouts);
-    // Evidence-only: auto-verifiable habits are done ONLY from real data — the AI
-    // verifier's verdict when it has run, else the rule-based check. Manual habits
-    // are done when ticked.
+    // Forgiving model: a tick always counts; evidence (AI verdict first, else the
+    // rule-based check) can ALSO complete auto-verifiable habits on its own — and
+    // earns the "verified" badge a bare tick doesn't get.
     bool done(Habit h, String day) => habitDoneOn(h, day,
         logs: logs, food: food, workouts: workouts, ticked: st.completions[h.id],
         aiVerdict: st.aiVerdictFor(h.id, day));
+    // Verified = evidence-backed (AI verdict when it has run, else rules).
+    bool verified(Habit h, String day) =>
+        h.verify != 'manual' &&
+        (st.aiVerdictFor(h.id, day) ?? met(h, day)) == true;
 
     // Time-ordered: timed habits first (by clock), then untimed.
     int byTime(Habit a, Habit b) {
@@ -173,9 +177,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           else ...[
             _summaryCard(doneCount, dueToday.length,
                 label: _dayLabel(_selected).toUpperCase(),
-                verified: dueToday
-                    .where((h) => h.verify != 'manual' && done(h, dayKey0))
-                    .length,
+                verified: dueToday.where((h) => verified(h, dayKey0)).length,
                 missed: [for (final h in dueToday) if (!done(h, dayKey0)) h]),
             const SizedBox(height: 12),
             _budgetCard(habits),
@@ -197,11 +199,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                     day: dayKey0,
                     done: done(h, dayKey0),
                     streak: currentStreak(_doneDaysOf(h, done)),
-                    status: h.verify == 'manual'
-                        ? ((st.completions[h.id]?.contains(dayKey0) ?? false)
+                    status: verified(h, dayKey0)
+                        ? HabitStatus.verified
+                        : ((st.completions[h.id]?.contains(dayKey0) ?? false)
                             ? HabitStatus.manual
-                            : HabitStatus.notDone)
-                        : (done(h, dayKey0) ? HabitStatus.verified : HabitStatus.notDone),
+                            : HabitStatus.notDone),
                     aiJudged: st.aiVerdictFor(h.id, dayKey0) != null,
                     measuredToday: measured(h, dayKey0),
                     last7: lastNDays(7),
@@ -402,11 +404,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
-            onTap: h.verify == 'manual'
-                ? () => ref.read(habitsProvider.notifier).toggleOn(h.id, dayKey0)
-                : () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    duration: const Duration(seconds: 2),
-                    content: Text('"${h.title}" verifies from your data.'))),
+            onTap: () => ref.read(habitsProvider.notifier).toggleOn(h.id, dayKey0),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
@@ -611,15 +609,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
             borderRadius: BorderRadius.circular(14),
             // Long-press to edit any habit (title, target, time, days…).
             onLongPress: () => _showAddDialog(context, ref, edit: h),
-            // Manual habits toggle on tap; auto-verified ones are earned from data only.
+            // Every habit is tickable — a tick always counts as done; evidence
+            // (AI check / data) upgrades it to "verified" on its own.
             onTap: dimmed
                 ? null
-                : (h.verify == 'manual'
-                    ? () => ref.read(habitsProvider.notifier).toggleOn(h.id, day)
-                    : () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        duration: const Duration(seconds: 3),
-                        content: Text('"${h.title}" is verified from your data — '
-                            'log the activity (or sync) to check it off.')))),
+                : () => ref.read(habitsProvider.notifier).toggleOn(h.id, day),
             child: IntrinsicHeight(
               child: Row(children: [
                 Container(width: 4, color: cc),
@@ -627,10 +621,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     child: Row(children: [
-                      Icon(
-                          done
-                              ? Icons.check_circle
-                              : (h.verify == 'manual' ? Icons.circle_outlined : Icons.sensors),
+                      Icon(done ? Icons.check_circle : Icons.circle_outlined,
                           color: done ? _teal : _muted, size: 26),
                       const SizedBox(width: 10),
                       Expanded(
@@ -803,9 +794,12 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           '${(r['removed'] ?? 0) != 0 ? ' · ${r['removed']} removed' : ''}'
           '${failed > 0 ? ' · $failed failed: ${(r['error'] ?? '').toString().replaceAll('\n', ' ')}' : ''}.';
     } on ApiException catch (e) {
-      msg = (e.status == 401 || e.status == 403)
-          ? 'Connect Google Calendar in the Cloud sheet (☁), then try again.'
-          : 'Calendar sync failed — try again in a moment.';
+      msg = e.status == 412 || e.message.contains('calendar_api_disabled')
+          ? 'The Google Calendar API is disabled for your Cloud project — enable it at '
+            'console.cloud.google.com → APIs & Services → Library → Google Calendar API.'
+          : (e.status == 401 || e.status == 403)
+              ? 'Connect Google Calendar in the Cloud sheet (☁), then try again.'
+              : 'Calendar sync failed — try again in a moment.';
     } catch (_) {
       msg = 'Couldn’t reach the calendar service.';
     }
