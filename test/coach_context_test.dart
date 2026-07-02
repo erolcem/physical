@@ -41,17 +41,13 @@ void main() {
     expect(out.first['exercises'][0]['volume'], (80 * 8 + 80 * 7));
   });
 
-  test('coachHabits reports measured/met/adherence (forgiving tick + evidence)', () {
+  test('coachHabits reports measured/met/adherence (evidence-only for auto habits)', () {
     final today = todayKey();
     final h = Habit(id: 'h', title: 'Protein', section: 'diet', verify: 'diet',
         goalKey: 'protein', target: 150, unit: 'g', createdAt: today);
-    // Forgiving model: a manual tick always counts as done (the "verified"
-    // badge stays evidence-only in the UI).
+    // STRICT: a manual tick alone must NOT satisfy an auto habit — only real data.
     final ticked = coachHabits([h], {'h': {today}}, logs: const {}, food: const [], workouts: const []);
-    expect(ticked.first['met'], isTrue);
-    // Untouched with no data → not met.
-    final bare = coachHabits([h], const {}, logs: const {}, food: const [], workouts: const []);
-    expect(bare.first['met'], isFalse);
+    expect(ticked.first['met'], isFalse);
     // With food meeting the protein target, it's met from evidence.
     final met = coachHabits([h], const {},
         logs: const {},

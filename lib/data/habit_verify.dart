@@ -63,21 +63,18 @@ double? habitMeasured(
   }
 }
 
-/// Whether a habit counts as DONE on [day]. Simplified, forgiving model (owner
-/// review round 5): EVERY habit is manually tickable, and a tick always counts —
-/// the user is never locked out of their own checklist by missing data. On top
-/// of that, auto-verifiable habits (metric/diet/workout) can ALSO complete
-/// purely from evidence without a tick:
-///
-///   done = ticked  OR  aiVerdict  OR  (no verdict yet → rule-based evidence)
+/// Whether a habit counts as DONE on [day]. STRICT by design (the owner's
+/// accountability principle): a data-verifiable habit (metric/diet/workout)
+/// counts ONLY from real evidence — a watch session with real heart-rate data,
+/// logged sets, a synced food total. A manual tick can never satisfy it; that's
+/// what keeps the AI's picture of the day honest. Inherently manual habits
+/// (brush teeth, journaling) are tick-only, as they should be.
 ///
 /// [aiVerdict] is the LLM verifier's judgement for this habit+day (see
 /// data/ai_verify.dart): when present it OVERRIDES the rule-based check — the
 /// model reads the actual evidence (sessions + sets, food, metrics) and applies
 /// evidence-exclusivity (one workout can't tick two habits), which the simple
-/// rules can't. A negative verdict never removes a user's explicit tick; it
-/// only withholds the "verified" badge (the UI distinguishes verified vs
-/// manually ticked).
+/// rules can't.
 bool habitDoneOn(
   Habit h,
   String day, {
@@ -87,8 +84,7 @@ bool habitDoneOn(
   Set<String>? ticked,
   bool? aiVerdict,
 }) {
-  if (ticked?.contains(day) ?? false) return true; // a tick always counts
-  if (h.verify == 'manual') return false;
+  if (h.verify == 'manual') return ticked?.contains(day) ?? false;
   if (aiVerdict != null) return aiVerdict;
   return habitGoalMet(h, day, logs: logs, food: food, workouts: workouts);
 }
