@@ -37,9 +37,14 @@ class Settings:
     app_name: str = os.environ.get("APP_NAME", "Physical")
 
     # AI coach (PDF Part 5) — Gemini, to stay in the user's Google ecosystem.
-    # Get a key from Google AI Studio (aistudio.google.com). Flash = cheap + fast.
+    # Get a key from Google AI Studio (aistudio.google.com).
+    # Two tiers: GEMINI_MODEL powers the coach chat + evening digest (deep reasoning
+    # over the full context — Pro-class by default); GEMINI_FAST_MODEL powers the
+    # high-frequency, low-stakes calls (nutrition estimates, nudge lines, habit
+    # verification) where Flash is plenty and ~10× cheaper.
     gemini_api_key: str = os.environ.get("GEMINI_API_KEY", "")
-    gemini_model: str = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    gemini_model: str = os.environ.get("GEMINI_MODEL", "gemini-2.5-pro")
+    gemini_fast_model: str = os.environ.get("GEMINI_FAST_MODEL", "gemini-2.5-flash")
 
 
 settings = Settings()

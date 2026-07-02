@@ -16,7 +16,8 @@ from fastapi.responses import RedirectResponse
 from .config import settings
 from .db import init_db
 from .integrations.google_health.router import router as google_health_router
-from .routers import aesthetics, auth, backup, calendar, coach, health, legal, nutrition, ranks, samples
+from .routers import (aesthetics, auth, backup, calendar, coach, habits, health,
+                      legal, nutrition, ranks, samples)
 
 
 @asynccontextmanager
@@ -46,6 +47,7 @@ app.include_router(auth.router)
 app.include_router(samples.router)
 app.include_router(ranks.router)
 app.include_router(coach.router)
+app.include_router(habits.router)
 app.include_router(nutrition.router)
 app.include_router(aesthetics.router)
 app.include_router(backup.router)

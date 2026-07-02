@@ -23,12 +23,18 @@ MICRO_UNITS = {
 }
 _MACROS = ("calories", "protein", "carbs", "fat", "fibre")
 
-# Diet-health radar axes. Each food gets points 0–100 PER AXIS for the portion eaten,
-# scaled so a full healthy day's foods sum to ~100 on each axis (i.e. one food is a
-# fraction). They accumulate across the day → a radar + an averaged /100 diet-health
-# score. Provisional (AI estimate). Keep keys in sync with diet.dart `healthAxisLabels`.
+# Diet-health radar axes. The model rates each food's QUALITY DENSITY per axis
+# (0–100, portion-independent — how strongly 100 kcal of this food exhibits the
+# quality); the PORTION math is done here deterministically:
+#     points = density × (portion kcal / 2000 kcal reference day)
+# so a 2000-kcal day of density-80 food lands the axis at 80, junk calories
+# contribute ~0 (they no longer "count for free"), and under-eating scales down
+# honestly. Points accumulate across the day capped at 100 per axis. The fibre and
+# micronutrient axes are recomputed EXACTLY in the app from grams vs targets — the
+# AI densities are the fallback. Keep keys in sync with diet.dart `healthAxisLabels`.
 HEALTH_AXES = ("micronutrients", "fibre", "gut_health", "antioxidants",
                "healthy_fats", "whole_food")
+_REFERENCE_DAY_KCAL = 2000.0
 
 NUTRITION_PROMPT = (
     "You are a precise nutrition estimator. Given a food or meal description, "
@@ -37,10 +43,10 @@ NUTRITION_PROMPT = (
     "markdown fences. Keys: calories (kcal), protein, carbs, fat, fibre (all in "
     "grams), and these micronutrients in the stated units: "
     + ", ".join(f"{k} ({u})" for k, u in MICRO_UNITS.items())
-    + ". Also include a \"health\" object scoring THIS food+portion's contribution "
-    "to each diet-health axis as points 0-100, calibrated so a full day of healthy "
-    "eating sums to about 100 per axis (so one item is a fraction): "
-    + ", ".join(HEALTH_AXES)
+    + ". Also include a \"health\" object rating this FOOD's quality density 0-100 "
+    "per diet-health axis, INDEPENDENT of portion size (how strongly a typical "
+    "calorie of this food exhibits the quality; e.g. spinach antioxidants ~90, "
+    "soda ~0): " + ", ".join(HEALTH_AXES)
     + " (whole_food = minimally-processed/whole vs ultra-processed). "
     "All values plain numbers; use 0 for negligible amounts. Approximate honestly."
 )
@@ -84,11 +90,15 @@ def parse_nutrition(text: str):
     out["micros"] = micros
 
     hsrc = obj.get("health") if isinstance(obj.get("health"), dict) else obj
+    # Density (0–100, portion-independent) → points for THIS portion: density
+    # weighted by its share of a 2000-kcal reference day. Junk calories therefore
+    # dilute the day instead of adding "free" health points.
+    kcal_frac = min(1.0, (out["calories"] or 0.0) / _REFERENCE_DAY_KCAL)
     health = {}
     for k in HEALTH_AXES:
         v = _num(hsrc.get(k))
         if v is not None:
-            health[k] = min(100.0, v)  # cap one food's per-axis contribution
+            health[k] = round(min(100.0, v) * kcal_frac, 2)
     out["health"] = health
 
     # Reject all-zero results (junk input) so the app never shows a fake "0 kcal".

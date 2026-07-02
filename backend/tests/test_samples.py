@@ -51,3 +51,20 @@ def test_value_required_when_no_raw(client):
         {"metric_id": "bench", "ts": "2026-06-01T08:00:00", "bodyweight_at_ts": 80},
     ])
     assert r.status_code == 422
+
+
+def test_delete_samples_scoped_and_all(client):
+    client.post("/me/samples", json=[
+        {"metric_id": "bench", "ts": "2026-06-01T08:00:00", "value": 100,
+         "bodyweight_at_ts": 80, "source": "manual", "source_id": "d1"},
+        {"metric_id": "steps", "ts": "2026-06-01T00:00:00", "value": 9000,
+         "source": "google_health", "source_id": "steps:2026-06-01"},
+    ])
+    # Scoped delete: only the google_health sample goes.
+    r = client.delete("/me/samples", params={"source": "google_health"})
+    assert r.status_code == 200 and r.json()["deleted"] == 1
+    left = client.get("/me/samples").json()
+    assert [s["metric_id"] for s in left] == ["bench"]
+    # Full delete wipes the rest.
+    assert client.delete("/me/samples").json()["deleted"] == 1
+    assert client.get("/me/samples").json() == []

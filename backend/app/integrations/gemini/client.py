@@ -21,11 +21,15 @@ def configured() -> bool:
 
 
 def _build(system: str, turns: list[dict], temperature: float,
-           tools: list[dict] | None, minimal: bool) -> dict:
-    gen: dict = {"temperature": temperature, "maxOutputTokens": 2048 if not minimal else 1536}
-    if not minimal:
-        # Disable 2.5 "thinking" so thinking tokens don't eat the output budget (which
-        # returns finishReason=MAX_TOKENS with NO text). The prompt reasons explicitly.
+           tools: list[dict] | None, minimal: bool, model: str) -> dict:
+    # Pro-class models think by default (and reject a zero budget), so they get a
+    # large output window that leaves room for thinking + a full reply. Flash gets
+    # thinking disabled so thinking tokens don't eat the output budget (which used
+    # to return finishReason=MAX_TOKENS with NO text) — the prompt reasons explicitly.
+    is_flash = "flash" in model or "lite" in model
+    gen: dict = {"temperature": temperature,
+                 "maxOutputTokens": 1536 if minimal else (4096 if is_flash else 8192)}
+    if not minimal and is_flash:
         gen["thinkingConfig"] = {"thinkingBudget": 0}
     body: dict = {
         "system_instruction": {"parts": [{"text": system}]},
@@ -51,9 +55,9 @@ def _call(system: str, turns: list[dict], *, model: str | None = None,
     mdl = model or settings.gemini_model
     url = f"{BASE}/models/{mdl}:generateContent?key={settings.gemini_api_key}"
     last_err = "unknown"
-    # Tier 1 = full (thinking off + tools); tier 2 = minimal (plain text) as a fallback.
+    # Tier 1 = full (tools + tuned thinking); tier 2 = minimal (plain text) as a fallback.
     for minimal in (False, True):
-        body = _build(system, turns, temperature, tools, minimal)
+        body = _build(system, turns, temperature, tools, minimal, mdl)
         for _ in range(2):  # transient retry within a tier
             try:
                 r = httpx.post(url, json=body, timeout=60)
@@ -63,6 +67,11 @@ def _call(system: str, turns: list[dict], *, model: str | None = None,
             if r.status_code == 400:
                 last_err = f"Gemini 400: {r.text[:200]}"
                 break  # bad request for THIS config — drop to the minimal tier
+            if r.status_code == 404 and mdl != settings.gemini_fast_model:
+                # This key/region can't use the requested (Pro-class) model — degrade
+                # to the fast model rather than failing the whole reply.
+                return _call(system, turns, model=settings.gemini_fast_model,
+                             temperature=temperature, tools=tools)
             if r.status_code >= 500:
                 last_err = f"Gemini {r.status_code}"
                 continue

@@ -362,14 +362,23 @@ def _cardio_load(zones: dict):
 
 
 def parse_intraday_daily(metric_id: str, datapoints: list[dict],
-                         container_key: str, value_key: str, agg: str = "sum") -> list[dict]:
+                         container_key: str, value_key: str, agg: str = "sum",
+                         drop_oldest: bool = False) -> list[dict]:
     """Roll a continuous type's per-interval values into one value per day — `sum`
-    (steps, active-zone-minutes) or `avg` (heart-rate). These are intraday and the list
-    endpoint takes no time filter, so the latest day may be partial — fine for context.
+    (steps, active-zone-minutes) or `avg` (heart-rate). The list endpoint takes no time
+    filter, so with [drop_oldest] the earliest day in the batch (whose intervals are cut
+    off by the page window, under-counting the total) is discarded; today stays — it's a
+    live running count that later syncs update via the ingest upsert.
     Day comes from interval.civilStartTime / interval.startTime, or sampleTime (HR)."""
     sums: dict[str, float] = {}
     counts: dict[str, int] = {}
+    seen_ids: set[str] = set()
     for p in datapoints:
+        pid = p.get("dataPointId") or p.get("name")
+        if pid:  # paginated fetches can overlap — never double-count an interval
+            if pid in seen_ids:
+                continue
+            seen_ids.add(pid)
         c = p.get(container_key) or {}
         interval = c.get("interval") or {}
         sample_time = c.get("sampleTime") or {}
@@ -384,6 +393,8 @@ def parse_intraday_daily(metric_id: str, datapoints: list[dict],
         if day and v is not None:
             sums[day] = sums.get(day, 0.0) + v
             counts[day] = counts.get(day, 0) + 1
+    if drop_oldest and len(sums) > 1:
+        sums.pop(min(sums.keys()))
     out = []
     for d, total in sums.items():
         val = (total / counts[d]) if agg == "avg" else total

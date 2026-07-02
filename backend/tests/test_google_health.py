@@ -272,3 +272,46 @@ def test_spo2_daily_oxygen_saturation():
     out = {s["metric_id"]: s for s in mapping.to_samples("spo2", pts)}
     assert out["spo2"]["value"] == 96.6
     assert out["spo2"]["ts"] == "2026-06-27T00:00:00"
+
+
+def test_parse_intraday_drop_oldest_discards_boundary_partial_day():
+    pts = [
+        {"steps": {"interval": {"civilStartTime": {"date": {"year": 2026, "month": 6, "day": 26}}}, "count": "6"}},
+        {"steps": {"interval": {"civilStartTime": {"date": {"year": 2026, "month": 6, "day": 25}}}, "count": "4"}},
+    ]
+    out = {s["ts"][:10] for s in mapping.parse_intraday_daily(
+        "steps", pts, "steps", "count", drop_oldest=True)}
+    assert out == {"2026-06-26"}  # the oldest (page-truncated) day is dropped
+    # A single-day batch is never dropped to nothing.
+    one = mapping.parse_intraday_daily("steps", pts[:1], "steps", "count", drop_oldest=True)
+    assert len(one) == 1
+
+
+def test_parse_intraday_dedupes_repeated_datapoint_ids():
+    p = {"dataPointId": "dp1",
+         "steps": {"interval": {"civilStartTime": {"date": {"year": 2026, "month": 6, "day": 26}}}, "count": "6"}}
+    out = mapping.parse_intraday_daily("steps", [p, p], "steps", "count")
+    assert out[0]["value"] == 6.0  # paginated overlap never double-counts
+
+
+def test_status_reports_missing_scopes(client):
+    import datetime as dt
+    from app.db import get_db
+    from app.main import app as _app
+    from app.models import GoogleHealthToken
+    # Store a token granted BEFORE the calendar/nutrition scopes were added.
+    gen = _app.dependency_overrides[get_db]()
+    db = next(gen)
+    db.merge(GoogleHealthToken(
+        user_id="local-dev", access_token="a", refresh_token="r",
+        expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1),
+        scope="openid email profile "
+              "https://www.googleapis.com/auth/googlehealth.sleep.readonly"))
+    db.commit()
+    r = client.get("/integrations/google/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["connected"] is True
+    missing = body["missing_scopes"]
+    assert any("calendar.events" in s for s in missing)
+    assert any("nutrition" in s for s in missing)

@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from .. import engine as E
@@ -55,6 +55,27 @@ def ingest(body: list[SampleIn], user_id: str = Depends(current_user),
 
     db.commit()
     return IngestResult(ingested=ingested, skipped=skipped, ids=ids)
+
+
+@router.delete("")
+def delete_samples(
+    metric_id: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    user_id: str = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete the signed-in user's canonical samples (optionally scoped to one
+    metric and/or source). Powers the app's 'reset cloud data' — without it,
+    deleted local data lives on in the server store and keeps feeding the
+    server-side ranks and the coach's fallback context."""
+    stmt = delete(Sample).where(Sample.user_id == user_id)
+    if metric_id:
+        stmt = stmt.where(Sample.metric_id == metric_id)
+    if source:
+        stmt = stmt.where(Sample.source == source)
+    result = db.execute(stmt)
+    db.commit()
+    return {"deleted": result.rowcount}
 
 
 @router.get("", response_model=list[SampleOut])
