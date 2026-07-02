@@ -46,6 +46,7 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
       String? goalKey,
       String unit = '',
       List<String> products = const [],
+      String? templateId,
       String? time,
       int durationMins = 0,
       double cost = 0,
@@ -64,6 +65,7 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
       goalKey: goalKey,
       unit: unit,
       products: products,
+      templateId: templateId,
       time: time,
       durationMins: durationMins,
       cost: cost,
@@ -93,7 +95,8 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
     repo.saveHabit(Habit(
       id: o.id, title: o.title, section: o.section, verify: o.verify,
       linkedMetricId: o.linkedMetricId, target: target, compare: compare ?? o.compare,
-      goalKey: o.goalKey, unit: o.unit, products: o.products, time: o.time,
+      goalKey: o.goalKey, unit: o.unit, products: o.products,
+      templateId: o.templateId, time: o.time,
       durationMins: o.durationMins, cost: o.cost, cadence: o.cadence, days: o.days,
       createdAt: o.createdAt,
     ));

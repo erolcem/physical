@@ -18,6 +18,7 @@ import '../data/sync.dart' show apiClientProvider;
 import '../state/habit_providers.dart';
 import '../state/log_providers.dart';
 import '../state/providers.dart' show logsProvider, repositoryProvider;
+import 'exercise_screen.dart' show SessionDetailScreen, TemplateEditorScreen;
 
 const _bg = Color(0xFF08091A);
 const _card = Color(0xFF12152E);
@@ -667,6 +668,16 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                         _badge(aiJudged ? '✨ AI verified' : '✓ verified', _teal)
                       else if (streak > 0)
                         _badge('🔥 $streak', _accent),
+                      // The habit carries its workout plan → one tap starts the
+                      // session pre-filled; log what actually happened.
+                      if (h.templateId != null && !done && day == todayKey())
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          iconSize: 22, color: _teal,
+                          tooltip: 'Start planned workout',
+                          icon: const Icon(Icons.play_circle_outline),
+                          onPressed: () => _startPlanned(context, ref, h),
+                        ),
                       IconButton(
                         visualDensity: VisualDensity.compact,
                         iconSize: 18, color: _muted,
@@ -720,6 +731,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
   }
 
   List<Widget> _pills(Habit h) => [
+        if (h.templateId != null) _pill('🏋 planned workout', _teal),
         if (h.time != null) _pill('⏰ ${_fmt12(h.time!)}', _muted),
         if (h.durationMins > 0) _pill('⏱ ${_fmtDur(h.durationMins)}', _muted),
         if (h.cost > 0) _pill('£${h.cost == h.cost.roundToDouble() ? h.cost.round() : h.cost}', _muted),
@@ -756,6 +768,23 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     if (url != null) await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
+  // Start the habit's planned workout: a new session pre-filled from its
+  // template, opened for logging what actually happened.
+  void _startPlanned(BuildContext context, WidgetRef ref, Habit h) {
+    final t = ref
+        .read(templatesProvider)
+        .where((t) => t.id == h.templateId)
+        .firstOrNull;
+    if (t == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('This habit\'s workout plan was deleted — edit the habit to pick a new one.')));
+      return;
+    }
+    final s = ref.read(workoutProvider.notifier).createFromTemplate(t);
+    Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => SessionDetailScreen(sessionId: s.id)));
+  }
+
   // Write habits straight into the user's Google Calendar via the Calendar API (upsert +
   // prune, no duplicates). Needs the calendar scope — prompts a reconnect if missing.
   Future<void> _pushCalendar(BuildContext context, WidgetRef ref) async {
@@ -769,8 +798,10 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     try {
       final r = await ref.read(apiClientProvider).pushCalendar(habits, tz);
       final n = (r['added'] ?? 0) + (r['updated'] ?? 0);
+      final failed = (r['failed'] ?? 0) as num;
       msg = '$n habit${n == 1 ? '' : 's'} synced to Google Calendar'
-          '${(r['removed'] ?? 0) != 0 ? ' · ${r['removed']} removed' : ''}.';
+          '${(r['removed'] ?? 0) != 0 ? ' · ${r['removed']} removed' : ''}'
+          '${failed > 0 ? ' · $failed failed: ${(r['error'] ?? '').toString().replaceAll('\n', ' ')}' : ''}.';
     } on ApiException catch (e) {
       msg = (e.status == 401 || e.status == 403)
           ? 'Connect Google Calendar in the Cloud sheet (☁), then try again.'
@@ -807,6 +838,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     String compare = edit?.compare ?? 'gte';
     String? goalKey = edit?.goalKey;
     String unit = edit?.unit ?? '';
+    String? templateId = edit?.templateId;
     String? time = edit?.time;
     String cadence = edit?.cadence ?? 'daily';
     final days = <int>{...?edit?.days};
@@ -897,6 +929,39 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                           border: const OutlineInputBorder(),
                         ),
                       ),
+                    ),
+                  ]),
+                ],
+                // Exercise: the habit can CARRY its workout plan (a saved template) —
+                // on due days it starts pre-filled from the Habits tab.
+                if (section == 'exercise') ...[
+                  const SizedBox(height: 10),
+                  const Text('Workout plan (starts pre-filled on due days)',
+                      style: TextStyle(fontSize: 11, color: _muted)),
+                  const SizedBox(height: 4),
+                  Wrap(spacing: 6, runSpacing: 4, children: [
+                    ChoiceChip(
+                      label: const Text('None'),
+                      selected: templateId == null,
+                      onSelected: (_) => setLocal(() => templateId = null),
+                    ),
+                    for (final t in ref.read(templatesProvider))
+                      ChoiceChip(
+                        label: Text('${t.name} · ${t.setCount} sets'),
+                        selected: templateId == t.id,
+                        selectedColor: _teal.withValues(alpha: 0.25),
+                        onSelected: (_) => setLocal(() => templateId = t.id),
+                      ),
+                    // Build a plan right here — the editor pops with the new id.
+                    ActionChip(
+                      label: const Text('➕ New plan…'),
+                      onPressed: () async {
+                        final id = await Navigator.of(context).push<String>(
+                            MaterialPageRoute(
+                                builder: (_) => TemplateEditorScreen(
+                                    suggestedName: titleCtrl.text.trim())));
+                        if (id != null) setLocal(() => templateId = id);
+                      },
                     ),
                   ]),
                 ],
@@ -991,6 +1056,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                           goalKey: goalKey,
                           unit: unit,
                           products: products,
+                          templateId: section == 'exercise' ? templateId : null,
                           time: time,
                           durationMins: int.tryParse(durCtrl.text) ?? 0,
                           cost: double.tryParse(costCtrl.text.trim()) ?? 0,
@@ -1011,6 +1077,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                           goalKey: goalKey,
                           unit: unit,
                           products: products,
+                          templateId: section == 'exercise' ? templateId : null,
                           time: time,
                           durationMins: int.tryParse(durCtrl.text) ?? 0,
                           cost: double.tryParse(costCtrl.text.trim()) ?? 0,

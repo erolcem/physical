@@ -59,7 +59,11 @@ def habit_event(h: dict, *, tz: str | None = None, now: dt.datetime | None = Non
             hh, mm = 7, 0
         start = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
         end = start + dt.timedelta(minutes=dur if dur > 0 else 30)
-        tzkw = {"timeZone": tz} if tz else {}
+        # The Calendar API REJECTS recurring events whose dateTime carries no
+        # timeZone ("Missing time zone definition for recurring event"), so a
+        # missing app timezone must fall back to something, not to nothing —
+        # otherwise every timed habit 400s and the calendar stays empty.
+        tzkw = {"timeZone": tz or "UTC"}
         start_obj = {"dateTime": start.strftime("%Y-%m-%dT%H:%M:%S"), **tzkw}
         end_obj = {"dateTime": end.strftime("%Y-%m-%dT%H:%M:%S"), **tzkw}
     else:

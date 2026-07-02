@@ -72,7 +72,8 @@ def push_to_google_calendar(
     except Exception as e:
         raise HTTPException(502, f"Calendar unavailable: {str(e)[:160]}")
 
-    added = updated = removed = 0
+    added = updated = removed = failed = 0
+    first_error: str | None = None
     seen: set[str] = set()
     for h in habits:
         hid = str(h.get("id") or h.get("title") or "")
@@ -82,19 +83,30 @@ def push_to_google_calendar(
         ev = habit_event(h, tz=tz)
         if hid in existing:
             r = httpx.put(f"{_CAL}/{existing[hid]}", headers=headers, json=ev, timeout=30)
-            if r.status_code < 400:
-                updated += 1
         else:
             r = httpx.post(_CAL, headers=headers, json=ev, timeout=30)
-            if r.status_code < 400:
+        if r.status_code < 400:
+            if hid in existing:
+                updated += 1
+            else:
                 added += 1
+        else:
+            # Don't swallow per-event failures — a systematic one (e.g. a missing
+            # timeZone on recurring events) used to report "synced" with an
+            # empty calendar. Surface the first Google error to the app.
+            failed += 1
+            if first_error is None:
+                first_error = r.text[:200]
     # Remove events for habits that no longer exist.
     for hid, eid in existing.items():
         if hid not in seen:
             r = httpx.delete(f"{_CAL}/{eid}", headers=headers, timeout=30)
             if r.status_code < 400 or r.status_code == 410:
                 removed += 1
-    return {"added": added, "updated": updated, "removed": removed}
+    out: dict = {"added": added, "updated": updated, "removed": removed, "failed": failed}
+    if first_error:
+        out["error"] = first_error
+    return out
 
 
 @router.get("/me/calendar-feed")

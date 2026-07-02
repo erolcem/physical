@@ -133,6 +133,11 @@ class Habit {
   final String? goalKey; // diet field (protein/calories/…), or an exercise-name filter
   final String unit; // display unit for the target (g, kcal, sets, /100, …)
   final List<String> products; // aesthetics: products/items used in this routine
+  // Exercise habits can CARRY THEIR WORKOUT PLAN: the id of a WorkoutTemplate
+  // (exercises + sets). On a due day the habit offers a one-tap "start" that
+  // pre-fills a session from the plan — the habit is the plan, the log is what
+  // actually happened, and the AI verifier judges the two against each other.
+  final String? templateId;
   final String? time; // ideal time 'HH:MM' (drives calendar + reminder)
   final int durationMins;
   final double cost; // money per occurrence (the planner/budgeter angle)
@@ -151,6 +156,7 @@ class Habit {
     this.goalKey,
     this.unit = '',
     this.products = const [],
+    this.templateId,
     this.time,
     this.durationMins = 0,
     this.cost = 0,
@@ -180,6 +186,7 @@ class Habit {
         if (goalKey != null) 'goalKey': goalKey,
         if (unit.isNotEmpty) 'unit': unit,
         if (products.isNotEmpty) 'products': products,
+        if (templateId != null) 'tpl': templateId,
         'time': time, 'dur': durationMins,
         if (cost > 0) 'cost': cost,
         'cadence': cadence, 'days': days, 'created': createdAt,
@@ -198,6 +205,7 @@ class Habit {
       goalKey: j['goalKey'] as String?,
       unit: j['unit'] as String? ?? '',
       products: [for (final p in (j['products'] as List? ?? const [])) p as String],
+      templateId: j['tpl'] as String?,
       time: j['time'] as String?,
       durationMins: (j['dur'] as num?)?.toInt() ?? 0,
       cost: (j['cost'] as num?)?.toDouble() ?? 0,

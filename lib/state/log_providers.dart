@@ -206,6 +206,12 @@ class TemplatesNotifier extends StateNotifier<List<WorkoutTemplate>> {
     state = repo.loadTemplates();
   }
 
+  /// Upsert a template directly (AI-planned workouts, future editors).
+  void save(WorkoutTemplate t) {
+    repo.saveTemplate(t);
+    state = repo.loadTemplates();
+  }
+
   void remove(String id) {
     repo.deleteTemplate(id);
     state = repo.loadTemplates();

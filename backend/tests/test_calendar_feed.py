@@ -45,3 +45,17 @@ def test_habit_event_timed_and_untimed():
     untimed = habit_event({"id": "h2", "title": "Skincare", "cadence": "daily"}, now=now)
     assert "date" in untimed["start"]
     assert untimed["recurrence"] == ["RRULE:FREQ=DAILY"]
+
+
+def test_habit_event_timed_always_has_a_timezone():
+    # The Calendar API rejects RECURRING events whose dateTime has no timeZone —
+    # a missing app tz must fall back to UTC, not to a floating (rejected) time.
+    from app.calendar_feed import habit_event
+    ev = habit_event({"id": "h", "title": "Train", "time": "18:00", "dur": 60})
+    assert ev["start"]["timeZone"] == "UTC"
+    ev2 = habit_event({"id": "h", "title": "Train", "time": "18:00"},
+                      tz="Australia/Sydney")
+    assert ev2["start"]["timeZone"] == "Australia/Sydney"
+    # All-day (untimed) events don't need one.
+    ev3 = habit_event({"id": "h", "title": "Read"})
+    assert "timeZone" not in ev3["start"] and "date" in ev3["start"]

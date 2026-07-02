@@ -6,10 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/api_client.dart';
 import '../data/coach_context.dart';
 import '../data/diet.dart' show todayDiet;
+import '../data/habits.dart' show habitSections, sectionOf;
 import '../data/metrics.dart' show metricById, metrics, MetricTier;
 import '../data/readiness.dart' show dailyReadiness;
 import '../data/sync.dart' show apiClientProvider;
-import '../data/workout.dart' show exercisesOverDays, sessionsOverDays, sortedByRecent, volumeOverDays;
+import '../data/workout.dart'
+    show SetMode, WorkoutSet, WorkoutTemplate, exercisesOverDays, sessionsOverDays,
+        sortedByRecent, volumeOverDays;
 import '../state/habit_providers.dart';
 import '../state/log_providers.dart';
 import '../state/providers.dart'
@@ -250,6 +253,15 @@ class _CoachTabState extends ConsumerState<CoachTab>
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Coach functions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
             const SizedBox(height: 12),
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('🗓 Plan my week (AI builds your habits)'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _planWeek();
+              },
+            ),
             for (final f in _coachFunctions)
               ListTile(
                 dense: true,
@@ -264,6 +276,217 @@ class _CoachTabState extends ConsumerState<CoachTab>
         ),
       ),
     );
+  }
+
+  // ── "Plan my week": the AI designs a complete scaffolded habit roster (with
+  // workout plans) from the user's data + an optional emphasised goal; the user
+  // reviews and applies it — nothing changes without their tap. ──
+  Future<void> _planWeek() async {
+    final goalCtrl = TextEditingController();
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _card,
+        title: const Text('Plan my week'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text(
+              'The coach reads your ranks, recovery, diet and training history and '
+              'proposes a full weekly habit roster — including the workout plans your '
+              'gym habits will carry. You review everything before it\'s added.',
+              style: TextStyle(fontSize: 13, color: _muted)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: goalCtrl,
+            decoration: const InputDecoration(
+                labelText: 'Goal to emphasise (optional)',
+                hintText: 'e.g. cut to 12% body fat, bigger bench…',
+                border: OutlineInputBorder()),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Build plan')),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    setState(() => _sending = true);
+    Map<String, dynamic>? plan;
+    String? error;
+    try {
+      plan = await ref.read(apiClientProvider).coachPlan(
+          goal: goalCtrl.text.trim(),
+          habits: _habitsCtx(), profile: _profileCtx(), diet: _dietCtx(),
+          training: _trainingCtx(), aesthetics: _aestheticsCtx(), ranks: _ranksCtx(),
+          trends: _trendsCtx(), correlations: _correlationsCtx(), workoutSets: _setsCtx(),
+          metricHistory: _historyCtx(), energy: _energyCtx());
+    } on ApiException catch (e) {
+      error = e.status == 503
+          ? 'The AI coach isn\'t configured on the server yet.'
+          : 'The coach couldn\'t build a plan — try again in a moment.';
+    } catch (_) {
+      error = 'Couldn\'t reach the coach — check your connection.';
+    }
+    if (!mounted) return;
+    setState(() => _sending = false);
+    if (plan == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? 'No plan.')));
+      return;
+    }
+    _showPlanReview(plan);
+  }
+
+  void _showPlanReview(Map<String, dynamic> plan) {
+    final proposals = ((plan['habits'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    final selected = List<bool>.filled(proposals.length, true);
+    var replace = false; // remove the current roster before applying
+    String planLine(Map<String, dynamic> h) {
+      final bits = <String>[];
+      if (h['target'] != null) {
+        bits.add('${h['compare'] == 'lte' ? '≤' : '≥'} ${h['target']}${h['unit'] ?? ''}');
+      }
+      if (h['time'] != null) bits.add('⏰ ${h['time']}');
+      if (h['cadence'] == 'weekly' && h['days'] != null) {
+        const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        bits.add((h['days'] as List).map((d) => wd[(d as num).toInt() - 1]).join(' '));
+      }
+      final p = h['plan'] as Map<String, dynamic>?;
+      if (p != null) {
+        final names = {for (final s in (p['sets'] as List? ?? const [])) (s as Map)['name']};
+        bits.add('🏋 ${names.length} exercises · ${(p['sets'] as List? ?? const []).length} sets');
+      }
+      return bits.join(' · ');
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _bg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Your proposed week',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                if ((plan['summary'] as String?)?.isNotEmpty == true) ...[
+                  const SizedBox(height: 6),
+                  Text(plan['summary'] as String,
+                      style: const TextStyle(fontSize: 12.5, color: _muted)),
+                ],
+                const SizedBox(height: 10),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: proposals.length,
+                    itemBuilder: (_, i) {
+                      final h = proposals[i];
+                      final sec = sectionOf((h['section'] as String?) ?? 'misc');
+                      final detail = planLine(h);
+                      return CheckboxListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: selected[i],
+                        onChanged: (v) => setLocal(() => selected[i] = v ?? false),
+                        title: Text('${sec.emoji} ${h['title']}',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                        subtitle: detail.isEmpty
+                            ? null
+                            : Text(detail, style: const TextStyle(fontSize: 11.5, color: _muted)),
+                      );
+                    },
+                  ),
+                ),
+                CheckboxListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: replace,
+                  onChanged: (v) => setLocal(() => replace = v ?? false),
+                  title: const Text('Replace my current habits',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                  subtitle: const Text(
+                      'Removes every existing habit (and its streaks) first — a fresh start.',
+                      style: TextStyle(fontSize: 11, color: _muted)),
+                ),
+                const SizedBox(height: 6),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                      backgroundColor: _accent, minimumSize: const Size.fromHeight(46)),
+                  icon: const Icon(Icons.check),
+                  label: Text(
+                      '${replace ? 'Replace with' : 'Add'} ${selected.where((s) => s).length} habits'),
+                  onPressed: () {
+                    if (replace) {
+                      final notifier = ref.read(habitsProvider.notifier);
+                      for (final h in [...ref.read(habitsProvider).habits]) {
+                        notifier.removeHabit(h.id);
+                      }
+                    }
+                    var added = 0;
+                    for (var i = 0; i < proposals.length; i++) {
+                      if (!selected[i]) continue;
+                      _applyProposal(proposals[i]);
+                      added++;
+                    }
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(
+                            '${replace ? 'Roster replaced —' : 'Added'} $added habits, see the Habits tab.')));
+                  },
+                ),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // One proposal → (optionally) its workout template + the habit carrying it.
+  void _applyProposal(Map<String, dynamic> h) {
+    String? templateId;
+    final p = h['plan'] as Map<String, dynamic>?;
+    if (p != null) {
+      final sets = [
+        for (final s in ((p['sets'] as List?) ?? const []).cast<Map<String, dynamic>>())
+          WorkoutSet(
+            name: (s['name'] as String?) ?? 'Exercise',
+            mode: s['w'] != null ? SetMode.weightReps : SetMode.reps,
+            weight: (s['w'] as num?)?.toDouble(),
+            reps: (s['r'] as num?)?.toInt(),
+          )
+      ];
+      final t = WorkoutTemplate(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        name: (p['name'] as String?) ?? (h['title'] as String? ?? 'Workout'),
+        type: (p['type'] as String?) ?? 'Weightlifting',
+        sets: sets,
+      );
+      ref.read(templatesProvider.notifier).save(t);
+      templateId = t.id;
+    }
+    final section = habitSections.containsKey(h['section']) ? h['section'] as String : 'misc';
+    ref.read(habitsProvider.notifier).addHabit(
+          (h['title'] as String?) ?? 'Habit',
+          section: section,
+          verify: h['verify'] as String?,
+          linkedMetricId: h['metric'] as String?,
+          target: (h['target'] as num?)?.toDouble(),
+          compare: (h['compare'] as String?) ?? 'gte',
+          goalKey: h['goalKey'] as String?,
+          unit: (h['unit'] as String?) ?? '',
+          templateId: templateId,
+          time: h['time'] as String?,
+          durationMins: (h['durationMins'] as num?)?.toInt() ?? 0,
+          cadence: (h['cadence'] as String?) ?? 'daily',
+          days: [for (final d in ((h['days'] as List?) ?? const [])) (d as num).toInt()],
+        );
   }
 
   Future<void> _showContext() async {
@@ -467,6 +690,13 @@ class _CoachTabState extends ConsumerState<CoachTab>
             spacing: 8,
             runSpacing: 8,
             children: [
+              ActionChip(
+                label: const Text('🗓 Plan my week'),
+                backgroundColor: _accent.withValues(alpha: 0.2),
+                side: const BorderSide(color: _teal),
+                labelStyle: const TextStyle(color: _teal, fontSize: 12, fontWeight: FontWeight.w700),
+                onPressed: _planWeek,
+              ),
               for (final f in _coachFunctions)
                 ActionChip(
                   label: Text(f.$1),

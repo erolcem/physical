@@ -12,6 +12,7 @@ from ..config import settings
 from ..db import get_db
 from ..integrations.gemini import client as gemini
 from ..models import Sample
+from ..planner import PLAN_PROMPT, parse_plan
 from ..schemas import CoachChatIn, CoachChatOut, CoachContextIn
 
 router = APIRouter(prefix="/me/coach", tags=["coach"])
@@ -59,6 +60,33 @@ def chat(body: CoachChatIn,
     if not clean and actions:
         clean = "Here's a change I'd suggest — tap to apply."
     return CoachChatOut(reply=clean, actions=actions)
+
+
+@router.post("/plan")
+def plan(body: CoachChatIn,
+         user_id: str = Depends(current_user),
+         db: Session = Depends(get_db)):
+    """AI weekly habit-roster builder: the full coach context (+ the optional
+    emphasised goal in `message`) → a structured roster proposal {summary,
+    habits:[…]} the app shows as a review sheet. Nothing is applied server-side."""
+    if not gemini.configured():
+        raise HTTPException(503, "AI coach isn't configured on the server yet")
+    samples = list(db.scalars(select(Sample).where(Sample.user_id == user_id)))
+    system = compose_system(samples, body.habits, body.profile,
+                            body.diet, body.training, body.aesthetics,
+                            body.ranks, body.trends, body.correlations, body.workout_sets,
+                            body.metric_history, body.energy)
+    goal = (body.message or "").strip()
+    instruction = PLAN_PROMPT + (f"\n\nMy emphasised goal: {goal}" if goal else "")
+    try:
+        reply = gemini.generate(system, [{"role": "user", "text": instruction}],
+                                temperature=0.4)
+    except gemini.GeminiError as e:
+        raise HTTPException(502, f"Coach unavailable: {e}")
+    parsed = parse_plan(reply)
+    if parsed is None:
+        raise HTTPException(502, "The coach couldn't produce a valid plan — try again")
+    return parsed
 
 
 _NUDGE = ("Based ONLY on the USER DATA, write the single most useful one-sentence push "

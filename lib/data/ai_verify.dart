@@ -8,13 +8,16 @@
 import 'api_client.dart';
 import 'habits.dart';
 import 'repository.dart';
+import 'workout.dart' show WorkoutTemplate;
 
 /// The habits the AI can judge on [date]: due that day and not manual.
 List<Habit> verifiableHabitsOn(List<Habit> habits, DateTime date) =>
     [for (final h in habits) if (h.verify != 'manual' && isDueOn(h, date)) h];
 
-/// One habit → the compact dict the verifier reasons over.
-Map<String, dynamic> habitPayload(Habit h) => {
+/// One habit → the compact dict the verifier reasons over. When the habit
+/// carries a workout [plan], the verifier can judge the actual session against
+/// the planned exercises, not just "was there a workout".
+Map<String, dynamic> habitPayload(Habit h, {WorkoutTemplate? plan}) => {
       'id': h.id,
       'title': h.title,
       'section': h.section,
@@ -25,6 +28,12 @@ Map<String, dynamic> habitPayload(Habit h) => {
       if (h.unit.isNotEmpty) 'unit': h.unit,
       if (h.goalKey != null) 'goalKey': h.goalKey,
       if (h.time != null) 'time': h.time,
+      if (plan != null)
+        'planned_workout': {
+          'name': plan.name,
+          'exercises': plan.exercises.toList(),
+          'sets': plan.setCount,
+        },
     };
 
 /// Everything recorded on [day], as evidence: workout sessions (with individual
@@ -83,9 +92,12 @@ Future<int?> runAiVerification(ApiClient api, Repository repo, {DateTime? date})
   final habits = verifiableHabitsOn(repo.loadHabits(), d);
   if (habits.isEmpty) return 0;
   final ev = dayEvidence(repo, day);
+  final plans = {for (final t in repo.loadTemplates()) t.id: t};
   final verdicts = await api.verifyHabits(
     day: day,
-    habits: [for (final h in habits) habitPayload(h)],
+    habits: [
+      for (final h in habits) habitPayload(h, plan: plans[h.templateId])
+    ],
     workouts: (ev['workouts'] as List).cast<Map<String, dynamic>>(),
     food: (ev['food'] as List).cast<Map<String, dynamic>>(),
     metrics: (ev['metrics'] as Map).cast<String, dynamic>(),
