@@ -47,7 +47,24 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
       // Signed-in == the backend confirms our identity. If a stored token can't be
       // confirmed (e.g. we switched to the hosted server), just prompt sign-in.
       final email = api.isSignedIn ? await api.whoAmI() : null;
-      if (mounted) setState(() { _signedIn = email != null; _email = email; _loading = false; });
+      // A Google token granted before a scope was added (calendar / nutrition)
+      // silently 403s those APIs — surface the one-tap reconnect immediately.
+      var missingScopes = false;
+      if (email != null) {
+        final gs = await api.googleStatus();
+        missingScopes = ((gs['missing_scopes'] as List?) ?? const []).isNotEmpty;
+      }
+      if (mounted) {
+        setState(() {
+          _signedIn = email != null;
+          _email = email;
+          _loading = false;
+          if (missingScopes) {
+            _needsReconnect = true;
+            _msg = 'Google needs new permissions (calendar/nutrition) — reconnect below.';
+          }
+        });
+      }
     } catch (_) {
       if (mounted) setState(() { _loading = false; _msg = "Couldn't reach the backend."; });
     }
@@ -175,6 +192,56 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
     }
   }
 
+  // Rebuild the rank + readiness history purely from the data that exists now —
+  // deleting logs used to leave the old category-rank climb behind.
+  Future<void> _recomputeHistory() async {
+    setState(() { _busy = true; _msg = null; });
+    final n = recomputeDerivedHistory(ref);
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        _msg = 'Rank & readiness history rebuilt from current data ($n day-points).';
+      });
+    }
+  }
+
+  // Wipe the CLOUD copy of the samples (server store) — the fix for deleted data
+  // living on in the server-side ranks/coach fallback. Local data stays.
+  Future<void> _resetCloud() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _bg,
+        title: const Text('Delete cloud data?'),
+        content: const Text('This deletes ALL samples stored in the cloud for your account '
+            '(manual + Google-synced). Data on this device stays; the next "Sync now" '
+            're-uploads your current local logs so the cloud matches what you see.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFA3737)),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() { _busy = true; _msg = null; });
+    try {
+      final n = await ref.read(apiClientProvider).deleteCloudSamples();
+      // Push the current local truth straight back up so cloud == device.
+      final synced = await syncNow(ref);
+      if (mounted) {
+        setState(() =>
+            _msg = 'Cloud reset: $n samples deleted, ${synced.ingested} re-uploaded from this device.');
+      }
+    } catch (_) {
+      if (mounted) setState(() => _msg = "Couldn't reset the cloud data — check your connection.");
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<String?> _askForCode(String url) {
     final ctrl = TextEditingController();
     return showDialog<String>(
@@ -279,6 +346,26 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
               style: OutlinedButton.styleFrom(
                   foregroundColor: _teal, minimumSize: const Size.fromHeight(46)),
             ),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : _recomputeHistory,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Rebuild rank history', style: TextStyle(fontSize: 12.5)),
+                  style: OutlinedButton.styleFrom(foregroundColor: Colors.grey),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : _resetCloud,
+                  icon: const Icon(Icons.delete_sweep_outlined, size: 16),
+                  label: const Text('Reset cloud data', style: TextStyle(fontSize: 12.5)),
+                  style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFFA3737)),
+                ),
+              ),
+            ]),
             const SizedBox(height: 8),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               TextButton.icon(

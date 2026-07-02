@@ -86,7 +86,8 @@ def nudge(body: CoachChatIn,
                             body.workout_sets)
     instruction = _NUDGE + _SLOTS.get((body.message or "").strip().lower(), "")
     try:
-        reply = gemini.generate(system, [{"role": "user", "text": instruction}])
+        reply = gemini.generate(system, [{"role": "user", "text": instruction}],
+                                model=settings.gemini_fast_model)
     except gemini.GeminiError as e:
         raise HTTPException(502, f"Coach unavailable: {e}")
     line = (reply or "").strip().splitlines()[0].strip().strip('"').strip() if reply else ""

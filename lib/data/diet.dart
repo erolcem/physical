@@ -21,8 +21,12 @@ const Map<String, String> microLabels = {
 String microUnit(String key) => key.endsWith('_ug') ? 'µg' : 'mg';
 
 // Diet-health radar axes (keys match the backend nutrition.HEALTH_AXES). Each food
-// contributes 0–100 points per axis (portion-scaled, AI-inferred); points ACCUMULATE
-// across the day and cap at 100, and the overall diet-health score averages all axes.
+// contributes points per axis = its AI-rated quality DENSITY (0–100, portion-
+// independent) × its share of a 2000-kcal reference day; points ACCUMULATE across
+// the day and cap at 100, and the overall diet-health score averages all axes.
+// The FIBRE and MICRONUTRIENT axes don't rely on the AI at all — they're computed
+// EXACTLY from the day's logged grams vs the daily targets below, so those two
+// spokes of the web are real measurements, not estimates.
 const Map<String, String> healthAxisLabels = {
   'micronutrients': 'Micronutrients',
   'fibre': 'Fibre',
@@ -31,6 +35,32 @@ const Map<String, String> healthAxisLabels = {
   'healthy_fats': 'Healthy Fats',
   'whole_food': 'Whole-food',
 };
+
+/// Daily fibre target (g) — the axis hits 100 at this intake (AHA/NHS guidance ~30 g).
+const double fibreTargetG = 30.0;
+
+/// Daily reference intakes for the tracked "more is better" micronutrients
+/// (young-male RDA/AI values; sodium excluded — it's an upper-limit nutrient).
+const Map<String, double> microDailyTarget = {
+  'potassium_mg': 3400,
+  'calcium_mg': 1000,
+  'iron_mg': 8,
+  'magnesium_mg': 400,
+  'zinc_mg': 11,
+  'vitamin_c_mg': 90,
+  'vitamin_d_ug': 15,
+};
+
+/// Micronutrient adequacy 0–100: the mean of each tracked micro's intake vs its
+/// daily target (capped at 100% each, so megadosing one vitamin can't carry the
+/// score). This is the exact math behind the radar's Micronutrients spoke.
+double microAdequacy(Map<String, double> micros) {
+  var s = 0.0;
+  microDailyTarget.forEach((k, target) {
+    s += ((micros[k] ?? 0) / target).clamp(0.0, 1.0);
+  });
+  return s / microDailyTarget.length * 100;
+}
 
 class FoodEntry {
   final String id;
@@ -157,6 +187,13 @@ DietTotals dietTotals(List<FoodEntry> entries, String day) {
     // Health axis points accumulate across the day, capped at 100 per axis.
     e.health.forEach((k, v) => hl[k] = ((hl[k] ?? 0) + v).clamp(0.0, 100.0));
     n++;
+  }
+  if (n > 0) {
+    // Exact axes override the AI estimates where the quantity is measured:
+    // fibre from logged grams vs the 30 g/day target, micronutrients from the
+    // summed micros vs their daily targets (when any have been inferred).
+    hl['fibre'] = (fib / fibreTargetG * 100).clamp(0.0, 100.0);
+    if (mic.values.any((v) => v > 0)) hl['micronutrients'] = microAdequacy(mic);
   }
   return DietTotals(c, p, cb, f, fib, n, micros: mic, health: hl);
 }

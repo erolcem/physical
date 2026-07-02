@@ -8,10 +8,11 @@ import '../engine/rank_engine.dart' show Log;
 import '../state/habit_providers.dart' show habitsProvider;
 import '../state/log_providers.dart' show dietProvider, workoutProvider, pinsProvider;
 import '../state/providers.dart';
+import 'ai_verify.dart' show runAiVerification;
 import 'api_client.dart';
 import 'coach_context.dart' show coachHabits, coachRanks, coachTrends;
 import 'notifications.dart' show NotificationService;
-import 'rank_history.dart' show backfillRankLogs;
+import 'rank_history.dart' show backfillRankLogs, resetDerivedHistory;
 import 'readiness.dart' show backfillReadinessLogs;
 import 'repository.dart';
 
@@ -72,25 +73,38 @@ Future<SyncResult> syncNow(WidgetRef ref) async {
 
 // ── Pull (backend → app) ────────────────────────────────────────────────────
 
-/// Merge backend samples into [repo], skipping any already present (dedupe by
-/// metric + timestamp). Returns how many were newly added. Pure & testable.
+/// Merge backend samples into [repo]: new (metric, timestamp) pairs are added,
+/// and an existing pair whose VALUE changed server-side (today's step total
+/// grows through the day; vendor-revised sleep scores) is updated in place —
+/// otherwise local history freezes at whatever the first sync saw. Returns how
+/// many were added or updated. Pure & testable.
 int mergeSamples(Repository repo, List<Map<String, dynamic>> samples) {
   final existing = repo.loadLogs();
   final tombs = repo.loadTombstones();
-  var added = 0;
+  var changed = 0;
   for (final s in samples) {
     final mid = s['metric_id'] as String;
     final ts = s['ts'] as String;
     if (tombs.contains('$mid@$ts')) continue; // deleted locally — don't let Google re-add it
+    final value = (s['value'] as num).toDouble();
     final list = existing[mid] ??= <Log>[];
-    if (list.any((l) => l.ts == ts)) continue; // already have this day's value
-    final log = Log(mid, (s['value'] as num).toDouble(),
+    final i = list.indexWhere((l) => l.ts == ts);
+    if (i >= 0) {
+      if ((list[i].value - value).abs() > 1e-9) {
+        final log = Log(mid, value, bodyweight: list[i].bodyweight, ts: ts);
+        repo.replaceLog(mid, i, log);
+        list[i] = log;
+        changed++;
+      }
+      continue;
+    }
+    final log = Log(mid, value,
         bodyweight: (s['bodyweight_at_ts'] as num?)?.toDouble(), ts: ts);
     repo.saveLog(mid, log);
     list.add(log); // keep the snapshot current for in-batch dedupe
-    added++;
+    changed++;
   }
-  return added;
+  return changed;
 }
 
 class CloudSyncResult {
@@ -113,13 +127,21 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
   var needsReconnect = false;
   try {
     final g = await api.triggerGoogleSync();
-    final errs = (g['errors'] as Map?) ?? const {};
-    // A 'token' error means the Google Health refresh token expired — the user
-    // just needs to sign in with Google again (refreshes it).
-    needsReconnect = errs.containsKey('token');
-    note = errs.isEmpty
-        ? 'Google +${g['ingested']}'
-        : (needsReconnect ? 'Google sign-in expired' : 'Google: partial sync');
+    final errs = ((g['errors'] as Map?) ?? const {}).cast<String, dynamic>();
+    // A 'token' error means the refresh token expired; a 'scope' error means the
+    // stored token predates a newly-added permission (calendar/nutrition). Both
+    // are fixed by the same one-tap Google reconnect.
+    needsReconnect = errs.containsKey('token') || errs.containsKey('scope');
+    if (needsReconnect) {
+      note = 'Google sign-in expired';
+    } else if (errs.isEmpty) {
+      note = 'Google +${g['ingested']}';
+    } else {
+      // Name what failed instead of a blanket "partial sync" — the data that
+      // works still synced fine.
+      final failed = errs.keys.where((k) => k != 'scope').take(3).join(', ');
+      note = 'Google +${g['ingested']} · $failed unavailable';
+    }
   } catch (_) {
     note = 'Google refresh skipped';
   }
@@ -172,30 +194,53 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
       }
     }
   } catch (_) {/* calendar mirror is best-effort */}
-  // AI-personalised notifications — a morning (day ahead) and an evening (how it went)
-  // nudge, refreshed each sync from the same live context the coach uses. Best-effort.
-  try {
-    final logs = ref.read(logsProvider);
-    final hs = ref.read(habitsProvider);
-    final habitsCtx = coachHabits(hs.habits, hs.completions,
-        logs: logs, food: ref.read(dietProvider), workouts: ref.read(workoutProvider));
-    final ranksCtx = ref.read(latestLogsProvider).isEmpty
-        ? null
-        : coachRanks(
-            overall: ref.read(overallProvider),
-            categories: ref.read(categoryRanksProvider),
-            latest: ref.read(latestLogsProvider),
-            logs: logs);
-    final trendsCtx = coachTrends(logs);
-    Future<void> sched(String slot, int id, int hour) async {
-      final n = await api.coachNudge(slot: slot, habits: habitsCtx, ranks: ranksCtx, trends: trendsCtx);
-      if (n != null) await NotificationService.instance.scheduleAiNudge(id, n, hour);
-    }
-    unawaited(sched('morning', NotificationService.nudgeMorningId, 8));
-    unawaited(sched('evening', NotificationService.nudgeEveningId, 20));
-  } catch (_) {/* nudges are best-effort */}
+  // The daily AI loop (item 15), in order and off the critical path:
+  //   1. VERIFY — the LLM re-judges today's non-manual habits against the day's
+  //      real evidence (robust to custom habits; one workout can't tick two).
+  //   2. NUDGES — the morning brief (8am, day ahead) and the evening digest
+  //      (8pm, how today went) are regenerated from the live context, with the
+  //      evening one scheduled AFTER verification so it reflects the verdicts.
+  // All best-effort; the rule-based checks remain the fallback.
+  unawaited(() async {
+    int? judged;
+    try {
+      judged = await runAiVerification(api, repo);
+    } catch (_) {/* verification is best-effort */}
+    if (judged != null && judged > 0) ref.invalidate(habitsProvider);
+    try {
+      final logs = ref.read(logsProvider);
+      final hs = ref.read(habitsProvider);
+      final habitsCtx = coachHabits(hs.habits, hs.completions,
+          logs: logs, food: ref.read(dietProvider), workouts: ref.read(workoutProvider),
+          aiVerdicts: hs.aiVerdicts);
+      final ranksCtx = ref.read(latestLogsProvider).isEmpty
+          ? null
+          : coachRanks(
+              overall: ref.read(overallProvider),
+              categories: ref.read(categoryRanksProvider),
+              latest: ref.read(latestLogsProvider),
+              logs: logs);
+      final trendsCtx = coachTrends(logs);
+      Future<void> sched(String slot, int id, int hour) async {
+        final n = await api.coachNudge(slot: slot, habits: habitsCtx, ranks: ranksCtx, trends: trendsCtx);
+        if (n != null) await NotificationService.instance.scheduleAiNudge(id, n, hour);
+      }
+      unawaited(sched('morning', NotificationService.nudgeMorningId, 8));
+      unawaited(sched('evening', NotificationService.nudgeEveningId, 20));
+    } catch (_) {/* nudges are best-effort */}
+  }());
   return CloudSyncResult(added, note,
       needsReconnect: needsReconnect, calendarNeedsReconnect: calendarNeedsReconnect);
+}
+
+/// Rebuild the derived rank/readiness history purely from the data that exists
+/// NOW (item: deleting data used to leave the old category-rank climb behind),
+/// then refresh the graphs. Returns how many day-points were rebuilt.
+int recomputeDerivedHistory(WidgetRef ref) {
+  final repo = ref.read(repositoryProvider);
+  final n = resetDerivedHistory(repo, readinessBackfill: backfillReadinessLogs);
+  ref.read(logsProvider.notifier).reload();
+  return n;
 }
 
 /// Pull the cloud snapshot and REPLACE all local data with it (new-device restore).

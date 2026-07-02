@@ -309,7 +309,7 @@ def _correlation_lines(correlations) -> str | None:
     if not correlations:
         return None
     rows = []
-    for c in correlations[:14]:
+    for c in correlations[:20]:
         a, b, r, n = c.get("a"), c.get("b"), c.get("r"), c.get("n")
         if a is None or b is None or r is None:
             continue
@@ -321,10 +321,10 @@ def _history_lines(hist) -> str | None:
     if not hist:
         return None
     rows = []
-    for mid, vals in list(hist.items())[:45]:
+    for mid, vals in list(hist.items())[:60]:
         if not vals:
             continue
-        rows.append(f"{mid}: " + ", ".join(f"{v:g}" for v in vals[-30:]))
+        rows.append(f"{mid}: " + ", ".join(f"{v:g}" for v in vals[-45:]))
     return ("Full metric history (downsampled daily, oldest→newest):\n  " + "\n  ".join(rows)) if rows else None
 
 
@@ -364,7 +364,7 @@ def _habit_lines(habits) -> str | None:
         return None
     done = sum(1 for h in habits if h.get("done_today") or h.get("met"))
     items = []
-    for h in habits[:16]:
+    for h in habits[:40]:
         bits = [h.get("title", "?")]
         if h.get("section") or h.get("category"):
             bits.append(f"[{h.get('section') or h.get('category')}]")

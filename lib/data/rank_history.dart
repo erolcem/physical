@@ -49,21 +49,50 @@ Map<String, Map<String, double>> rankSeries(Map<String, List<Log>> logs) {
   return out;
 }
 
-/// Persist any missing rank-series logs so the ranks graph like other metrics.
-/// Idempotent (skips days already logged per series). Returns how many were added.
+/// Persist the rank-series logs so the ranks graph like other metrics. LIVE, not
+/// frozen: a day whose recomputed rank differs from the stored one (because
+/// underlying logs were added, revised or deleted) is REPLACED in place — the
+/// rank history always reflects the current data. Returns how many days were
+/// added or updated.
 int backfillRankLogs(Repository repo) {
   final logs = repo.loadLogs();
-  var added = 0;
+  var changed = 0;
   rankSeries(logs).forEach((seriesId, byDay) {
-    final have = {
-      for (final l in (logs[seriesId] ?? const <Log>[]))
-        if (l.ts.length >= 10) l.ts.substring(0, 10)
-    };
+    final list = logs[seriesId] ?? const <Log>[];
+    final idxByDay = <String, int>{};
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].ts.length >= 10) idxByDay[list[i].ts.substring(0, 10)] = i;
+    }
     byDay.forEach((day, value) {
-      if (have.contains(day)) return;
-      repo.saveLog(seriesId, Log(seriesId, value, ts: '${day}T12:00:00'));
-      added++;
+      final i = idxByDay[day];
+      if (i == null) {
+        repo.saveLog(seriesId, Log(seriesId, value, ts: '${day}T12:00:00'));
+        changed++;
+      } else if ((list[i].value - value).abs() > 1e-6) {
+        repo.replaceLog(seriesId, i, Log(seriesId, value, ts: list[i].ts));
+        changed++;
+      }
     });
   });
-  return added;
+  return changed;
+}
+
+/// The derived, fully recomputable series (rank history + readiness).
+const List<String> derivedSeriesIds = [
+  'overall_rank', 'strength_rank', 'performance_rank', 'recovery_rank',
+  'aesthetics_rank', 'daily_readiness',
+];
+
+/// Wipe the derived rank/readiness history so it rebuilds purely from whatever
+/// data exists NOW (the owner's "reset ranks" — deleting data used to leave the
+/// old category-rank climb behind). Purges without tombstones (the series
+/// re-backfills at the same timestamps), then recomputes immediately.
+/// Returns how many day-points were rebuilt. Caller reloads providers.
+int resetDerivedHistory(Repository repo,
+    {int Function(Repository)? readinessBackfill}) {
+  for (final id in derivedSeriesIds) {
+    repo.purgeMetricLogs(id);
+  }
+  final readiness = readinessBackfill?.call(repo) ?? 0;
+  return readiness + backfillRankLogs(repo);
 }

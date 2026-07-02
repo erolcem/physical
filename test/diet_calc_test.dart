@@ -6,16 +6,31 @@ void main() {
   test('health axes accumulate (capped 100/axis); score = mean of all axes', () {
     final food = [
       const FoodEntry(id: 'a', dateKey: day, name: 'x', calories: 500, protein: 40,
-          health: {'micronutrients': 60, 'fibre': 40}),
+          fibre: 12, health: {'micronutrients': 60, 'fibre': 40}),
       const FoodEntry(id: 'b', dateKey: day, name: 'y', calories: 400, protein: 30,
-          health: {'micronutrients': 60, 'gut_health': 50}),
+          fibre: 3, health: {'micronutrients': 60, 'gut_health': 50}),
     ];
     final t = dietTotals(food, day);
-    expect(t.health['micronutrients'], 100); // 60+60 capped at 100
-    expect(t.health['fibre'], 40);
+    // AI-estimated axes accumulate, capped at 100 — no micros were logged, so
+    // the micronutrient axis stays the accumulated AI estimate (60+60 capped).
+    expect(t.health['micronutrients'], 100);
     expect(t.health['gut_health'], 50);
-    // score = (100 + 40 + 50 + 0 + 0 + 0) / 6 axes
-    expect(t.healthScore, closeTo(190 / 6, 0.01));
+    // The FIBRE axis is EXACT — logged grams vs the 30 g/day target overrides
+    // the AI points: (12+3)/30 = 50.
+    expect(t.health['fibre'], closeTo(50, 1e-9));
+    // score = (100 + 50 + 50 + 0 + 0 + 0) / 6 axes
+    expect(t.healthScore, closeTo(200 / 6, 0.01));
+  });
+
+  test('micronutrient axis is exact when micros are logged (mean vs targets)', () {
+    final food = [
+      const FoodEntry(id: 'a', dateKey: day, name: 'x', calories: 500,
+          micros: {'vitamin_c_mg': 90, 'zinc_mg': 5.5}, // 100% + 50% of targets
+          health: {'micronutrients': 5}), // the AI estimate is overridden
+    ];
+    final t = dietTotals(food, day);
+    // (1.0 + 0.5 + five micros at 0) / 7 targets = 21.43
+    expect(t.health['micronutrients'], closeTo(100 * 1.5 / 7, 0.01));
   });
 
   test('macros + energy split are correct', () {

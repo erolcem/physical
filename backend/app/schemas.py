@@ -101,6 +101,20 @@ class CoachContextIn(BaseModel):
     workout_sets: list[dict] = []
 
 
+class HabitVerifyIn(BaseModel):
+    """The day's habits + evidence for LLM verification (see habit_check.py)."""
+    day: str  # YYYY-MM-DD
+    habits: list[dict] = []    # {id, title, section, verify, target, compare, unit, goalKey, time}
+    workouts: list[dict] = []  # that day's sessions incl. sets [{name, w, r, s, d}]
+    food: list[dict] = []      # that day's food entries {name, calories, protein, …}
+    metrics: dict = {}         # that day's metric readings {metric_id: value}
+
+
+class HabitVerifyOut(BaseModel):
+    verdicts: list[dict]  # [{id, done, reason}] — one per submitted habit
+    model: str | None = None
+
+
 class NutritionIn(BaseModel):
     description: str  # a food/meal, e.g. "2 eggs and a slice of toast"
 

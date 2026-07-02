@@ -106,6 +106,7 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
         label: const Text('New workout'),
       ),
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
+        _templatesRow(),
         if (sessions.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 48),
@@ -134,6 +135,64 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
         ],
       ]),
     );
+  }
+
+  // ── Templates (Hevy-style fast logging): tap → start a pre-filled workout;
+  // long-press → delete. Templates are saved from a session's "Save as template". ──
+  Widget _templatesRow() {
+    final templates = ref.watch(templatesProvider);
+    if (templates.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('TEMPLATES', style: TextStyle(fontSize: 11, letterSpacing: 2, color: _muted)),
+        const SizedBox(height: 6),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final t in templates)
+            InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => _startFromTemplate(t),
+              onLongPress: () => _deleteTemplate(t),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _card,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _accent.withValues(alpha: 0.35)),
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${typeEmoji(t.type)} ${t.name}',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text('${t.exercises.length} exercises · ${t.setCount} sets',
+                      style: const TextStyle(fontSize: 10.5, color: _muted)),
+                ]),
+              ),
+            ),
+        ]),
+      ]),
+    );
+  }
+
+  void _startFromTemplate(WorkoutTemplate t) {
+    final s = ref.read(workoutProvider.notifier).createFromTemplate(t);
+    Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => SessionDetailScreen(sessionId: s.id)));
+  }
+
+  Future<void> _deleteTemplate(WorkoutTemplate t) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _card,
+        title: Text('Delete template "${t.name}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok == true) ref.read(templatesProvider.notifier).remove(t.id);
   }
 
   Widget _lastCard(WorkoutSession s) => Card(
@@ -256,6 +315,12 @@ class SessionDetailScreen extends ConsumerWidget {
         backgroundColor: _bg,
         title: Text(s.label),
         actions: [
+          if (s.sets.isNotEmpty)
+            IconButton(
+              tooltip: 'Save as template',
+              icon: const Icon(Icons.bookmark_add_outlined),
+              onPressed: () => _saveAsTemplate(context, ref, s),
+            ),
           IconButton(
             tooltip: 'Delete workout',
             icon: const Icon(Icons.delete_outline),
@@ -337,6 +402,35 @@ class SessionDetailScreen extends ConsumerWidget {
           ]),
         ),
       );
+
+  // Save this session's sets as a named template for one-tap future workouts.
+  Future<void> _saveAsTemplate(BuildContext context, WidgetRef ref, WorkoutSession s) async {
+    final name = TextEditingController(text: s.label);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _card,
+        title: const Text('Save as template'),
+        content: TextField(
+          controller: name,
+          autofocus: true,
+          decoration: const InputDecoration(
+              labelText: 'Template name', hintText: 'e.g. Push day', border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok != true || name.text.trim().isEmpty) return;
+    ref.read(templatesProvider.notifier).saveFromSession(s, name.text.trim());
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Template "${name.text.trim()}" saved — start it from the Exercise page.'),
+          duration: const Duration(seconds: 2)));
+    }
+  }
 
   Future<void> _addSet(BuildContext context, WidgetRef ref) async {
     final name = TextEditingController();

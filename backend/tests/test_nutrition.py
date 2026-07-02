@@ -27,15 +27,24 @@ def test_accepts_nested_micros_object():
     assert out["micros"] == {"calcium_mg": 120.0, "iron_mg": 1.2}
 
 
-def test_parses_health_axes_capped_at_100():
+def test_health_densities_scale_by_portion_calories():
+    # Densities are portion-independent; points = density × (kcal / 2000-kcal day).
     out = parse_nutrition(
-        '{"calories": 50, "protein": 1, "carbs": 12, "fat": 0, "fibre": 6, '
-        '"health": {"fibre": 35, "gut_health": 40, "antioxidants": 120, "whole_food": 90}}')
+        '{"calories": 500, "protein": 20, "carbs": 50, "fat": 20, "fibre": 6, '
+        '"health": {"fibre": 40, "gut_health": 40, "antioxidants": 120, "whole_food": 80}}')
     h = out["health"]
-    assert h["fibre"] == 35 and h["gut_health"] == 40
-    assert h["antioxidants"] == 100  # one food's contribution capped at 100
-    assert h["whole_food"] == 90
+    assert h["fibre"] == 10.0 and h["gut_health"] == 10.0  # 40 × 500/2000
+    assert h["antioxidants"] == 25.0  # density capped at 100 first, then scaled
+    assert h["whole_food"] == 20.0
     assert "micronutrients" not in h  # omitted axes simply absent
+
+
+def test_health_points_never_exceed_density_even_for_huge_portions():
+    # A 3000-kcal portion caps the day-fraction at 1.0 → points == density.
+    out = parse_nutrition(
+        '{"calories": 3000, "protein": 100, "carbs": 300, "fat": 100, "fibre": 30, '
+        '"health": {"whole_food": 70}}')
+    assert out["health"]["whole_food"] == 70.0
 
 
 def test_coerces_strings_clamps_negatives_drops_unknown_and_nonfinite():

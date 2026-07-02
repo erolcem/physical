@@ -24,6 +24,8 @@ const _muted = Color(0xFF7880A8);
 // A fixed selection of coach functions (PDF Table 3) — keeps responses robust and
 // on-rails. Each is sent as a structured prompt the coach answers over your data.
 const _coachFunctions = <(String, String)>[
+  ('🌅 Morning brief', 'Give me my morning brief: today\'s readiness, what\'s scheduled on my habit checklist, what to prioritise given my recovery + weakest areas, and one thing to watch out for. Keep it tight and actionable.'),
+  ('🌙 Evening digest', 'Give me my evening digest: go through today\'s habits (which were completed vs missed — the completion data includes the AI verification results), today\'s training, diet and recovery numbers vs my targets, name what went well and what slipped, and take the initiative: propose any habit changes, target adjustments or amendments for tomorrow based on the data.'),
   ('😴 Sleep review', 'Review my sleep & recovery from my recent data and habits, then give 2–3 specific suggestions.'),
   ('🥗 Diet review', 'Review my diet — calories, protein and macros vs my weight/body-fat — and suggest concrete adjustments.'),
   ('💪 Training review', 'Review my training: recent volume, sessions, and which lifts/ranks lag. What should I prioritise this week?'),
@@ -102,7 +104,8 @@ class _CoachTabState extends ConsumerState<CoachTab>
     return coachHabits(hs.habits, hs.completions,
         logs: ref.read(logsProvider),
         food: ref.read(dietProvider),
-        workouts: ref.read(workoutProvider));
+        workouts: ref.read(workoutProvider),
+        aiVerdicts: hs.aiVerdicts);
   }
 
   // App-computed ranks (the app holds the full data + canonical engine), or null if empty.

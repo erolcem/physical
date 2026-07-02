@@ -94,21 +94,29 @@ Map<String, double> readinessSeries(
   return out;
 }
 
-/// Persist any missing daily_readiness logs so the metric graphs like the rest.
-/// Idempotent (skips days already logged). Returns how many were added.
+/// Persist the daily_readiness logs so the metric graphs like the rest. LIVE:
+/// a day whose recomputed score differs from the stored one (recovery data can
+/// arrive or be revised after the day was first scored) is REPLACED in place.
+/// Returns how many days were added or updated.
 int backfillReadinessLogs(Repository repo) {
   final logs = repo.loadLogs();
-  final have = {
-    for (final l in (logs['daily_readiness'] ?? const <Log>[]))
-      if (l.ts.length >= 10) l.ts.substring(0, 10)
-  };
-  var added = 0;
+  final list = logs['daily_readiness'] ?? const <Log>[];
+  final idxByDay = <String, int>{};
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].ts.length >= 10) idxByDay[list[i].ts.substring(0, 10)] = i;
+  }
+  var changed = 0;
   readinessSeries(logs, repo.loadWorkouts()).forEach((day, val) {
-    if (have.contains(day)) return;
-    repo.saveLog('daily_readiness', Log('daily_readiness', val, ts: '${day}T12:00:00'));
-    added++;
+    final i = idxByDay[day];
+    if (i == null) {
+      repo.saveLog('daily_readiness', Log('daily_readiness', val, ts: '${day}T12:00:00'));
+      changed++;
+    } else if ((list[i].value - val).abs() > 0.5) { // re-log only a meaningful shift
+      repo.replaceLog('daily_readiness', i, Log('daily_readiness', val, ts: list[i].ts));
+      changed++;
+    }
   });
-  return added;
+  return changed;
 }
 
 /// Traffic-light colour for readiness (green = ready … red = rest). NOT the tier

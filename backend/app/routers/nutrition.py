@@ -4,6 +4,7 @@ and still yields micros. Powered by the same Gemini key as the coach."""
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth import current_user
+from ..config import settings
 from ..integrations.gemini import client as gemini
 from ..nutrition import NUTRITION_PROMPT, parse_nutrition
 from ..schemas import NutritionIn, NutritionOut
@@ -26,7 +27,7 @@ def infer(body: NutritionIn, user_id: str = Depends(current_user)):
         raise HTTPException(503, "Nutrition auto-fill isn't configured on the server yet")
     try:
         reply = gemini.generate(NUTRITION_PROMPT, [{"role": "user", "text": desc}],
-                                temperature=0.2)
+                                model=settings.gemini_fast_model, temperature=0.2)
     except gemini.GeminiError as e:
         raise HTTPException(502, f"Couldn't estimate nutrition: {e}")
     data = parse_nutrition(reply)

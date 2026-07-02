@@ -54,6 +54,23 @@ void main() {
     expect(repo.loadLogs()['resting_hr']!.length, 1);
   });
 
+  test('mergeSamples updates a revised value in place (same metric+ts)', () {
+    // Today's step total grows through the day — the same (metric, ts) sample
+    // arrives with a larger value on the next sync and must replace, not freeze.
+    final repo = InMemoryRepository();
+    expect(mergeSamples(repo, [
+      {'metric_id': 'steps', 'ts': '2026-06-24T00:00:00', 'value': 3000.0,
+       'bodyweight_at_ts': null, 'source': 'google_health'},
+    ]), 1);
+    expect(mergeSamples(repo, [
+      {'metric_id': 'steps', 'ts': '2026-06-24T00:00:00', 'value': 9500.0,
+       'bodyweight_at_ts': null, 'source': 'google_health'},
+    ]), 1);
+    final logs = repo.loadLogs()['steps']!;
+    expect(logs.length, 1); // replaced, not duplicated
+    expect(logs.single.value, 9500.0);
+  });
+
   test('performSync flattens all logs and reports the backend overall', () async {
     final api = _FakeApi();
     final logs = {

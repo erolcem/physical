@@ -17,7 +17,7 @@ import '../engine/rank_engine.dart' show Log, RankResult;
 /// coach see the real data over time and find its own connections. Excludes the derived
 /// rank pseudo-metrics (circular). Compact: {metricId: [oldest … newest]}.
 Map<String, List<double>> coachHistory(Map<String, List<Log>> logs,
-    {int window = 90, int maxPoints = 30}) {
+    {int window = 180, int maxPoints = 45}) {
   final cutoff = DateTime.now().subtract(Duration(days: window));
   final out = <String, List<double>>{};
   for (final e in logs.entries) {
@@ -163,7 +163,7 @@ Map<String, dynamic> coachTrends(Map<String, List<Log>> logs) {
 /// Day-aligned Pearson correlations across logged metrics, strongest first. Excludes the
 /// derived rank/readiness pseudo-metrics (they'd be circular) and weak/low-overlap pairs.
 List<Map<String, dynamic>> coachCorrelations(Map<String, List<Log>> logs,
-    {double minAbsR = 0.4, int minOverlap = 5, int top = 14}) {
+    {double minAbsR = 0.4, int minOverlap = 5, int top = 20}) {
   final hidden = {for (final m in metrics) if (m.category == 'rank') m.id}
     ..addAll(['daily_readiness']);
   final ids = [
@@ -186,7 +186,7 @@ List<Map<String, dynamic>> coachCorrelations(Map<String, List<Log>> logs,
 
 /// Recent sessions with their individual sets, so the coach can read weight×reps,
 /// per-exercise volume, and progression.
-List<Map<String, dynamic>> coachWorkoutSets(List<WorkoutSession> sessions, {int take = 6}) {
+List<Map<String, dynamic>> coachWorkoutSets(List<WorkoutSession> sessions, {int take = 10}) {
   final recent = sortedByRecent(sessions).take(take);
   return [
     for (final s in recent)
@@ -307,13 +307,15 @@ List<({String title, String body, String ask})> coachInsights({
 }
 
 /// Rich habit context: target, today's measured value + met, streak, 30-day adherence,
-/// and the products used (for aesthetics reasoning).
+/// and the products used (for aesthetics reasoning). [aiVerdicts] (from the LLM
+/// verification round) override the rule-based done-check per habit+day.
 List<Map<String, dynamic>> coachHabits(
   List<Habit> habits,
   Map<String, Set<String>> completions, {
   required Map<String, List<Log>> logs,
   required List<FoodEntry> food,
   required List<WorkoutSession> workouts,
+  Map<String, Map<String, bool>> aiVerdicts = const {},
   DateTime? today,
 }) {
   final t = today ?? DateTime.now();
@@ -323,7 +325,8 @@ List<Map<String, dynamic>> coachHabits(
     for (final h in habits)
       () {
         bool metOn(String day) => habitDoneOn(h, day,
-            logs: logs, food: food, workouts: workouts, ticked: completions[h.id]);
+            logs: logs, food: food, workouts: workouts, ticked: completions[h.id],
+            aiVerdict: aiVerdicts[h.id]?[day]);
         final dueDays = [for (final d in window) if (isDueOn(h, DateTime.parse('${d}T12:00:00'))) d];
         final doneDays = {for (final d in window) if (metOn(d)) d};
         final adherence = dueDays.isEmpty

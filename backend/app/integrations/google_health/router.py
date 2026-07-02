@@ -46,8 +46,16 @@ def exchange(code: str = Query(...), user_id: str = Depends(current_user),
 @router.get("/status")
 def status(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     """Whether the signed-in user has a Google Health connection (for the app's
-    Connect/Connected UI)."""
-    return {"connected": db.get(GoogleHealthToken, user_id) is not None}
+    Connect/Connected UI), plus which of the app's scopes the stored token is
+    missing — a token granted before a scope was added (calendar / nutrition)
+    silently 403s those APIs until the user reconnects."""
+    token = db.get(GoogleHealthToken, user_id)
+    if token is None:
+        return {"connected": False}
+    granted = set((token.scope or "").split())
+    missing = [s for s in oauth.SCOPES
+               if s not in granted and s not in ("openid", "email", "profile")]
+    return {"connected": True, "missing_scopes": missing}
 
 
 @router.get("/profile")
@@ -152,7 +160,9 @@ def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     # Diet retrieval: the canonical IDs are nutrition-log / hydration-log / food (the
     # plain "nutrition" 400s). Needs the nutrition scope + food logged in Google Health.
     # daily-oxygen-saturation is the working SpO2 ID (kept for a possible background add).
-    for cand in ("nutrition-log", "hydration-log", "food", "daily-oxygen-saturation"):
+    # calories/energy candidates probe for the "total energy burned" import (Part 1).
+    for cand in ("nutrition-log", "hydration-log", "food", "daily-oxygen-saturation",
+                 "calories", "active-energy-burned", "daily-calories", "energy-expended"):
         try:
             status, body = client.get_raw(
                 f"/users/me/dataTypes/{cand}/dataPoints?pageSize=3")
@@ -214,16 +224,22 @@ def sync_user(db: Session, user_id: str, days: int = 7, replace: bool = False) -
             errors[data_type] = str(e)[:400]
 
     # Intraday → daily totals: steps + active-zone-minutes (continuous types, no daily
-    # rollup; the list endpoint takes no time filter so the latest day may be partial).
+    # rollup). PAGINATED so a day's total covers every interval — one page of a
+    # per-minute stream truncates the sums and under-counts vs the Google Health app.
+    # The oldest day in the window is dropped as boundary-partial; today stays (it's a
+    # live running total, refreshed by the upsert in _ingest on each sync).
     for metric_id, dtid, ckey, vkey, agg in [
         ("steps", "steps", "steps", "count", "sum"),
         ("active_zone", "active-zone-minutes", "activeZoneMinutes", "activeZoneMinutes", "sum"),
         ("heart_rate", "heart-rate", "heartRate", "beatsPerMinute", "avg"),
+        # Total energy burned (PDF Part 1 diet-background). Type id unconfirmed on this
+        # API — candidates probed in /debug; a 404 just yields no points (no error noise).
+        ("energy_burned", "calories", "calories", "energyKcal", "sum"),
     ]:
         try:
-            _, body = client.get_raw(f"/users/me/dataTypes/{dtid}/dataPoints?pageSize=2000")
-            pts = body.get("dataPoints", []) if isinstance(body, dict) else []
-            samples += mapping.parse_intraday_daily(metric_id, pts, ckey, vkey, agg=agg)
+            pts = client.query_pages(dtid)
+            samples += mapping.parse_intraday_daily(metric_id, pts, ckey, vkey, agg=agg,
+                                                    drop_oldest=True)
         except Exception as e:
             errors[dtid] = str(e)[:200]
 
@@ -246,6 +262,11 @@ def sync_user(db: Session, user_id: str, days: int = 7, replace: bool = False) -
     except Exception as e:
         return {"pulled": len(samples), "ingested": 0, "skipped": 0,
                 "errors": {**errors, "ingest": str(e)[:300]}, "days": days}
+    # A 401/403 on any data type means the stored token predates a newly-added scope
+    # (e.g. nutrition / calendar) — the fix is a one-tap reconnect, so tell the app.
+    if any(("401" in v or "403" in v or "PERMISSION_DENIED" in v or "insufficient" in v.lower())
+           for v in errors.values()):
+        errors["scope"] = "reconnect Google to grant the newly added permissions"
     return {"pulled": len(samples), "ingested": ingested, "skipped": skipped,
             "errors": errors, "days": days}
 
@@ -298,7 +319,15 @@ def _ingest(db: Session, user_id: str, samples: list[dict]) -> tuple[int, int]:
             Sample.user_id == user_id, Sample.metric_id == s["metric_id"],
             Sample.source == s["source"], Sample.source_id == s["source_id"]))
         if dupe is not None:
-            skipped += 1
+            # UPSERT, don't freeze: a day synced mid-day (e.g. steps at noon) or a
+            # vendor-revised value (sleep score) must update, or the stored total is
+            # forever whatever it was at the FIRST sync that day.
+            if abs((dupe.value or 0) - float(s["value"])) > 1e-9:
+                dupe.value = float(s["value"])
+                dupe.raw = s.get("raw")
+                ingested += 1
+            else:
+                skipped += 1
             continue
         db.add(Sample(
             user_id=user_id, metric_id=s["metric_id"],

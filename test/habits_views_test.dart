@@ -36,7 +36,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('TODAY’S TIMELINE'), findsOneWidget);
+    expect(find.text('TIMELINE'), findsOneWidget);
     await tester.tap(find.text('Week'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

@@ -48,6 +48,31 @@ class GoogleHealthClient:
             raise RuntimeError(f"{r.status_code} {r.text[:400]}")
         return r.json().get("dataPoints", [])
 
+    def query_pages(self, data_type: str, page_size: int = 1000,
+                    max_pages: int = 8) -> list[dict]:
+        """Paginate through a continuous (intraday) dataType so daily rollups cover
+        every interval of a day, not just the first page. Without this, high-frequency
+        types (per-minute steps / heart-rate) truncate at one page and the summed
+        daily totals under-count vs what Google Health shows."""
+        out: list[dict] = []
+        token = None
+        for _ in range(max_pages):
+            params: dict = {"pageSize": page_size}
+            if token:
+                params["pageToken"] = token
+            r = httpx.get(f"{BASE}/users/me/dataTypes/{data_type}/dataPoints",
+                          headers=self._headers, params=params, timeout=45)
+            if r.status_code == 404:
+                break
+            if r.status_code >= 400:
+                raise RuntimeError(f"{r.status_code} {r.text[:400]}")
+            body = r.json()
+            out += body.get("dataPoints", [])
+            token = body.get("nextPageToken")
+            if not token:
+                break
+        return out
+
     def get_raw(self, path: str):
         """Raw GET for diagnostics — returns (status_code, parsed-json-or-text)."""
         r = httpx.get(f"{BASE}{path}", headers=self._headers, timeout=20)
