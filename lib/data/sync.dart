@@ -194,36 +194,41 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
       }
     }
   } catch (_) {/* calendar mirror is best-effort */}
-  // AI habit verification round (items 4+7): the LLM re-judges today's non-manual
-  // habits against the day's real evidence — robust to custom habits, and stops one
-  // workout ticking two habits. Runs in the background; refreshes the Habits tab
-  // when the verdicts land. Best-effort (rule-based checks remain the fallback).
-  unawaited(runAiVerification(api, repo).then((judged) {
+  // The daily AI loop (item 15), in order and off the critical path:
+  //   1. VERIFY — the LLM re-judges today's non-manual habits against the day's
+  //      real evidence (robust to custom habits; one workout can't tick two).
+  //   2. NUDGES — the morning brief (8am, day ahead) and the evening digest
+  //      (8pm, how today went) are regenerated from the live context, with the
+  //      evening one scheduled AFTER verification so it reflects the verdicts.
+  // All best-effort; the rule-based checks remain the fallback.
+  unawaited(() async {
+    int? judged;
+    try {
+      judged = await runAiVerification(api, repo);
+    } catch (_) {/* verification is best-effort */}
     if (judged != null && judged > 0) ref.invalidate(habitsProvider);
-  }).catchError((_) => null));
-  // AI-personalised notifications — a morning (day ahead) and an evening (how it went)
-  // nudge, refreshed each sync from the same live context the coach uses. Best-effort.
-  try {
-    final logs = ref.read(logsProvider);
-    final hs = ref.read(habitsProvider);
-    final habitsCtx = coachHabits(hs.habits, hs.completions,
-        logs: logs, food: ref.read(dietProvider), workouts: ref.read(workoutProvider),
-        aiVerdicts: hs.aiVerdicts);
-    final ranksCtx = ref.read(latestLogsProvider).isEmpty
-        ? null
-        : coachRanks(
-            overall: ref.read(overallProvider),
-            categories: ref.read(categoryRanksProvider),
-            latest: ref.read(latestLogsProvider),
-            logs: logs);
-    final trendsCtx = coachTrends(logs);
-    Future<void> sched(String slot, int id, int hour) async {
-      final n = await api.coachNudge(slot: slot, habits: habitsCtx, ranks: ranksCtx, trends: trendsCtx);
-      if (n != null) await NotificationService.instance.scheduleAiNudge(id, n, hour);
-    }
-    unawaited(sched('morning', NotificationService.nudgeMorningId, 8));
-    unawaited(sched('evening', NotificationService.nudgeEveningId, 20));
-  } catch (_) {/* nudges are best-effort */}
+    try {
+      final logs = ref.read(logsProvider);
+      final hs = ref.read(habitsProvider);
+      final habitsCtx = coachHabits(hs.habits, hs.completions,
+          logs: logs, food: ref.read(dietProvider), workouts: ref.read(workoutProvider),
+          aiVerdicts: hs.aiVerdicts);
+      final ranksCtx = ref.read(latestLogsProvider).isEmpty
+          ? null
+          : coachRanks(
+              overall: ref.read(overallProvider),
+              categories: ref.read(categoryRanksProvider),
+              latest: ref.read(latestLogsProvider),
+              logs: logs);
+      final trendsCtx = coachTrends(logs);
+      Future<void> sched(String slot, int id, int hour) async {
+        final n = await api.coachNudge(slot: slot, habits: habitsCtx, ranks: ranksCtx, trends: trendsCtx);
+        if (n != null) await NotificationService.instance.scheduleAiNudge(id, n, hour);
+      }
+      unawaited(sched('morning', NotificationService.nudgeMorningId, 8));
+      unawaited(sched('evening', NotificationService.nudgeEveningId, 20));
+    } catch (_) {/* nudges are best-effort */}
+  }());
   return CloudSyncResult(added, note,
       needsReconnect: needsReconnect, calendarNeedsReconnect: calendarNeedsReconnect);
 }
