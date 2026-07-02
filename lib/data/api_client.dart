@@ -104,6 +104,12 @@ class ApiClient {
     return (jsonDecode(r.body) as Map<String, dynamic>)['authorize_url'] as String;
   }
 
+  /// Scopes the LAST sign-in consent failed to grant (set by
+  /// [googleSignInComplete]). Google can silently drop scopes — unticked consent
+  /// checkboxes, or restricted health scopes when the OAuth consent screen isn't
+  /// in Testing mode — which otherwise shows up only as 403s on every sync.
+  List<String> lastSignInMissingScopes = const [];
+
   /// Complete sign-in with the OAuth code: stores the JWT (persisted) and returns
   /// the account email.
   Future<String?> googleSignInComplete(String code) async {
@@ -118,6 +124,8 @@ class ApiClient {
     final j = jsonDecode(r.body) as Map<String, dynamic>;
     await _persist(j['access_token'] as String);
     userEmail = j['email'] as String?;
+    lastSignInMissingScopes =
+        ((j['missing_scopes'] as List?) ?? const []).cast<String>();
     return userEmail;
   }
 
@@ -211,6 +219,29 @@ class ApiClient {
       return jsonDecode(r.body) as Map<String, dynamic>;
     } catch (_) {
       return const {};
+    }
+  }
+
+  /// The consent URL for the SEPARATE Google Calendar grant. Calendar can't ride
+  /// on the health token — the Health API rejects tokens carrying calendar.events.
+  Future<String> googleCalendarAuthorizeUrl() async {
+    final r = await _client
+        .get(Uri.parse('$baseUrl/integrations/google/calendar/authorize'),
+            headers: _headers())
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) {
+      throw ApiException('calendar authorize failed: ${r.body}', r.statusCode);
+    }
+    return (jsonDecode(r.body) as Map<String, dynamic>)['authorize_url'] as String;
+  }
+
+  /// Exchange the calendar consent code → stores the calendar token server-side.
+  Future<void> googleCalendarExchange(String code) async {
+    final uri = Uri.parse('$baseUrl/integrations/google/calendar/exchange')
+        .replace(queryParameters: {'code': code});
+    final r = await _client.post(uri, headers: _headers()).timeout(const Duration(seconds: 20));
+    if (r.statusCode != 200) {
+      throw ApiException('calendar exchange failed: ${r.body}', r.statusCode);
     }
   }
 

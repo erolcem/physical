@@ -14,7 +14,7 @@ from ..auth import current_user
 from ..calendar_feed import build_ics, feed_token, habit_event, verify_token
 from ..db import get_db
 from ..integrations.google_health.router import _valid_access_token
-from ..models import Backup, GoogleHealthToken
+from ..models import Backup, GoogleCalendarToken
 
 router = APIRouter(tags=["calendar"])
 
@@ -29,10 +29,14 @@ def push_to_google_calendar(
 ):
     """Upsert the app-supplied habits as recurring events in the user's Google Calendar.
     Tagged with a private extended property so re-pushes update (never duplicate), and
-    habits that no longer exist are removed. Returns {added, updated, removed}."""
-    token = db.get(GoogleHealthToken, user_id)
+    habits that no longer exist are removed. Returns {added, updated, removed}.
+
+    Uses the SEPARATE calendar token (from /integrations/google/calendar/exchange):
+    the calendar grant can't ride on the health token — health.googleapis.com rejects
+    tokens carrying calendar.events (DISALLOWED_OAUTH_SCOPES)."""
+    token = db.get(GoogleCalendarToken, user_id)
     if not token:
-        raise HTTPException(400, "Connect Google first")
+        raise HTTPException(401, "needs_calendar_connect")
     try:
         access = _valid_access_token(db, token)
     except Exception:

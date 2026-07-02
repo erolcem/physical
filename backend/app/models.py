@@ -64,6 +64,20 @@ class GoogleHealthToken(Base):
     scope: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
+class GoogleCalendarToken(Base):
+    """Per-user Google OAuth tokens for Calendar, SEPARATE from the health token:
+    health.googleapis.com rejects any access token that also carries non-health
+    scopes (403 DISALLOWED_OAUTH_SCOPES, disallowed_scopes=cl_events), so the
+    calendar.events grant must live on its own token from its own consent."""
+    __tablename__ = "google_calendar_tokens"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    access_token: Mapped[str] = mapped_column(String)
+    refresh_token: Mapped[str] = mapped_column(String)
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime)
+    scope: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
 class Backup(Base):
     """A full JSON snapshot of a user's local app data (logs, habits, food, workouts,
     pins…) so sign-in on a new device restores everything. One row per user."""

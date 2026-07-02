@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from ...auth import current_user
 from ...config import settings
 from ...db import get_db
-from ...models import GoogleHealthToken, Sample
+from ...models import GoogleCalendarToken, GoogleHealthToken, Sample
 from . import mapping, oauth
 from .client import DATA_TYPES, GoogleHealthClient
 
@@ -46,16 +46,48 @@ def exchange(code: str = Query(...), user_id: str = Depends(current_user),
 @router.get("/status")
 def status(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     """Whether the signed-in user has a Google Health connection (for the app's
-    Connect/Connected UI), plus which of the app's scopes the stored token is
-    missing — a token granted before a scope was added (calendar / nutrition)
-    silently 403s those APIs until the user reconnects."""
+    Connect/Connected UI), plus which health scopes the stored token is missing,
+    whether it carries a POISON scope (calendar on the health token makes the
+    Health API 403 everything), and whether the separate Calendar token exists."""
     token = db.get(GoogleHealthToken, user_id)
     if token is None:
         return {"connected": False}
     granted = set((token.scope or "").split())
     missing = [s for s in oauth.SCOPES
                if s not in granted and s not in ("openid", "email", "profile")]
-    return {"connected": True, "missing_scopes": missing}
+    # A health token that ALSO carries calendar.events is rejected wholesale by
+    # health.googleapis.com — reconnecting (which now consents health-only) fixes it.
+    poisoned = any("calendar" in s for s in granted)
+    return {"connected": True, "missing_scopes": missing, "health_token_poisoned": poisoned,
+            "calendar_connected": db.get(GoogleCalendarToken, user_id) is not None}
+
+
+# ── Calendar linking (a SEPARATE consent + token: the Health API rejects tokens
+# that carry non-health scopes, so calendar.events can't ride on the sign-in). ──
+@router.get("/calendar/authorize")
+def calendar_authorize(user_id: str = Depends(current_user)):
+    """The consent URL for the calendar-only grant (auto-add habits to Google
+    Calendar). Same code-paste flow as sign-in."""
+    if not settings.google_client_id:
+        raise HTTPException(500, "GOOGLE_CLIENT_ID not configured (see backend/README.md)")
+    return {"authorize_url": oauth.authorize_url(state=user_id, scopes=oauth.CALENDAR_SCOPES)}
+
+
+@router.post("/calendar/exchange")
+def calendar_exchange(code: str = Query(...), user_id: str = Depends(current_user),
+                      db: Session = Depends(get_db)):
+    tok = oauth.exchange_code(code)
+    refresh = tok.get("refresh_token")
+    if not refresh:
+        existing = db.get(GoogleCalendarToken, user_id)
+        refresh = existing.refresh_token if existing else None
+    if not refresh:
+        raise HTTPException(400, "no refresh_token returned — re-consent (prompt=consent)")
+    db.merge(GoogleCalendarToken(
+        user_id=user_id, access_token=tok["access_token"], refresh_token=refresh,
+        expires_at=oauth.expiry_from(tok), scope=tok.get("scope")))
+    db.commit()
+    return {"status": "calendar_connected", "user_id": user_id}
 
 
 @router.get("/profile")
@@ -122,13 +154,26 @@ def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     token = db.get(GoogleHealthToken, user_id)
     if token is None:
         raise HTTPException(404, "Google Health not connected")
+    out = {}
+    # What the stored token is actually allowed to do (scope strings only — no
+    # secrets). All-403 syncs are almost always explained right here: Google
+    # granted the token WITHOUT the health scopes (consent checkboxes unticked,
+    # or a non-Testing/unverified consent screen silently dropping restricted
+    # scopes), and no amount of reconnecting fixes that until the consent does.
+    granted = set((token.scope or "").split())
+    out["_token"] = {
+        "granted_scopes": sorted(granted),
+        "missing_scopes": [s for s in oauth.SCOPES
+                           if s not in granted and s not in ("openid", "email", "profile")],
+        "expires_at": str(token.expires_at),
+    }
     try:
         access = _valid_access_token(db, token)
     except Exception as e:
         # If the refresh failed, re-run /authorize then /exchange to reconnect.
-        return {"token_error": str(e)[:500]}
+        out["token_error"] = str(e)[:500]
+        return out
     client = GoogleHealthClient(access)
-    out = {}
     # One real sample per data type so we can write precise field extractors.
     for metric_id, data_type in DATA_TYPES.items():
         try:
@@ -262,11 +307,27 @@ def sync_user(db: Session, user_id: str, days: int = 7, replace: bool = False) -
     except Exception as e:
         return {"pulled": len(samples), "ingested": 0, "skipped": 0,
                 "errors": {**errors, "ingest": str(e)[:300]}, "days": days}
-    # A 401/403 on any data type means the stored token predates a newly-added scope
-    # (e.g. nutrition / calendar) — the fix is a one-tap reconnect, so tell the app.
-    if any(("401" in v or "403" in v or "PERMISSION_DENIED" in v or "insufficient" in v.lower())
-           for v in errors.values()):
-        errors["scope"] = "reconnect Google to grant the newly added permissions"
+    # Classify auth-ish failures so the app can say WHAT to fix, not just "reconnect":
+    #   • api_disabled  — the Google Health API is off in the Cloud project (console fix)
+    #   • grant         — the token itself lacks the health scopes: Google dropped them
+    #                     at consent (unticked checkboxes / consent screen not in
+    #                     Testing / user not a test user) — reconnecting alone won't help
+    #   • scope         — a 403 with scopes present ⇒ stale token; reconnect fixes it
+    joined = " ".join(errors.values())
+    if "SERVICE_DISABLED" in joined or "has not been used in project" in joined or "it is disabled" in joined:
+        errors["api_disabled"] = ("the Google Health API is disabled for this Cloud "
+                                  "project — enable it in console.cloud.google.com")
+    elif any(("401" in v or "403" in v or "PERMISSION_DENIED" in v or "insufficient" in v.lower())
+             for v in errors.values()):
+        granted = set((token.scope or "").split())
+        health_missing = [s for s in oauth.SCOPES if "googlehealth" in s and s not in granted]
+        if health_missing:
+            errors["grant"] = ("Google did not grant the health scopes at the last consent — "
+                               "re-connect and TICK EVERY CHECKBOX on the consent page, and check "
+                               "the OAuth consent screen is in Testing mode with your email under "
+                               "Test users")
+        else:
+            errors["scope"] = "reconnect Google to grant the newly added permissions"
     return {"pulled": len(samples), "ingested": ingested, "skipped": skipped,
             "errors": errors, "days": days}
 
@@ -295,14 +356,21 @@ def _store_token(db: Session, user_id: str, tok: dict) -> None:
     db.commit()
 
 
-def _valid_access_token(db: Session, token: GoogleHealthToken) -> str:
+def _valid_access_token(db: Session, token) -> str:
+    """Refresh-if-stale for EITHER token row (health or calendar) — updates the
+    row in place, so it works regardless of which table the token lives in."""
     exp = token.expires_at
     if exp.tzinfo is None:
         exp = exp.replace(tzinfo=dt.timezone.utc)
     if exp <= dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=2):
         new = oauth.refresh_token(token.refresh_token)
-        _store_token(db, token.user_id, new)
-        return new["access_token"]
+        token.access_token = new["access_token"]
+        if new.get("refresh_token"):  # Google usually omits it on refresh
+            token.refresh_token = new["refresh_token"]
+        if new.get("scope"):
+            token.scope = new["scope"]
+        token.expires_at = oauth.expiry_from(new)
+        db.commit()
     return token.access_token
 
 

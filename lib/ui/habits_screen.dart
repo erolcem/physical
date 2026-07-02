@@ -773,7 +773,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           '${(r['removed'] ?? 0) != 0 ? ' · ${r['removed']} removed' : ''}.';
     } on ApiException catch (e) {
       msg = (e.status == 401 || e.status == 403)
-          ? 'Reconnect Google (Cloud ☁) to grant calendar access, then try again.'
+          ? 'Connect Google Calendar in the Cloud sheet (☁), then try again.'
           : 'Calendar sync failed — try again in a moment.';
     } catch (_) {
       msg = 'Couldn’t reach the calendar service.';

@@ -22,6 +22,12 @@ class TokenOut(BaseModel):
     access_token: str
     user_id: str
     email: str | None = None
+    # Which of the app's Google scopes this consent actually granted / omitted —
+    # Google can silently drop scopes (unticked consent checkboxes; restricted
+    # health scopes for apps not in Testing mode), which otherwise surfaces only
+    # as baffling 403s on every sync.
+    granted_scopes: list[str] | None = None
+    missing_scopes: list[str] | None = None
 
 
 class GoogleSignIn(BaseModel):
@@ -89,7 +95,15 @@ def google_complete(body: GoogleCode, db: Session = Depends(get_db)):
             user_id=sub, access_token=tok["access_token"], refresh_token=refresh,
             expires_at=gh_oauth.expiry_from(tok), scope=tok.get("scope")))
     db.commit()
-    return TokenOut(access_token=create_access_token(sub), user_id=sub, email=email)
+    # Report exactly what this consent granted vs what the app asked for, so the
+    # app can tell the user WHY a "successful" reconnect still 403s (e.g. Google
+    # dropped the restricted health scopes because the OAuth consent screen left
+    # Testing mode, or the consent checkboxes weren't ticked).
+    granted = (tok.get("scope") or "").split()
+    missing = [s for s in gh_oauth.SCOPES
+               if s not in granted and s not in ("openid", "email", "profile")]
+    return TokenOut(access_token=create_access_token(sub), user_id=sub, email=email,
+                    granted_scopes=granted, missing_scopes=missing)
 
 
 class DevSignIn(BaseModel):
