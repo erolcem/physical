@@ -404,7 +404,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
-            onTap: () => ref.read(habitsProvider.notifier).toggleOn(h.id, dayKey0),
+            onTap: h.verify == 'manual'
+                ? () => ref.read(habitsProvider.notifier).toggleOn(h.id, dayKey0)
+                : () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    duration: const Duration(seconds: 2),
+                    content: Text('"${h.title}" counts only from real data (watch/sets/food).'))),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
@@ -609,11 +613,18 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
             borderRadius: BorderRadius.circular(14),
             // Long-press to edit any habit (title, target, time, days…).
             onLongPress: () => _showAddDialog(context, ref, edit: h),
-            // Every habit is tickable — a tick always counts as done; evidence
-            // (AI check / data) upgrades it to "verified" on its own.
+            // Manual habits toggle on tap. Data-verifiable ones are STRICT:
+            // only real evidence counts (watch session, logged sets, food
+            // totals) — that's what keeps the AI's picture honest.
             onTap: dimmed
                 ? null
-                : () => ref.read(habitsProvider.notifier).toggleOn(h.id, day),
+                : (h.verify == 'manual'
+                    ? () => ref.read(habitsProvider.notifier).toggleOn(h.id, day)
+                    : () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        duration: const Duration(seconds: 3),
+                        content: Text('"${h.title}" counts only from real data — '
+                            'train with the watch / log the sets or food, then sync. '
+                            'The AI check verifies it.')))),
             child: IntrinsicHeight(
               child: Row(children: [
                 Container(width: 4, color: cc),
@@ -621,7 +632,10 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     child: Row(children: [
-                      Icon(done ? Icons.check_circle : Icons.circle_outlined,
+                      Icon(
+                          done
+                              ? Icons.check_circle
+                              : (h.verify == 'manual' ? Icons.circle_outlined : Icons.sensors),
                           color: done ? _teal : _muted, size: 26),
                       const SizedBox(width: 10),
                       Expanded(

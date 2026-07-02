@@ -49,10 +49,12 @@ void main() {
     // And can also confirm a habit the rules can't see evidence for.
     expect(habitDoneOn(train, day, logs: const {}, food: const [], workouts: const [],
         aiVerdict: true), isTrue);
-    // Forgiving model: an explicit user tick always counts, even against a
-    // negative AI verdict (the verdict only withholds the "verified" badge).
+    // STRICT: a manual tick can never satisfy a data-verifiable habit — real
+    // evidence (watch session / sets / food) is the only way it counts.
     expect(habitDoneOn(train, day, logs: const {}, food: const [], workouts: const [],
-        ticked: {day}, aiVerdict: false), isTrue);
+        ticked: {day}, aiVerdict: false), isFalse);
+    expect(habitDoneOn(train, day, logs: const {}, food: const [], workouts: const [],
+        ticked: {day}), isFalse);
     // Manual habits are never judged by the AI.
     final manual = h('m1', 'Journal', verify: 'manual');
     expect(habitDoneOn(manual, day, logs: const {}, food: const [], workouts: const [],
