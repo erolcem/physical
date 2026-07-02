@@ -4,9 +4,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/api_client.dart';
 import '../data/sync.dart';
+import '../state/habit_providers.dart' show habitsProvider;
 
 const _accent = Color(0xFF5B6AF8);
 const _teal = Color(0xFF4CE0C3);
@@ -200,10 +202,28 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
       final code = await _askForCode(url);
       if (code != null && code.isNotEmpty) {
         await api.googleCalendarExchange(code);
+        // Push the current roster RIGHT NOW — "connected" with an empty calendar
+        // until the next sync/edit reads as broken.
+        String detail;
+        try {
+          final habits = [for (final h in ref.read(habitsProvider).habits) h.toJson()];
+          String? tz;
+          try {
+            tz = await FlutterTimezone.getLocalTimezone();
+          } catch (_) {/* backend falls back to UTC */}
+          final r = await api.pushCalendar(habits, tz);
+          final n = ((r['added'] ?? 0) as num) + ((r['updated'] ?? 0) as num);
+          final failed = (r['failed'] ?? 0) as num;
+          detail = failed > 0
+              ? '$n habits added, $failed failed (${(r['error'] ?? '').toString().replaceAll('\n', ' ')})'
+              : '$n habits now on your Google Calendar.';
+        } catch (_) {
+          detail = 'habits will be added on the next sync.';
+        }
         if (mounted) {
           setState(() {
             _calendarConnected = true;
-            _msg = 'Google Calendar connected ✓ — habits will auto-add from now on.';
+            _msg = 'Google Calendar connected ✓ — $detail';
           });
         }
       }

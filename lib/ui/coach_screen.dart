@@ -339,6 +339,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
   void _showPlanReview(Map<String, dynamic> plan) {
     final proposals = ((plan['habits'] as List?) ?? const []).cast<Map<String, dynamic>>();
     final selected = List<bool>.filled(proposals.length, true);
+    var replace = false; // remove the current roster before applying
     String planLine(Map<String, dynamic> h) {
       final bits = <String>[];
       if (h['target'] != null) {
@@ -401,13 +402,32 @@ class _CoachTabState extends ConsumerState<CoachTab>
                     },
                   ),
                 ),
-                const SizedBox(height: 10),
+                CheckboxListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: replace,
+                  onChanged: (v) => setLocal(() => replace = v ?? false),
+                  title: const Text('Replace my current habits',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                  subtitle: const Text(
+                      'Removes every existing habit (and its streaks) first — a fresh start.',
+                      style: TextStyle(fontSize: 11, color: _muted)),
+                ),
+                const SizedBox(height: 6),
                 FilledButton.icon(
                   style: FilledButton.styleFrom(
                       backgroundColor: _accent, minimumSize: const Size.fromHeight(46)),
                   icon: const Icon(Icons.check),
-                  label: Text('Add ${selected.where((s) => s).length} habits'),
+                  label: Text(
+                      '${replace ? 'Replace with' : 'Add'} ${selected.where((s) => s).length} habits'),
                   onPressed: () {
+                    if (replace) {
+                      final notifier = ref.read(habitsProvider.notifier);
+                      for (final h in [...ref.read(habitsProvider).habits]) {
+                        notifier.removeHabit(h.id);
+                      }
+                    }
                     var added = 0;
                     for (var i = 0; i < proposals.length; i++) {
                       if (!selected[i]) continue;
@@ -416,7 +436,8 @@ class _CoachTabState extends ConsumerState<CoachTab>
                     }
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text('Added $added habits — see the Habits tab.')));
+                        content: Text(
+                            '${replace ? 'Roster replaced —' : 'Added'} $added habits, see the Habits tab.')));
                   },
                 ),
               ]),

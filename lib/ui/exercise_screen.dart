@@ -230,7 +230,7 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
             InkWell(
               borderRadius: BorderRadius.circular(10),
               onTap: () => _startFromTemplate(t),
-              onLongPress: () => _deleteTemplate(t),
+              onLongPress: () => _templateMenu(t),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
@@ -256,6 +256,45 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
     final s = ref.read(workoutProvider.notifier).createFromTemplate(t);
     Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => SessionDetailScreen(sessionId: s.id)));
+  }
+
+  // Long-press a template chip: start / edit / delete.
+  void _templateMenu(WorkoutTemplate t) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _bg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.play_circle_outline, color: _accent),
+            title: Text('Start "${t.name}"'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _startFromTemplate(t);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.edit_outlined, color: _teal),
+            title: const Text('Edit plan'),
+            onTap: () {
+              Navigator.pop(ctx);
+              Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => TemplateEditorScreen(existing: t)));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline, color: Color(0xFFFA3737)),
+            title: const Text('Delete'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _deleteTemplate(t);
+            },
+          ),
+        ]),
+      ),
+    );
   }
 
   Future<void> _deleteTemplate(WorkoutTemplate t) async {
@@ -511,80 +550,205 @@ class SessionDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _addSet(BuildContext context, WidgetRef ref) async {
-    final name = TextEditingController();
-    var mode = SetMode.weightReps;
-    final weight = TextEditingController();
-    final reps = TextEditingController();
-    final mins = TextEditingController();
-    final secs = TextEditingController();
-    final dist = TextEditingController();
+    final set = await promptWorkoutSet(context);
+    if (set != null) ref.read(workoutProvider.notifier).addSet(sessionId, set);
+  }
+}
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          Widget num(TextEditingController c, String label) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  child: TextField(
-                    controller: c,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-                  ),
+/// Shared "describe one set" dialog (exercise name + mode + values) — used when
+/// logging into a session and when editing a workout plan (template).
+Future<WorkoutSet?> promptWorkoutSet(BuildContext context, {String? initialName}) async {
+  final name = TextEditingController(text: initialName ?? '');
+  var mode = SetMode.weightReps;
+  final weight = TextEditingController();
+  final reps = TextEditingController();
+  final mins = TextEditingController();
+  final secs = TextEditingController();
+  final dist = TextEditingController();
+
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) {
+        Widget num(TextEditingController c, String label) => Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: TextField(
+                  controller: c,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
                 ),
-              );
-          return AlertDialog(
-            backgroundColor: _card,
-            title: const Text('Add set'),
-            content: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                TextField(controller: name, autofocus: true, decoration: const InputDecoration(
-                    labelText: 'Exercise', hintText: 'e.g. Chest Press', border: OutlineInputBorder())),
-                const SizedBox(height: 12),
-                const Text('Mode', style: TextStyle(fontSize: 11, color: _muted)),
-                const SizedBox(height: 6),
-                Wrap(spacing: 6, runSpacing: 6, children: [
-                  for (final m in SetMode.values)
-                    ChoiceChip(
-                      label: Text(m.label, style: const TextStyle(fontSize: 12)),
-                      selected: mode == m,
-                      onSelected: (_) => setLocal(() => mode = m),
-                      selectedColor: _accent.withValues(alpha: 0.25),
-                      backgroundColor: _bg,
-                    ),
-                ]),
-                const SizedBox(height: 12),
-                if (mode == SetMode.weightReps)
-                  Row(children: [num(weight, 'Weight (kg)'), num(reps, 'Reps')])
-                else if (mode == SetMode.reps)
-                  Row(children: [num(reps, 'Reps')])
-                else if (mode == SetMode.time)
-                  Row(children: [num(mins, 'Minutes'), num(secs, 'Seconds')])
-                else
-                  Row(children: [num(dist, 'Distance (km)')]),
+              ),
+            );
+        return AlertDialog(
+          backgroundColor: _card,
+          title: const Text('Add set'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              TextField(controller: name, autofocus: initialName == null, decoration: const InputDecoration(
+                  labelText: 'Exercise', hintText: 'e.g. Chest Press', border: OutlineInputBorder())),
+              const SizedBox(height: 12),
+              const Text('Mode', style: TextStyle(fontSize: 11, color: _muted)),
+              const SizedBox(height: 6),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final m in SetMode.values)
+                  ChoiceChip(
+                    label: Text(m.label, style: const TextStyle(fontSize: 12)),
+                    selected: mode == m,
+                    onSelected: (_) => setLocal(() => mode = m),
+                    selectedColor: _accent.withValues(alpha: 0.25),
+                    backgroundColor: _bg,
+                  ),
               ]),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Add')),
-            ],
-          );
-        },
+              const SizedBox(height: 12),
+              if (mode == SetMode.weightReps)
+                Row(children: [num(weight, 'Weight (kg)'), num(reps, 'Reps')])
+              else if (mode == SetMode.reps)
+                Row(children: [num(reps, 'Reps')])
+              else if (mode == SetMode.time)
+                Row(children: [num(mins, 'Minutes'), num(secs, 'Seconds')])
+              else
+                Row(children: [num(dist, 'Distance (km)')]),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Add')),
+          ],
+        );
+      },
+    ),
+  );
+  if (ok != true || name.text.trim().isEmpty) return null;
+  return WorkoutSet(
+    name: name.text.trim(),
+    mode: mode,
+    weight: double.tryParse(weight.text),
+    reps: int.tryParse(reps.text),
+    seconds: mode == SetMode.time
+        ? (double.tryParse(mins.text) ?? 0) * 60 + (double.tryParse(secs.text) ?? 0)
+        : null,
+    distance: double.tryParse(dist.text),
+  );
+}
+
+/// Workout-plan editor: edit a template's name, type and sets directly (the
+/// habit-carried plan). Pops with the saved template's id, so callers (e.g. the
+/// habit dialog's "New plan…") can link it.
+class TemplateEditorScreen extends ConsumerStatefulWidget {
+  final WorkoutTemplate? existing;
+  final String? suggestedName;
+  const TemplateEditorScreen({this.existing, this.suggestedName, super.key});
+
+  @override
+  ConsumerState<TemplateEditorScreen> createState() => _TemplateEditorScreenState();
+}
+
+class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
+  late final TextEditingController _name = TextEditingController(
+      text: widget.existing?.name ?? widget.suggestedName ?? '');
+  late String _type = widget.existing?.type ?? 'Weightlifting';
+  late final List<WorkoutSet> _sets = List.of(widget.existing?.sets ?? const []);
+
+  void _save() {
+    if (_name.text.trim().isEmpty || _sets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Give the plan a name and at least one set.')));
+      return;
+    }
+    final t = WorkoutTemplate(
+      id: widget.existing?.id ?? DateTime.now().microsecondsSinceEpoch.toString(),
+      name: _name.text.trim(),
+      type: _type,
+      sets: List.of(_sets),
+    );
+    ref.read(templatesProvider.notifier).save(t);
+    Navigator.of(context).pop(t.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final grouped = groupByExercise(_sets);
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        backgroundColor: _bg,
+        title: Text(widget.existing == null ? 'New workout plan' : 'Edit workout plan'),
+        actions: [
+          TextButton(onPressed: _save, child: const Text('Save')),
+        ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: _teal,
+        foregroundColor: Colors.black,
+        onPressed: () async {
+          final s = await promptWorkoutSet(context);
+          if (s != null) setState(() => _sets.add(s));
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('Add set'),
+      ),
+      body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
+        TextField(
+          controller: _name,
+          decoration: const InputDecoration(
+              labelText: 'Plan name', hintText: 'e.g. Push day', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 12),
+        const Text('Type', style: TextStyle(fontSize: 11, color: _muted)),
+        const SizedBox(height: 6),
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final t in sessionTypes)
+            ChoiceChip(
+              label: Text('${t.$2} ${t.$1}', style: const TextStyle(fontSize: 12)),
+              selected: _type == t.$1,
+              onSelected: (_) => setState(() => _type = t.$1),
+              selectedColor: _accent.withValues(alpha: 0.25),
+              backgroundColor: _card,
+            ),
+        ]),
+        const SizedBox(height: 16),
+        if (_sets.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: Text('No sets yet — add the planned sets below.',
+                style: TextStyle(color: _muted))))
+        else
+          for (final e in grouped.entries)
+            Card(
+              color: _card,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(child: Text(e.key,
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15))),
+                    IconButton(
+                      tooltip: 'Add a set of ${e.key}',
+                      icon: const Icon(Icons.add, size: 18, color: _teal),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () async {
+                        final s = await promptWorkoutSet(context, initialName: e.key);
+                        if (s != null) setState(() => _sets.add(s));
+                      },
+                    ),
+                  ]),
+                  const SizedBox(height: 4),
+                  for (final set in e.value)
+                    Row(children: [
+                      const Text('•  ', style: TextStyle(color: _muted)),
+                      Expanded(child: Text(set.detail, style: const TextStyle(fontSize: 13))),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 16, color: _muted),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => setState(() => _sets.remove(set)),
+                      ),
+                    ]),
+                ]),
+              ),
+            ),
+      ]),
     );
-    if (ok != true) return;
-    if (name.text.trim().isEmpty) return;
-    final set = WorkoutSet(
-      name: name.text.trim(),
-      mode: mode,
-      weight: double.tryParse(weight.text),
-      reps: int.tryParse(reps.text),
-      seconds: mode == SetMode.time
-          ? (double.tryParse(mins.text) ?? 0) * 60 + (double.tryParse(secs.text) ?? 0)
-          : null,
-      distance: double.tryParse(dist.text),
-    );
-    ref.read(workoutProvider.notifier).addSet(sessionId, set);
   }
 }
 

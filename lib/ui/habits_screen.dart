@@ -18,7 +18,7 @@ import '../data/sync.dart' show apiClientProvider;
 import '../state/habit_providers.dart';
 import '../state/log_providers.dart';
 import '../state/providers.dart' show logsProvider, repositoryProvider;
-import 'exercise_screen.dart' show SessionDetailScreen;
+import 'exercise_screen.dart' show SessionDetailScreen, TemplateEditorScreen;
 
 const _bg = Color(0xFF08091A);
 const _card = Color(0xFF12152E);
@@ -798,8 +798,10 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     try {
       final r = await ref.read(apiClientProvider).pushCalendar(habits, tz);
       final n = (r['added'] ?? 0) + (r['updated'] ?? 0);
+      final failed = (r['failed'] ?? 0) as num;
       msg = '$n habit${n == 1 ? '' : 's'} synced to Google Calendar'
-          '${(r['removed'] ?? 0) != 0 ? ' · ${r['removed']} removed' : ''}.';
+          '${(r['removed'] ?? 0) != 0 ? ' · ${r['removed']} removed' : ''}'
+          '${failed > 0 ? ' · $failed failed: ${(r['error'] ?? '').toString().replaceAll('\n', ' ')}' : ''}.';
     } on ApiException catch (e) {
       msg = (e.status == 401 || e.status == 403)
           ? 'Connect Google Calendar in the Cloud sheet (☁), then try again.'
@@ -840,7 +842,6 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     String? time = edit?.time;
     String cadence = edit?.cadence ?? 'daily';
     final days = <int>{...?edit?.days};
-    final templates = ref.read(templatesProvider);
 
     await showDialog<void>(
       context: context,
@@ -938,26 +939,31 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                   const Text('Workout plan (starts pre-filled on due days)',
                       style: TextStyle(fontSize: 11, color: _muted)),
                   const SizedBox(height: 4),
-                  if (templates.isEmpty)
-                    const Text(
-                        'No saved plans yet — save one from any workout (🔖 in Exercise), '
-                        'or let "Plan my week" in Coach build them.',
-                        style: TextStyle(fontSize: 11.5, color: _muted))
-                  else
-                    Wrap(spacing: 6, runSpacing: 4, children: [
+                  Wrap(spacing: 6, runSpacing: 4, children: [
+                    ChoiceChip(
+                      label: const Text('None'),
+                      selected: templateId == null,
+                      onSelected: (_) => setLocal(() => templateId = null),
+                    ),
+                    for (final t in ref.read(templatesProvider))
                       ChoiceChip(
-                        label: const Text('None'),
-                        selected: templateId == null,
-                        onSelected: (_) => setLocal(() => templateId = null),
+                        label: Text('${t.name} · ${t.setCount} sets'),
+                        selected: templateId == t.id,
+                        selectedColor: _teal.withValues(alpha: 0.25),
+                        onSelected: (_) => setLocal(() => templateId = t.id),
                       ),
-                      for (final t in templates)
-                        ChoiceChip(
-                          label: Text('${t.name} · ${t.setCount} sets'),
-                          selected: templateId == t.id,
-                          selectedColor: _teal.withValues(alpha: 0.25),
-                          onSelected: (_) => setLocal(() => templateId = t.id),
-                        ),
-                    ]),
+                    // Build a plan right here — the editor pops with the new id.
+                    ActionChip(
+                      label: const Text('➕ New plan…'),
+                      onPressed: () async {
+                        final id = await Navigator.of(context).push<String>(
+                            MaterialPageRoute(
+                                builder: (_) => TemplateEditorScreen(
+                                    suggestedName: titleCtrl.text.trim())));
+                        if (id != null) setLocal(() => templateId = id);
+                      },
+                    ),
+                  ]),
                 ],
                 // Aesthetics: record the products/items used in this routine (for the AI).
                 if (section == 'aesthetics') ...[
