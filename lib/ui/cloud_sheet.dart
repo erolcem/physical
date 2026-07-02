@@ -203,7 +203,8 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
       if (code != null && code.isNotEmpty) {
         await api.googleCalendarExchange(code);
         // Push the current roster RIGHT NOW — "connected" with an empty calendar
-        // until the next sync/edit reads as broken.
+        // until the next sync/edit reads as broken. Failures are named, never
+        // swallowed: an off-switch in the Cloud console is the usual culprit.
         String detail;
         try {
           final habits = [for (final h in ref.read(habitsProvider).habits) h.toJson()];
@@ -217,8 +218,10 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
           detail = failed > 0
               ? '$n habits added, $failed failed (${(r['error'] ?? '').toString().replaceAll('\n', ' ')})'
               : '$n habits now on your Google Calendar.';
+        } on ApiException catch (e) {
+          detail = _calendarPushError(e);
         } catch (_) {
-          detail = 'habits will be added on the next sync.';
+          detail = 'the push didn\'t go through — tap Calendar on the Habits tab to retry.';
         }
         if (mounted) {
           setState(() {
@@ -333,6 +336,21 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  // Human-readable reason a calendar push failed.
+  static String _calendarPushError(ApiException e) {
+    if (e.status == 412 || e.message.contains('calendar_api_disabled')) {
+      return 'the Google CALENDAR API is disabled for your Cloud project. Enable it: '
+          'console.cloud.google.com → APIs & Services → Library → "Google Calendar API" '
+          '→ Enable — then tap Calendar on the Habits tab.';
+    }
+    if (e.status == 401 || e.status == 403) {
+      return 'Google needs the calendar permission — tap Connect Google Calendar again '
+          'and tick the checkbox.';
+    }
+    final m = e.message.replaceAll('\n', ' ');
+    return 'push failed: ${m.length > 160 ? m.substring(0, 160) : m}';
   }
 
   Future<String?> _askForCode(String url) {

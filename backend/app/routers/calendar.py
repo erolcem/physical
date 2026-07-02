@@ -56,6 +56,14 @@ def push_to_google_calendar(
                 params["pageToken"] = page
             r = httpx.get(_CAL, headers=headers, params=params, timeout=30)
             if r.status_code == 403:
+                # Distinguish "the Calendar API is switched off in the Cloud
+                # project" (a console fix — reconnecting can never help) from a
+                # genuine missing grant.
+                if "SERVICE_DISABLED" in r.text or "has not been used in project" in r.text:
+                    raise HTTPException(412, "calendar_api_disabled: enable the "
+                                        "Google Calendar API for your Cloud project "
+                                        "(console.cloud.google.com → APIs & Services "
+                                        "→ Library → Google Calendar API → Enable)")
                 raise HTTPException(403, "needs_reconnect")  # calendar scope not granted
             if r.status_code >= 400:
                 raise HTTPException(502, f"Calendar list failed: {r.text[:200]}")
