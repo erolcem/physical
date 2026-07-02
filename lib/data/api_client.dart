@@ -513,6 +513,45 @@ class ApiClient {
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
+  /// AI weekly habit-roster builder: full context + an optional emphasised
+  /// [goal] → {summary, habits: [{title, section, verify, target, …, plan?}]}.
+  /// The caller shows it as a review sheet; nothing is applied automatically.
+  Future<Map<String, dynamic>> coachPlan({
+    String goal = '',
+    List<Map<String, dynamic>> habits = const [],
+    Map<String, dynamic>? profile,
+    Map<String, dynamic>? diet,
+    Map<String, dynamic>? training,
+    Map<String, dynamic>? aesthetics,
+    Map<String, dynamic>? ranks,
+    Map<String, dynamic>? trends,
+    List<Map<String, dynamic>> correlations = const [],
+    List<Map<String, dynamic>> workoutSets = const [],
+    Map<String, List<double>> metricHistory = const {},
+    Map<String, dynamic>? energy,
+  }) async {
+    final r = await _client
+        .post(Uri.parse('$baseUrl/me/coach/plan'),
+            headers: _headers({'Content-Type': 'application/json'}),
+            body: _safeEncode({
+              'message': goal,
+              'habits': habits,
+              if (profile != null) 'profile': profile,
+              if (diet != null) 'diet': diet,
+              if (training != null) 'training': training,
+              if (aesthetics != null) 'aesthetics': aesthetics,
+              if (ranks != null) 'ranks': ranks,
+              if (trends != null) 'trends': trends,
+              if (correlations.isNotEmpty) 'correlations': correlations,
+              if (workoutSets.isNotEmpty) 'workout_sets': workoutSets,
+              if (metricHistory.isNotEmpty) 'metric_history': metricHistory,
+              if (energy != null && energy.isNotEmpty) 'energy': energy,
+            }))
+        .timeout(const Duration(seconds: 120));
+    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
   /// A short, AI-personalised notification line from the user's live context (or null).
   /// [slot] is 'morning' (day ahead) or 'evening' (reflect on today).
   Future<String?> coachNudge({

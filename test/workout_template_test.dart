@@ -1,6 +1,7 @@
 // Workout templates (Hevy-style fast logging): model round-trip, repository
 // storage, and backup export/import.
 import 'package:flutter_test/flutter_test.dart';
+import 'package:physical/data/habits.dart' show Habit;
 import 'package:physical/data/repository.dart';
 import 'package:physical/data/workout.dart';
 
@@ -48,5 +49,18 @@ void main() {
     // Merge unions without duplicating.
     repoMerge(b, repoExport(a));
     expect(b.loadTemplates().length, 1);
+  });
+
+  test('habit carries its workout plan: templateId round-trips', () {
+    // The habit IS the plan: an exercise habit links the template it starts.
+    const h = Habit(id: 'h1', title: 'Push day', section: 'exercise',
+        verify: 'workout', templateId: 'tp1', cadence: 'weekly', days: [1, 4],
+        createdAt: '2026-07-01T00:00:00');
+    final back = Habit.fromJson(h.toJson());
+    expect(back.templateId, 'tp1');
+    expect(back.days, [1, 4]);
+    // And a habit without a plan stays without one.
+    const plain = Habit(id: 'h2', title: 'Read', createdAt: '2026-07-01T00:00:00');
+    expect(Habit.fromJson(plain.toJson()).templateId, isNull);
   });
 }

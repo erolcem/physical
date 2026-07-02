@@ -5,10 +5,12 @@
 // the coach + habit verification.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/habits.dart' show isDueOn, todayKey;
 import '../data/metrics.dart' show MetricDef, MetricTier;
 import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart';
 import '../engine/rank_engine.dart' show Log;
+import '../state/habit_providers.dart';
 import '../state/log_providers.dart';
 import 'progress_screen.dart' show GraphArea;
 
@@ -106,6 +108,7 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
         label: const Text('New workout'),
       ),
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
+        _todaysPlan(),
         _templatesRow(),
         if (sessions.isEmpty)
           const Padding(
@@ -137,11 +140,86 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
     );
   }
 
+  // ── Today's plan: exercise habits due today that carry a workout plan — the
+  // habit is the plan, tapping starts the session pre-filled. ──
+  Widget _todaysPlan() {
+    final habits = ref.watch(habitsProvider).habits;
+    final templates = {for (final t in ref.watch(templatesProvider)) t.id: t};
+    final sessions = ref.watch(workoutProvider);
+    final today = DateTime.now();
+    final planned = [
+      for (final h in habits)
+        if (h.section == 'exercise' && h.templateId != null &&
+            templates.containsKey(h.templateId) && isDueOn(h, today))
+          h
+    ];
+    if (planned.isEmpty) return const SizedBox.shrink();
+    // "Done" here = a session started from this plan exists today (title match).
+    final todaysTitles = {
+      for (final s in sessions) if (s.dateKey == todayKey()) s.label
+    };
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text("TODAY'S PLAN", style: TextStyle(fontSize: 11, letterSpacing: 2, color: _muted)),
+        const SizedBox(height: 6),
+        for (final h in planned)
+          () {
+            final t = templates[h.templateId]!;
+            final done = todaysTitles.contains(t.name) || todaysTitles.contains(h.title);
+            return Card(
+              color: _card,
+              child: ListTile(
+                leading: Icon(done ? Icons.check_circle : Icons.play_circle_outline,
+                    color: done ? _teal : _accent, size: 28),
+                title: Text(h.title,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        decoration: done ? TextDecoration.lineThrough : null,
+                        color: done ? _muted : Colors.white)),
+                subtitle: Text(
+                    '${t.exercises.length} exercises · ${t.setCount} sets'
+                    '${h.time != null ? ' · ${h.time}' : ''}',
+                    style: const TextStyle(fontSize: 12, color: _muted)),
+                trailing: done ? null : const Text('Start', style: TextStyle(color: _accent, fontWeight: FontWeight.w700)),
+                onTap: done ? null : () => _startFromTemplate(t),
+              ),
+            );
+          }(),
+      ]),
+    );
+  }
+
   // ── Templates (Hevy-style fast logging): tap → start a pre-filled workout;
   // long-press → delete. Templates are saved from a session's "Save as template". ──
   Widget _templatesRow() {
     final templates = ref.watch(templatesProvider);
-    if (templates.isEmpty) return const SizedBox.shrink();
+    if (templates.isEmpty) {
+      // Always visible: without an empty state the feature is undiscoverable
+      // (the save action lives inside a session).
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _card,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _accent.withValues(alpha: 0.25)),
+          ),
+          child: const Row(children: [
+            Icon(Icons.bookmark_add_outlined, size: 18, color: _accent),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Templates: open any workout and tap the 🔖 icon to save its sets — '
+                'next time it\'s one tap to start pre-filled.',
+                style: TextStyle(fontSize: 12, color: _muted),
+              ),
+            ),
+          ]),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
