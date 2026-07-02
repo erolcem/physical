@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import '../data/habits.dart' show Habit;
 import '../data/notifications.dart';
 import '../data/sync.dart' show apiClientProvider, cloudSync;
 import '../state/habit_providers.dart';
@@ -42,17 +46,47 @@ class _MainScreenState extends ConsumerState<MainScreen>
     } catch (_) {/* launch sync is best-effort — the ☁ button is always there */}
   }
 
+  // ── Automatic Google Calendar mirror: whenever the habit LIST changes (add /
+  // edit / remove — not check-offs), push the roster to Calendar. Debounced so a
+  // burst of edits becomes one push; silent + best-effort (the Habits tab's
+  // Calendar button and each sync remain the visible/retry paths). ──
+  Timer? _calendarDebounce;
+  String _habitsFingerprint(List<Habit> habits) =>
+      [for (final h in habits) h.toJson().toString()].join('|');
+
+  void _scheduleCalendarPush(List<Habit> habits) {
+    _calendarDebounce?.cancel();
+    _calendarDebounce = Timer(const Duration(seconds: 4), () async {
+      try {
+        final api = ref.read(apiClientProvider);
+        await api.loadPersistedToken();
+        if (!api.isSignedIn) return;
+        String? tz;
+        try {
+          tz = await FlutterTimezone.getLocalTimezone();
+        } catch (_) {/* floating times */}
+        await api.pushCalendar([for (final h in habits) h.toJson()], tz);
+      } catch (_) {/* best-effort — sync + the Calendar button retry it */}
+    });
+  }
+
   @override
   void dispose() {
+    _calendarDebounce?.cancel();
     _tabController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Keep daily habit reminders in sync as habits change (no-op off-device).
-    ref.listen<HabitsState>(habitsProvider, (_, next) {
+    // Keep daily habit reminders in sync as habits change (no-op off-device),
+    // and mirror habit add/edit/remove into Google Calendar automatically.
+    ref.listen<HabitsState>(habitsProvider, (prev, next) {
       NotificationService.instance.syncHabitReminders(next.habits);
+      if (prev != null &&
+          _habitsFingerprint(prev.habits) != _habitsFingerprint(next.habits)) {
+        _scheduleCalendarPush(next.habits);
+      }
     });
     return Scaffold(
       backgroundColor: const Color(0xFF08091A),

@@ -134,6 +134,20 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
     return s;
   }
 
+  /// Start a new session pre-filled with a template's sets (fast logging —
+  /// tweak the odd weight instead of retyping the whole workout).
+  WorkoutSession createFromTemplate(WorkoutTemplate t) {
+    final s = WorkoutSession(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      type: t.type, title: t.name,
+      start: DateTime.now().toIso8601String(),
+      sets: List.of(t.sets),
+    );
+    repo.saveWorkout(s);
+    state = repo.loadWorkouts();
+    return s;
+  }
+
   void updateSession(WorkoutSession s) {
     repo.saveWorkout(s);
     state = repo.loadWorkouts();
@@ -172,6 +186,29 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
     }
     if (added > 0) state = repo.loadWorkouts();
     return added;
+  }
+}
+
+final templatesProvider =
+    StateNotifierProvider<TemplatesNotifier, List<WorkoutTemplate>>((ref) {
+  return TemplatesNotifier(ref.watch(repositoryProvider));
+});
+
+// Workout templates (Hevy-style): save a session's sets under a name; starting
+// from a template pre-fills a new session so nothing is retyped.
+class TemplatesNotifier extends StateNotifier<List<WorkoutTemplate>> {
+  final Repository repo;
+  TemplatesNotifier(this.repo) : super(repo.loadTemplates());
+
+  void saveFromSession(WorkoutSession s, String name) {
+    if (name.trim().isEmpty) return;
+    repo.saveTemplate(WorkoutTemplate.fromSession(s, name: name.trim()));
+    state = repo.loadTemplates();
+  }
+
+  void remove(String id) {
+    repo.deleteTemplate(id);
+    state = repo.loadTemplates();
   }
 }
 

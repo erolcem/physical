@@ -9,13 +9,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../data/ai_verify.dart' show runAiVerification;
 import '../data/api_client.dart' show ApiException;
 import '../data/habits.dart';
 import '../data/habit_verify.dart';
+import '../data/repository.dart' show Repository;
 import '../data/sync.dart' show apiClientProvider;
 import '../state/habit_providers.dart';
 import '../state/log_providers.dart';
-import '../state/providers.dart' show logsProvider;
+import '../state/providers.dart' show logsProvider, repositoryProvider;
 
 const _bg = Color(0xFF08091A);
 const _card = Color(0xFF12152E);
@@ -32,6 +34,21 @@ class HabitsTab extends ConsumerStatefulWidget {
 class _HabitsTabState extends ConsumerState<HabitsTab> {
   bool _week = false; // Day (false) / Week (true)
   bool _calBusy = false; // calendar push in flight
+  bool _aiBusy = false; // AI verification in flight
+  DateTime _selected = DateTime.now(); // the day being viewed (item: browse any day)
+
+  bool get _viewingToday => dateKey(_selected) == todayKey();
+
+  String _dayLabel(DateTime d) {
+    final key = dateKey(d);
+    if (key == todayKey()) return 'Today';
+    if (key == dateKey(DateTime.now().subtract(const Duration(days: 1)))) {
+      return 'Yesterday';
+    }
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${weekdayShort[d.weekday - 1]} ${d.day} ${months[d.month - 1]}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +57,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     final workouts = ref.watch(workoutProvider);
     final food = ref.watch(dietProvider);
     final habits = st.habits;
+    final dayKey0 = dateKey(_selected);
 
     // Target-aware verification: a habit's goal is "met" when the day's data satisfies
     // its target (auto-measured habits self-complete); manual habits need a tick.
@@ -47,10 +65,12 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         habitGoalMet(h, day, logs: logs, food: food, workouts: workouts);
     double? measured(Habit h, String day) =>
         habitMeasured(h, day, logs: logs, food: food, workouts: workouts);
-    // Evidence-only: auto-verifiable habits are done ONLY from real data (no manual tick);
-    // manual habits are done when ticked.
+    // Evidence-only: auto-verifiable habits are done ONLY from real data — the AI
+    // verifier's verdict when it has run, else the rule-based check. Manual habits
+    // are done when ticked.
     bool done(Habit h, String day) => habitDoneOn(h, day,
-        logs: logs, food: food, workouts: workouts, ticked: st.completions[h.id]);
+        logs: logs, food: food, workouts: workouts, ticked: st.completions[h.id],
+        aiVerdict: st.aiVerdictFor(h.id, day));
 
     // Time-ordered: timed habits first (by clock), then untimed.
     int byTime(Habit a, Habit b) {
@@ -61,8 +81,8 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       return ta.compareTo(tb);
     }
 
-    final dueToday = habits.where((h) => isDueToday(h)).toList()..sort(byTime);
-    final doneCount = dueToday.where((h) => done(h, todayKey())).length;
+    final dueToday = habits.where((h) => isDueOn(h, _selected)).toList()..sort(byTime);
+    final doneCount = dueToday.where((h) => done(h, dayKey0)).length;
 
     return Container(
       color: _bg,
@@ -81,21 +101,65 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               showSelectedIcon: false,
             ),
           ),
-          const SizedBox(height: 12),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          if (!_week) ...[
+            const SizedBox(height: 6),
+            // Browse any day — arrows step a day at a time; tap the label to jump
+            // back to today. Forward stops at today (the week view covers ahead).
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.chevron_left, color: _muted),
+                onPressed: () => setState(
+                    () => _selected = _selected.subtract(const Duration(days: 1))),
+              ),
+              TextButton(
+                onPressed: _viewingToday
+                    ? null
+                    : () => setState(() => _selected = DateTime.now()),
+                child: Text(_dayLabel(_selected),
+                    style: TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w800,
+                        color: _viewingToday ? Colors.white : _teal)),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.chevron_right,
+                    color: _viewingToday ? _muted.withValues(alpha: 0.3) : _muted),
+                onPressed: _viewingToday
+                    ? null
+                    : () => setState(
+                        () => _selected = _selected.add(const Duration(days: 1))),
+              ),
+            ]),
+          ] else
+            const SizedBox(height: 12),
+          // Wrap (not Row) so the actions never overflow on narrow screens.
+          Wrap(alignment: WrapAlignment.center, spacing: 4, children: [
             TextButton.icon(
               onPressed: _calBusy ? null : () => _pushCalendar(context, ref),
               icon: _calBusy
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.event_available, size: 18),
               label: const Text('Calendar'),
-              style: TextButton.styleFrom(foregroundColor: _muted),
+              style: TextButton.styleFrom(
+                  foregroundColor: _muted, visualDensity: VisualDensity.compact),
+            ),
+            // On-demand LLM verification of the shown day (also runs on every sync).
+            TextButton.icon(
+              onPressed: _aiBusy ? null : () => _aiVerify(context, ref),
+              icon: _aiBusy
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.auto_awesome, size: 18),
+              label: const Text('AI check'),
+              style: TextButton.styleFrom(
+                  foregroundColor: _teal, visualDensity: VisualDensity.compact),
             ),
             TextButton.icon(
               onPressed: () => _showAddDialog(context, ref),
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add habit'),
-              style: TextButton.styleFrom(foregroundColor: _accent),
+              style: TextButton.styleFrom(
+                  foregroundColor: _accent, visualDensity: VisualDensity.compact),
             ),
           ]),
           if (habits.isEmpty)
@@ -107,37 +171,47 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           ]
           else ...[
             _summaryCard(doneCount, dueToday.length,
-                verified: dueToday.where((h) => met(h, todayKey())).length,
-                missed: [for (final h in dueToday) if (!done(h, todayKey())) h]),
+                label: _dayLabel(_selected).toUpperCase(),
+                verified: dueToday
+                    .where((h) => h.verify != 'manual' && done(h, dayKey0))
+                    .length,
+                missed: [for (final h in dueToday) if (!done(h, dayKey0)) h]),
             const SizedBox(height: 12),
             _budgetCard(habits),
             const SizedBox(height: 12),
-            if (dueToday.isNotEmpty) _dayTimeline(context, ref, dueToday, done),
+            if (dueToday.isNotEmpty) _dayTimeline(context, ref, dueToday, done, dayKey0),
             const SizedBox(height: 12),
-            const Text('TODAY', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+            Text(_dayLabel(_selected).toUpperCase(),
+                style: const TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
             const SizedBox(height: 6),
             if (dueToday.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
-                child: Text('Nothing scheduled today — enjoy the rest.',
+                child: Text('Nothing scheduled this day — enjoy the rest.',
                     style: TextStyle(color: _muted, fontSize: 13)),
               )
             else
               for (final h in dueToday)
                 _habitTile(context, ref, h,
-                    done: done(h, todayKey()),
+                    day: dayKey0,
+                    done: done(h, dayKey0),
                     streak: currentStreak(_doneDaysOf(h, done)),
                     status: h.verify == 'manual'
-                        ? (st.doneToday(h.id) ? HabitStatus.manual : HabitStatus.notDone)
-                        : (met(h, todayKey()) ? HabitStatus.verified : HabitStatus.notDone),
-                    measuredToday: measured(h, todayKey()),
+                        ? ((st.completions[h.id]?.contains(dayKey0) ?? false)
+                            ? HabitStatus.manual
+                            : HabitStatus.notDone)
+                        : (done(h, dayKey0) ? HabitStatus.verified : HabitStatus.notDone),
+                    aiJudged: st.aiVerdictFor(h.id, dayKey0) != null,
+                    measuredToday: measured(h, dayKey0),
                     last7: lastNDays(7),
                     doneDays: _doneDaysOf(h, done)),
-            // Habits scheduled on other days only (not today) — for awareness.
-            for (final h in (habits.where((h) => !isDueToday(h)).toList()..sort(byTime)))
+            // Habits scheduled on other days only — for awareness.
+            for (final h in (habits.where((h) => !isDueOn(h, _selected)).toList()..sort(byTime)))
               _habitTile(context, ref, h,
-                  done: done(h, todayKey()), streak: currentStreak(_doneDaysOf(h, done)),
-                  status: HabitStatus.notDone, measuredToday: null, last7: lastNDays(7),
+                  day: dayKey0,
+                  done: done(h, dayKey0), streak: currentStreak(_doneDaysOf(h, done)),
+                  status: HabitStatus.notDone, aiJudged: false,
+                  measuredToday: null, last7: lastNDays(7),
                   doneDays: _doneDaysOf(h, done), dimmed: true),
           ],
         ],
@@ -145,12 +219,38 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     );
   }
 
+  // Run the LLM verification for the shown day and refresh the roster.
+  Future<void> _aiVerify(BuildContext context, WidgetRef ref) async {
+    setState(() => _aiBusy = true);
+    final api = ref.read(apiClientProvider);
+    final Repository repo = ref.read(repositoryProvider);
+    int? judged;
+    try {
+      await api.loadPersistedToken();
+      judged = api.isSignedIn
+          ? await runAiVerification(api, repo, date: _selected)
+          : null;
+    } catch (_) {
+      judged = null;
+    }
+    if (!context.mounted) return;
+    setState(() => _aiBusy = false);
+    ref.read(habitsProvider.notifier).reload();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(judged == null
+            ? 'AI check unavailable — sign in (☁) and make sure the AI key is set.'
+            : judged == 0
+                ? 'No auto-verifiable habits due this day.'
+                : 'AI checked $judged habit${judged == 1 ? '' : 's'} against the day\'s data.')));
+  }
+
   // Days counted "done" over the last 60 (auto habits = data-earned, manual = ticked).
   Set<String> _doneDaysOf(Habit h, bool Function(Habit, String) done) =>
       {for (final day in lastNDays(60)) if (done(h, day)) day};
 
-  // ── Today's accountability recap: done / total · verified, + what's still missed ──
-  Widget _summaryCard(int done, int total, {required int verified, required List<Habit> missed}) {
+  // ── The day's accountability recap: done / total · verified, + what's still missed ──
+  Widget _summaryCard(int done, int total,
+      {required String label, required int verified, required List<Habit> missed}) {
     final frac = total == 0 ? 0.0 : done / total;
     final allDone = done == total && total > 0;
     return Card(
@@ -159,7 +259,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         padding: const EdgeInsets.all(18),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            const Text('TODAY', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+            Text(label, style: const TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
             const Spacer(),
             if (verified > 0)
               Text('$verified auto-verified', style: const TextStyle(fontSize: 11, color: _teal, fontWeight: FontWeight.w700)),
@@ -220,17 +320,56 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     );
   }
 
-  // ── Day timeline: a Google-Calendar-style hour grid with habit blocks placed by time ──
+  // ── Day timeline: a Google-Calendar-style hour grid with habit blocks placed by
+  // time. Overlapping habits split into side-by-side columns (interval partitioning,
+  // like Google Calendar) instead of stacking on top of each other. ──
   Widget _dayTimeline(BuildContext context, WidgetRef ref, List<Habit> due,
-      bool Function(Habit, String) done) {
+      bool Function(Habit, String) done, String dayKey0) {
     int hourOf(Habit h) => int.tryParse(h.time!.split(':').first) ?? 0;
     int minOf(Habit h) {
       final p = h.time!.split(':');
       return p.length > 1 ? (int.tryParse(p[1]) ?? 0) : 0;
     }
+    int startMin(Habit h) => hourOf(h) * 60 + minOf(h);
+    int endMin(Habit h) =>
+        startMin(h) + (h.durationMins > 0 ? h.durationMins : 30);
     final timed = [for (final h in due) if (h.time != null) h]..sort((a, b) => a.time!.compareTo(b.time!));
     final untimed = [for (final h in due) if (h.time == null) h];
     final now = DateTime.now();
+
+    // Column assignment: group overlapping blocks into clusters, then greedily
+    // place each block in the first column whose last block has ended.
+    final colOf = <String, int>{}; // habit id → column
+    final colsOf = <String, int>{}; // habit id → columns in its cluster
+    var cluster = <Habit>[];
+    var colEnds = <int>[];
+    var clusterEnd = -1;
+    void closeCluster() {
+      for (final h in cluster) {
+        colsOf[h.id] = colEnds.length;
+      }
+      cluster = <Habit>[];
+      colEnds = <int>[];
+    }
+    for (final h in timed) {
+      if (cluster.isNotEmpty && startMin(h) >= clusterEnd) closeCluster();
+      var placed = false;
+      for (var c = 0; c < colEnds.length; c++) {
+        if (startMin(h) >= colEnds[c]) {
+          colOf[h.id] = c;
+          colEnds[c] = endMin(h);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        colOf[h.id] = colEnds.length;
+        colEnds.add(endMin(h));
+      }
+      cluster.add(h);
+      clusterEnd = math.max(clusterEnd, endMin(h));
+    }
+    closeCluster();
 
     const hourH = 44.0;
     const gutter = 42.0;
@@ -244,20 +383,26 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     endH = math.min(24, endH);
     final rows = endH - startH;
 
-    Widget block(Habit h) {
-      final tkey = todayKey();
-      final isDone = done(h, tkey);
+    Widget block(Habit h, double areaW) {
+      final isDone = done(h, dayKey0);
       final c = Color(sectionOf(h.section).color);
       final top = (hourOf(h) - startH + minOf(h) / 60.0) * hourH;
       final height = math.max(26.0, (h.durationMins > 0 ? h.durationMins : 30) / 60.0 * hourH - 3);
+      final cols = colsOf[h.id] ?? 1;
+      final col = colOf[h.id] ?? 0;
+      final colW = (areaW - gutter - 12) / cols;
+      final narrow = colW < 90; // drop the emoji when columns get tight
       return Positioned(
-        top: top, left: gutter + 6, right: 6, height: height,
+        top: top,
+        left: gutter + 6 + col * colW,
+        width: colW - (cols > 1 ? 3 : 0),
+        height: height,
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
             onTap: h.verify == 'manual'
-                ? () => ref.read(habitsProvider.notifier).toggleToday(h.id)
+                ? () => ref.read(habitsProvider.notifier).toggleOn(h.id, dayKey0)
                 : () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     duration: const Duration(seconds: 2),
                     content: Text('"${h.title}" verifies from your data.'))),
@@ -270,14 +415,16 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               ),
               child: Row(children: [
                 Expanded(
-                  child: Text('${sectionOf(h.section).emoji} ${h.title}',
+                  child: Text(
+                      narrow ? h.title : '${sectionOf(h.section).emoji} ${h.title}',
                       maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w700,
+                          fontSize: narrow ? 11 : 12, fontWeight: FontWeight.w700,
                           color: isDone ? _muted : Colors.white,
                           decoration: isDone ? TextDecoration.lineThrough : null)),
                 ),
-                if (isDone) const Icon(Icons.check_circle, color: _teal, size: 15),
+                if (isDone && !narrow)
+                  const Icon(Icons.check_circle, color: _teal, size: 15),
               ]),
             ),
           ),
@@ -291,7 +438,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            const Text('TODAY’S TIMELINE', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+            const Text('TIMELINE', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
             const Spacer(),
             if (untimed.isNotEmpty)
               Text('${untimed.length} anytime', style: const TextStyle(fontSize: 10.5, color: _muted)),
@@ -299,32 +446,34 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           const SizedBox(height: 12),
           SizedBox(
             height: rows * hourH,
-            child: Stack(children: [
-              // Hour gridlines + labels.
-              for (var i = 0; i <= rows; i++)
-                Positioned(
-                  top: i * hourH, left: 0, right: 0,
-                  child: Row(children: [
-                    SizedBox(width: gutter,
-                        child: Text(_hourLabel(startH + i),
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(fontSize: 9.5, color: _muted))),
-                    const SizedBox(width: 6),
-                    Expanded(child: Container(height: 1, color: Colors.white.withValues(alpha: 0.06))),
-                  ]),
-                ),
-              // "Now" line.
-              if (now.hour >= startH && now.hour < endH)
-                Positioned(
-                  top: (now.hour - startH + now.minute / 60.0) * hourH, left: gutter, right: 0,
-                  child: Row(children: [
-                    Container(width: 6, height: 6,
-                        decoration: const BoxDecoration(color: _teal, shape: BoxShape.circle)),
-                    Expanded(child: Container(height: 1.5, color: _teal.withValues(alpha: 0.6))),
-                  ]),
-                ),
-              for (final h in timed) block(h),
-            ]),
+            child: LayoutBuilder(
+              builder: (ctx, box) => Stack(children: [
+                // Hour gridlines + labels.
+                for (var i = 0; i <= rows; i++)
+                  Positioned(
+                    top: i * hourH, left: 0, right: 0,
+                    child: Row(children: [
+                      SizedBox(width: gutter,
+                          child: Text(_hourLabel(startH + i),
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(fontSize: 9.5, color: _muted))),
+                      const SizedBox(width: 6),
+                      Expanded(child: Container(height: 1, color: Colors.white.withValues(alpha: 0.06))),
+                    ]),
+                  ),
+                // "Now" line — only meaningful when viewing today.
+                if (dayKey0 == todayKey() && now.hour >= startH && now.hour < endH)
+                  Positioned(
+                    top: (now.hour - startH + now.minute / 60.0) * hourH, left: gutter, right: 0,
+                    child: Row(children: [
+                      Container(width: 6, height: 6,
+                          decoration: const BoxDecoration(color: _teal, shape: BoxShape.circle)),
+                      Expanded(child: Container(height: 1.5, color: _teal.withValues(alpha: 0.6))),
+                    ]),
+                  ),
+                for (final h in timed) block(h, box.maxWidth),
+              ]),
+            ),
           ),
           if (untimed.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -333,10 +482,10 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Color(sectionOf(h.section).color).withValues(alpha: done(h, todayKey()) ? 0.28 : 0.1),
+                    color: Color(sectionOf(h.section).color).withValues(alpha: done(h, dayKey0) ? 0.28 : 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text('${sectionOf(h.section).emoji} ${h.title}${done(h, todayKey()) ? ' ✓' : ''}',
+                  child: Text('${sectionOf(h.section).emoji} ${h.title}${done(h, dayKey0) ? ' ✓' : ''}',
                       style: const TextStyle(fontSize: 11, color: Colors.white70)),
                 ),
             ]),
@@ -431,9 +580,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
 
   // ── One habit row ──
   Widget _habitTile(BuildContext context, WidgetRef ref, Habit h,
-      {required bool done,
+      {required String day,
+      required bool done,
       required int streak,
       required HabitStatus status,
+      required bool aiJudged,
       required double? measuredToday,
       required List<String> last7,
       required Set<String> doneDays,
@@ -457,11 +608,13 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           color: _card,
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
+            // Long-press to edit any habit (title, target, time, days…).
+            onLongPress: () => _showAddDialog(context, ref, edit: h),
             // Manual habits toggle on tap; auto-verified ones are earned from data only.
             onTap: dimmed
                 ? null
                 : (h.verify == 'manual'
-                    ? () => ref.read(habitsProvider.notifier).toggleToday(h.id)
+                    ? () => ref.read(habitsProvider.notifier).toggleOn(h.id, day)
                     : () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         duration: const Duration(seconds: 3),
                         content: Text('"${h.title}" is verified from your data — '
@@ -511,9 +664,16 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                         ]),
                       ),
                       if (status == HabitStatus.verified)
-                        _badge('✓ verified', _teal)
+                        _badge(aiJudged ? '✨ AI verified' : '✓ verified', _teal)
                       else if (streak > 0)
                         _badge('🔥 $streak', _accent),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 18, color: _muted,
+                        tooltip: 'Edit habit',
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: () => _showAddDialog(context, ref, edit: h),
+                      ),
                       if (h.time != null)
                         IconButton(
                           visualDensity: VisualDensity.compact,
@@ -623,21 +783,33 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // ── Add habit: section → preset (or custom) → cadence/time/duration ──
-  Future<void> _showAddDialog(BuildContext context, WidgetRef ref) async {
-    String section = 'sleep';
+  // ── Add OR edit a habit: section → preset (or custom) → cadence/time/duration.
+  // Pass [edit] to modify an existing habit in place (same id, same history). ──
+  Future<void> _showAddDialog(BuildContext context, WidgetRef ref, {Habit? edit}) async {
+    String section = edit?.section ?? 'sleep';
     HabitPreset? preset;
-    final titleCtrl = TextEditingController();
-    final durCtrl = TextEditingController();
-    final costCtrl = TextEditingController();
-    final targetCtrl = TextEditingController();
-    final productsCtrl = TextEditingController();
-    String compare = 'gte';
-    String? goalKey;
-    String unit = '';
-    String? time;
-    String cadence = 'daily';
-    final days = <int>{};
+    final titleCtrl = TextEditingController(text: edit?.title ?? '');
+    final durCtrl = TextEditingController(
+        text: (edit?.durationMins ?? 0) > 0 ? '${edit!.durationMins}' : '');
+    final costCtrl = TextEditingController(
+        text: (edit?.cost ?? 0) > 0
+            ? (edit!.cost == edit.cost.roundToDouble()
+                ? '${edit.cost.round()}'
+                : '${edit.cost}')
+            : '');
+    final targetCtrl = TextEditingController(
+        text: edit?.target == null
+            ? ''
+            : (edit!.target == edit.target!.roundToDouble()
+                ? '${edit.target!.round()}'
+                : '${edit.target}'));
+    final productsCtrl = TextEditingController(text: edit?.products.join(', ') ?? '');
+    String compare = edit?.compare ?? 'gte';
+    String? goalKey = edit?.goalKey;
+    String unit = edit?.unit ?? '';
+    String? time = edit?.time;
+    String cadence = edit?.cadence ?? 'daily';
+    final days = <int>{...?edit?.days};
 
     await showDialog<void>(
       context: context,
@@ -646,7 +818,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           final presets = presetsFor(section);
           return AlertDialog(
             backgroundColor: _card,
-            title: const Text('New habit'),
+            title: Text(edit == null ? 'New habit' : 'Edit habit'),
             content: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('Section', style: TextStyle(fontSize: 11, color: _muted)),
@@ -802,30 +974,53 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
               FilledButton(
                 onPressed: () {
-                  final verify = preset?.verify ??
-                      (section == 'exercise' ? 'workout' : section == 'diet' ? 'diet' : 'manual');
                   final products = section == 'aesthetics'
                       ? [for (final p in productsCtrl.text.split(',')) if (p.trim().isNotEmpty) p.trim()]
                       : const <String>[];
-                  ref.read(habitsProvider.notifier).addHabit(
-                        titleCtrl.text,
-                        section: section,
-                        verify: verify,
-                        linkedMetricId: preset?.linkedMetricId,
-                        target: double.tryParse(targetCtrl.text.trim()),
-                        compare: compare,
-                        goalKey: goalKey,
-                        unit: unit,
-                        products: products,
-                        time: time,
-                        durationMins: int.tryParse(durCtrl.text) ?? 0,
-                        cost: double.tryParse(costCtrl.text.trim()) ?? 0,
-                        cadence: cadence,
-                        days: cadence == 'weekly' ? days.toList() : const [],
-                      );
+                  if (edit != null && titleCtrl.text.trim().isNotEmpty) {
+                    // Edit in place: same id + createdAt, so streaks/history stay.
+                    // Picking a preset can re-link the verification rule.
+                    ref.read(habitsProvider.notifier).updateHabit(Habit(
+                          id: edit.id,
+                          title: titleCtrl.text.trim(),
+                          section: section,
+                          verify: preset?.verify ?? edit.verify,
+                          linkedMetricId: preset?.linkedMetricId ?? edit.linkedMetricId,
+                          target: double.tryParse(targetCtrl.text.trim()),
+                          compare: compare,
+                          goalKey: goalKey,
+                          unit: unit,
+                          products: products,
+                          time: time,
+                          durationMins: int.tryParse(durCtrl.text) ?? 0,
+                          cost: double.tryParse(costCtrl.text.trim()) ?? 0,
+                          cadence: cadence,
+                          days: cadence == 'weekly' ? days.toList() : const [],
+                          createdAt: edit.createdAt,
+                        ));
+                  } else {
+                    final verify = preset?.verify ??
+                        (section == 'exercise' ? 'workout' : section == 'diet' ? 'diet' : 'manual');
+                    ref.read(habitsProvider.notifier).addHabit(
+                          titleCtrl.text,
+                          section: section,
+                          verify: verify,
+                          linkedMetricId: preset?.linkedMetricId,
+                          target: double.tryParse(targetCtrl.text.trim()),
+                          compare: compare,
+                          goalKey: goalKey,
+                          unit: unit,
+                          products: products,
+                          time: time,
+                          durationMins: int.tryParse(durCtrl.text) ?? 0,
+                          cost: double.tryParse(costCtrl.text.trim()) ?? 0,
+                          cadence: cadence,
+                          days: cadence == 'weekly' ? days.toList() : const [],
+                        );
+                  }
                   Navigator.pop(ctx);
                 },
-                child: const Text('Add'),
+                child: Text(edit == null ? 'Add' : 'Save'),
               ),
             ],
           );

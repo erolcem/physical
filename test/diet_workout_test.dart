@@ -74,13 +74,15 @@ void main() {
     });
 
     test('dietHealthScore averages the six axes (capped)', () {
-      const e = FoodEntry(id: '1', dateKey: 'd', name: 'x',
+      // fibre grams supplied so the exact fibre axis matches the AI points (18/30 = 60).
+      const e = FoodEntry(id: '1', dateKey: 'd', name: 'x', fibre: 18,
           health: {'micronutrients': 60, 'fibre': 60, 'gut_health': 60,
             'antioxidants': 60, 'healthy_fats': 60, 'whole_food': 60});
       expect(dietTotals([e], 'd').healthScore, closeTo(60, 1e-9));
-      // points accumulate + cap at 100 per axis
+      // points accumulate + cap at 100 per axis (fibre: 36 g vs 30 g target, capped)
       final two = dietTotals([e, e], 'd');
-      expect(two.health['fibre'], 100); // 60+60 capped
+      expect(two.health['fibre'], 100);
+      expect(two.health['gut_health'], 100); // 60+60 capped
     });
 
     test('caloriesLastNDays returns the day-by-day trend ending today', () {

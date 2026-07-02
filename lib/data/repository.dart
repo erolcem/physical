@@ -15,6 +15,16 @@ abstract class Repository {
   Map<String, List<Log>> loadLogs();
   void saveLog(String metricId, Log log);
   void deleteLog(String metricId, int index);
+
+  /// Replace the log at [index] in place (same slot, new value) — used when a
+  /// synced daily value is revised (e.g. today's step total grows through the
+  /// day) so history stays live instead of frozen at first sight.
+  void replaceLog(String metricId, int index, Log log);
+
+  /// Delete every log of a metric WITHOUT tombstoning — for derived, fully
+  /// recomputable series (rank history, readiness) that a reset re-backfills at
+  /// the same timestamps (a tombstone would block the re-add forever).
+  void purgeMetricLogs(String metricId);
   void clear();
 
   // Tombstones: keys ("metricId@ts") of deleted logs, so a delete STICKS — Google
@@ -28,6 +38,19 @@ abstract class Repository {
   void deleteHabit(String id);
   Map<String, Set<String>> loadCompletions(); // habitId → set of done date-keys
   void setCompletion(String habitId, String day, bool done);
+
+  // AI verification verdicts (LLM habit check): habitId → day → done. A verdict
+  // overrides the rule-based auto-check for that habit+day (manual habits are
+  // never judged). Stored separately from completions so a manual tick can
+  // never masquerade as verified evidence.
+  Map<String, Map<String, bool>> loadAiVerdicts();
+  void setAiVerdict(String habitId, String day, bool done);
+
+  // Workout templates (fast set logging — save a workout's sets, start new
+  // sessions pre-filled).
+  List<WorkoutTemplate> loadTemplates();
+  void saveTemplate(WorkoutTemplate template);
+  void deleteTemplate(String id);
 
   // Diet (PDF Part 1) — food log entries with macros.
   List<FoodEntry> loadFood();
@@ -50,8 +73,10 @@ class InMemoryRepository implements Repository {
   final Set<String> _tombstones = {};
   final List<Habit> _habits = [];
   final Map<String, Set<String>> _completions = {};
+  final Map<String, Map<String, bool>> _aiVerdicts = {};
   final List<FoodEntry> _food = [];
   final List<WorkoutSession> _workouts = [];
+  final List<WorkoutTemplate> _templates = [];
   final List<PinnedCorrelation> _pins = [];
 
   @override
@@ -69,6 +94,15 @@ class InMemoryRepository implements Repository {
       list.removeAt(index);
     }
   }
+
+  @override
+  void replaceLog(String metricId, int index, Log log) {
+    final list = _logs[metricId];
+    if (list != null && index >= 0 && index < list.length) list[index] = log;
+  }
+
+  @override
+  void purgeMetricLogs(String metricId) => _logs.remove(metricId);
 
   @override
   Set<String> loadTombstones() => Set.of(_tombstones);
@@ -92,6 +126,7 @@ class InMemoryRepository implements Repository {
   void deleteHabit(String id) {
     _habits.removeWhere((h) => h.id == id);
     _completions.remove(id);
+    _aiVerdicts.remove(id);
   }
 
   @override
@@ -103,6 +138,30 @@ class InMemoryRepository implements Repository {
     final set = _completions[habitId] ??= <String>{};
     done ? set.add(day) : set.remove(day);
   }
+
+  @override
+  Map<String, Map<String, bool>> loadAiVerdicts() =>
+      {for (final e in _aiVerdicts.entries) e.key: Map.of(e.value)};
+
+  @override
+  void setAiVerdict(String habitId, String day, bool done) =>
+      (_aiVerdicts[habitId] ??= {})[day] = done;
+
+  @override
+  List<WorkoutTemplate> loadTemplates() => List.of(_templates);
+
+  @override
+  void saveTemplate(WorkoutTemplate template) {
+    final i = _templates.indexWhere((t) => t.id == template.id);
+    if (i >= 0) {
+      _templates[i] = template;
+    } else {
+      _templates.add(template);
+    }
+  }
+
+  @override
+  void deleteTemplate(String id) => _templates.removeWhere((t) => t.id == id);
 
   @override
   List<FoodEntry> loadFood() => List.of(_food);
@@ -153,8 +212,10 @@ class InMemoryRepository implements Repository {
     _tombstones.clear();
     _habits.clear();
     _completions.clear();
+    _aiVerdicts.clear();
     _food.clear();
     _workouts.clear();
+    _templates.clear();
     _pins.clear();
   }
 
@@ -201,8 +262,13 @@ Map<String, dynamic> repoExport(Repository r) => {
       },
       'habits': [for (final h in r.loadHabits()) h.toJson()],
       'completions': {for (final e in r.loadCompletions().entries) e.key: e.value.toList()},
+      'aiVerdicts': {
+        for (final e in r.loadAiVerdicts().entries)
+          if (e.value.isNotEmpty) e.key: e.value
+      },
       'food': [for (final f in r.loadFood()) f.toJson()],
       'workouts': [for (final w in r.loadWorkouts()) w.toJson()],
+      'templates': [for (final t in r.loadTemplates()) t.toJson()],
       'pins': [for (final p in r.loadPins()) p.toJson()],
       'tombstones': r.loadTombstones().toList(),
     };
@@ -232,11 +298,19 @@ void repoImport(Repository r, Map<String, dynamic> m) {
       r.setCompletion(hid as String, d as String, true);
     }
   });
+  ((m['aiVerdicts'] as Map?) ?? const {}).forEach((hid, days) {
+    ((days as Map?) ?? const {}).forEach((day, done) {
+      r.setAiVerdict(hid as String, day as String, done == true);
+    });
+  });
   for (final f in ((m['food'] as List?) ?? const [])) {
     r.saveFood(FoodEntry.fromJson((f as Map).cast<String, dynamic>()));
   }
   for (final w in ((m['workouts'] as List?) ?? const [])) {
     r.saveWorkout(WorkoutSession.fromJson((w as Map).cast<String, dynamic>()));
+  }
+  for (final t in ((m['templates'] as List?) ?? const [])) {
+    r.saveTemplate(WorkoutTemplate.fromJson((t as Map).cast<String, dynamic>()));
   }
   for (final p in ((m['pins'] as List?) ?? const [])) {
     r.addPin(PinnedCorrelation.fromJson((p as Map).cast<String, dynamic>()));
@@ -281,6 +355,16 @@ void repoMerge(Repository r, Map<String, dynamic> m) {
       r.setCompletion(hid as String, d as String, true);
     }
   });
+  // AI verdicts: only fill gaps — a verdict recomputed on THIS device (fresher
+  // evidence) wins over the snapshot's copy.
+  final haveVerdicts = r.loadAiVerdicts();
+  ((m['aiVerdicts'] as Map?) ?? const {}).forEach((hid, days) {
+    ((days as Map?) ?? const {}).forEach((day, done) {
+      if (!(haveVerdicts[hid]?.containsKey(day) ?? false)) {
+        r.setAiVerdict(hid as String, day as String, done == true);
+      }
+    });
+  });
   final haveFood = {for (final f in r.loadFood()) f.id};
   for (final f in ((m['food'] as List?) ?? const [])) {
     final j = (f as Map).cast<String, dynamic>();
@@ -290,6 +374,11 @@ void repoMerge(Repository r, Map<String, dynamic> m) {
   for (final w in ((m['workouts'] as List?) ?? const [])) {
     final j = (w as Map).cast<String, dynamic>();
     if (!haveWorkouts.contains(j['id'])) r.saveWorkout(WorkoutSession.fromJson(j));
+  }
+  final haveTemplates = {for (final t in r.loadTemplates()) t.id};
+  for (final t in ((m['templates'] as List?) ?? const [])) {
+    final j = (t as Map).cast<String, dynamic>();
+    if (!haveTemplates.contains(j['id'])) r.saveTemplate(WorkoutTemplate.fromJson(j));
   }
   final havePins = {for (final p in r.loadPins()) p.key};
   for (final p in ((m['pins'] as List?) ?? const [])) {

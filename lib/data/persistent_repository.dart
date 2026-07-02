@@ -16,20 +16,25 @@ class PersistentRepository implements Repository {
   static const _key = 'physical_logs_v1';
   static const _habitsKey = 'physical_habits_v1';
   static const _doneKey = 'physical_habit_done_v1';
+  static const _aiVerdictKey = 'physical_ai_verdicts_v1';
   static const _foodKey = 'physical_food_v1';
   static const _workoutKey = 'physical_workouts_v1';
+  static const _templateKey = 'physical_templates_v1';
   static const _pinsKey = 'physical_pins_v1';
   static const _tombKey = 'physical_tombstones_v1';
   final SharedPreferences _prefs;
   final Map<String, List<Log>> _cache;
   final List<Habit> _habits;
   final Map<String, Set<String>> _completions;
+  final Map<String, Map<String, bool>> _aiVerdicts;
   final List<FoodEntry> _food;
   final List<WorkoutSession> _workouts;
+  final List<WorkoutTemplate> _templates;
   final List<PinnedCorrelation> _pins;
   final Set<String> _tombstones;
   PersistentRepository._(this._prefs, this._cache, this._habits,
-      this._completions, this._food, this._workouts, this._pins, this._tombstones);
+      this._completions, this._aiVerdicts, this._food, this._workouts,
+      this._templates, this._pins, this._tombstones);
 
   /// Load once at startup. First run seeds demo data, then persists it.
   static Future<PersistentRepository> create() async {
@@ -41,8 +46,10 @@ class PersistentRepository implements Repository {
       raw == null ? {} : _decode(raw),
       _decodeHabits(prefs.getString(_habitsKey)),
       _decodeDone(prefs.getString(_doneKey)),
+      _decodeVerdicts(prefs.getString(_aiVerdictKey)),
       _decodeFood(prefs.getString(_foodKey)),
       _decodeWorkouts(prefs.getString(_workoutKey)),
+      _decodeTemplates(prefs.getString(_templateKey)),
       _decodePins(prefs.getString(_pinsKey)),
       tombRaw == null ? <String>{} : {for (final t in (jsonDecode(tombRaw) as List)) t as String},
     );
@@ -83,6 +90,21 @@ class PersistentRepository implements Repository {
   }
 
   @override
+  void replaceLog(String metricId, int index, Log log) {
+    final list = _cache[metricId];
+    if (list != null && index >= 0 && index < list.length) {
+      list[index] = log;
+      _persist();
+    }
+  }
+
+  @override
+  void purgeMetricLogs(String metricId) {
+    _cache.remove(metricId);
+    _persist();
+  }
+
+  @override
   List<Habit> loadHabits() => List.of(_habits);
 
   @override
@@ -100,8 +122,10 @@ class PersistentRepository implements Repository {
   void deleteHabit(String id) {
     _habits.removeWhere((h) => h.id == id);
     _completions.remove(id);
+    _aiVerdicts.remove(id);
     _persistHabits();
     _persistDone();
+    _persistVerdicts();
   }
 
   @override
@@ -113,6 +137,36 @@ class PersistentRepository implements Repository {
     final set = _completions[habitId] ??= <String>{};
     done ? set.add(day) : set.remove(day);
     _persistDone();
+  }
+
+  @override
+  Map<String, Map<String, bool>> loadAiVerdicts() =>
+      {for (final e in _aiVerdicts.entries) e.key: Map.of(e.value)};
+
+  @override
+  void setAiVerdict(String habitId, String day, bool done) {
+    (_aiVerdicts[habitId] ??= {})[day] = done;
+    _persistVerdicts();
+  }
+
+  @override
+  List<WorkoutTemplate> loadTemplates() => List.of(_templates);
+
+  @override
+  void saveTemplate(WorkoutTemplate template) {
+    final i = _templates.indexWhere((t) => t.id == template.id);
+    if (i >= 0) {
+      _templates[i] = template;
+    } else {
+      _templates.add(template);
+    }
+    _persistTemplates();
+  }
+
+  @override
+  void deleteTemplate(String id) {
+    _templates.removeWhere((t) => t.id == id);
+    _persistTemplates();
   }
 
   @override
@@ -177,15 +231,19 @@ class PersistentRepository implements Repository {
     _cache.clear();
     _habits.clear();
     _completions.clear();
+    _aiVerdicts.clear();
     _food.clear();
     _workouts.clear();
+    _templates.clear();
     _pins.clear();
     _tombstones.clear();
     _persist();
     _persistHabits();
     _persistDone();
+    _persistVerdicts();
     _persistFood();
     _persistWorkouts();
+    _persistTemplates();
     _persistPins();
     _persistTombstones();
   }
@@ -202,6 +260,36 @@ class PersistentRepository implements Repository {
 
   void _persistWorkouts() => unawaited(_prefs.setString(
       _workoutKey, jsonEncode([for (final w in _workouts) w.toJson()])));
+
+  void _persistTemplates() => unawaited(_prefs.setString(
+      _templateKey, jsonEncode([for (final t in _templates) t.toJson()])));
+
+  static List<WorkoutTemplate> _decodeTemplates(String? s) {
+    if (s == null) return [];
+    final out = <WorkoutTemplate>[];
+    for (final t in (jsonDecode(s) as List)) {
+      try {
+        out.add(WorkoutTemplate.fromJson(t as Map<String, dynamic>));
+      } catch (_) {/* skip an unparseable entry */}
+    }
+    return out;
+  }
+
+  void _persistVerdicts() => unawaited(_prefs.setString(
+      _aiVerdictKey,
+      jsonEncode({for (final e in _aiVerdicts.entries) e.key: e.value})));
+
+  static Map<String, Map<String, bool>> _decodeVerdicts(String? s) {
+    if (s == null) return {};
+    final j = jsonDecode(s) as Map<String, dynamic>;
+    return {
+      for (final e in j.entries)
+        e.key: {
+          for (final d in (e.value as Map<String, dynamic>).entries)
+            d.key: d.value == true
+        }
+    };
+  }
 
   static List<FoodEntry> _decodeFood(String? s) => s == null
       ? []

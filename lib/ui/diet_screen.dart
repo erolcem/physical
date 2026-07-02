@@ -134,19 +134,27 @@ class DietScreen extends ConsumerWidget {
         Text(label, style: const TextStyle(fontSize: 10, color: _muted)),
       ]);
 
-  // Energy balance: calories in (food) vs out (estimated BMR + active from Google
-  // exercise sessions) + current weight. Out is ESTIMATED (watch-derived) — relative.
+  // Energy balance: calories in (food) vs out — the day's synced TOTAL energy
+  // burned when Google provides it, else estimated BMR + active session calories.
   Widget _energyBalance(WidgetRef ref, DietTotals t) {
     final latest = ref.watch(latestLogsProvider);
     final sessions = ref.watch(workoutProvider);
+    final logs = ref.watch(logsProvider);
     final w = latest['bodyweight']?.value;
     final h = latest['height']?.value;
     final age = latest['age']?.value;
     final hasBody = w != null && h != null && age != null;
-    final out = hasBody
-        ? bmrMifflin(w, h, age.round()) + activeCaloriesOn(sessions, todayKey())
-        : null;
+    double? burnedToday;
+    for (final l in (logs['energy_burned'] ?? const <Log>[])) {
+      if (l.ts.startsWith(todayKey())) burnedToday = l.value;
+    }
+    final out = (burnedToday != null && burnedToday > 0)
+        ? burnedToday
+        : hasBody
+            ? bmrMifflin(w, h, age.round()) + activeCaloriesOn(sessions, todayKey())
+            : null;
     final net = out == null ? null : t.calories - out;
+    final fromGoogle = burnedToday != null && burnedToday > 0;
     return Card(
       color: _card,
       child: Padding(
@@ -156,13 +164,18 @@ class DietScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             _energyStat('In', '${t.calories.round()}', 'kcal', _gold),
-            _energyStat('Out (est)', out == null ? '—' : '${out.round()}', 'kcal', _teal),
+            _energyStat(fromGoogle ? 'Out' : 'Out (est)',
+                out == null ? '—' : '${out.round()}', 'kcal', _teal),
             _energyStat(net == null ? 'Net' : (net >= 0 ? 'Surplus' : 'Deficit'),
                 net == null ? '—' : '${net.abs().round()}', 'kcal',
                 net == null ? _muted : (net >= 0 ? _pink : _teal)),
             _energyStat('Weight', w == null ? '—' : w.toStringAsFixed(1), 'kg', _accent),
           ]),
-          if (!hasBody) ...[
+          if (fromGoogle) ...[
+            const SizedBox(height: 10),
+            const Text('Out = today\'s total energy burned (Google Health) · updates through the day',
+                style: TextStyle(fontSize: 10.5, color: _muted)),
+          ] else if (!hasBody) ...[
             const SizedBox(height: 10),
             const Text('Sync weight/height/age (☁) for the burn estimate.',
                 style: TextStyle(fontSize: 11, color: _muted)),
@@ -282,17 +295,21 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
     final logs = ref.watch(logsProvider);
     final latest = ref.watch(latestLogsProvider);
     final days = lastNDays(_days); // oldest → newest
-    final w = latest['bodyweight']?.value;
     final h = latest['height']?.value;
     final age = latest['age']?.value;
-    final bmr = (w != null && h != null && age != null) ? bmrMifflin(w, h, age.round()) : null;
 
-    final inSeries = [for (final d in days) dietTotals(entries, d).calories];
-    final outSeries = bmr == null
-        ? const <double>[]
-        : [for (final d in days) bmr + activeCaloriesOn(sessions, d)];
+    // Days with NO food logged are gaps (null), not misleading dips to 0 kcal.
+    final inSeries = <double?>[
+      for (final d in days)
+        () {
+          final t = dietTotals(entries, d);
+          return t.items > 0 ? t.calories : null;
+        }()
+    ];
 
-    // Weight carried forward from the latest bodyweight log on/before each day.
+    // Weight carried forward from the latest bodyweight log on/before each day —
+    // also the weight the day's BMR is computed with (not today's weight for all
+    // of history).
     final wlogs = [...(logs['bodyweight'] ?? const <Log>[])]
       ..sort((a, b) => a.ts.compareTo(b.ts));
     final weightSeries = <double?>[];
@@ -303,12 +320,33 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
       }
       weightSeries.add(v);
     }
+    final w = latest['bodyweight']?.value;
+
+    // Out (est): the day's synced TOTAL energy burned when Google provides it;
+    // else that day's BMR (day-accurate weight) + session calories.
+    final burnedByDay = <String, double>{};
+    for (final l in (logs['energy_burned'] ?? const <Log>[])) {
+      if (l.ts.length >= 10) burnedByDay[l.ts.substring(0, 10)] = l.value;
+    }
+    final outSeries = <double?>[];
+    for (var i = 0; i < days.length; i++) {
+      final d = days[i];
+      final burned = burnedByDay[d];
+      if (burned != null && burned > 0) {
+        outSeries.add(burned);
+        continue;
+      }
+      final dayW = weightSeries[i] ?? w;
+      outSeries.add((dayW != null && h != null && age != null)
+          ? bmrMifflin(dayW, h, age.round()) + activeCaloriesOn(sessions, d)
+          : null);
+    }
     final wPts = [for (var i = 0; i < days.length; i++)
         if (weightSeries[i] != null) FlSpot(i.toDouble(), weightSeries[i]!)];
 
     double maxKcal = 100;
     for (final v in [...inSeries, ...outSeries]) {
-      if (v > maxKcal) maxKcal = v;
+      if (v != null && v > maxKcal) maxKcal = v;
     }
     final firstW = weightSeries.firstWhere((v) => v != null, orElse: () => null);
     final lastW = weightSeries.lastWhere((v) => v != null, orElse: () => null);
@@ -344,21 +382,15 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
             height: 130,
             child: LineChart(LineChartData(
               minY: 0, maxY: maxKcal * 1.15,
+              minX: 0, maxX: (days.length - 1).toDouble(),
               titlesData: const FlTitlesData(show: false),
               gridData: const FlGridData(show: false),
               borderData: FlBorderData(show: false),
               lineTouchData: const LineTouchData(enabled: false),
               lineBarsData: [
-                LineChartBarData(
-                  spots: [for (var i = 0; i < inSeries.length; i++) FlSpot(i.toDouble(), inSeries[i])],
-                  isCurved: true, color: _gold, barWidth: 2, dotData: const FlDotData(show: false),
-                  belowBarData: BarAreaData(show: true, color: _gold.withValues(alpha: 0.12)),
-                ),
-                if (outSeries.isNotEmpty)
-                  LineChartBarData(
-                    spots: [for (var i = 0; i < outSeries.length; i++) FlSpot(i.toDouble(), outSeries[i])],
-                    isCurved: true, color: _teal, barWidth: 2, dotData: const FlDotData(show: false),
-                  ),
+                // Days without data render as GAPS (split segments), not dips to 0.
+                ..._gapSegments(inSeries, _gold, fill: true),
+                ..._gapSegments(outSeries, _teal),
               ],
             )),
           ),
@@ -390,6 +422,37 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
         ]),
       ),
     );
+  }
+
+  // Split a nullable series into contiguous line segments so missing days read
+  // as gaps rather than plunges to zero.
+  List<LineChartBarData> _gapSegments(List<double?> series, Color c, {bool fill = false}) {
+    final bars = <LineChartBarData>[];
+    var run = <FlSpot>[];
+    void close() {
+      if (run.isEmpty) return;
+      bars.add(LineChartBarData(
+        spots: run,
+        isCurved: run.length > 2,
+        color: c,
+        barWidth: 2,
+        dotData: FlDotData(show: run.length == 1), // a lone day still shows as a dot
+        belowBarData: fill
+            ? BarAreaData(show: true, color: c.withValues(alpha: 0.12))
+            : BarAreaData(show: false),
+      ));
+      run = <FlSpot>[];
+    }
+    for (var i = 0; i < series.length; i++) {
+      final v = series[i];
+      if (v == null) {
+        close();
+      } else {
+        run.add(FlSpot(i.toDouble(), v));
+      }
+    }
+    close();
+    return bars;
   }
 
   Widget _legend(String label, Color c) => Row(mainAxisSize: MainAxisSize.min, children: [

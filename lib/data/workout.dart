@@ -167,6 +167,51 @@ class WorkoutSession {
       );
 }
 
+// ── Workout templates (Hevy-style fast logging) ────────────────────────────
+// A template saves a workout's exercises + sets (with their last-used weights/
+// reps) under a name, so starting "Push day" pre-fills every set instead of
+// retyping them. Saved from any session; starting from a template creates a new
+// session seeded with the template's sets.
+class WorkoutTemplate {
+  final String id;
+  final String name;
+  final String type; // one of sessionTypes
+  final List<WorkoutSet> sets;
+  const WorkoutTemplate({
+    required this.id,
+    required this.name,
+    this.type = 'Weightlifting',
+    this.sets = const [],
+  });
+
+  int get setCount => sets.length;
+  Set<String> get exercises => {for (final s in sets) s.name};
+
+  Map<String, dynamic> toJson() => {
+        'id': id, 'name': name, 'type': type,
+        'sets': [for (final s in sets) s.toJson()],
+      };
+
+  factory WorkoutTemplate.fromJson(Map<String, dynamic> j) => WorkoutTemplate(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        type: j['type'] as String? ?? 'Weightlifting',
+        sets: [
+          for (final s in (j['sets'] as List? ?? const []))
+            WorkoutSet.fromJson(s as Map<String, dynamic>)
+        ],
+      );
+
+  /// Snapshot a finished session's sets as a reusable template.
+  factory WorkoutTemplate.fromSession(WorkoutSession s, {required String name}) =>
+      WorkoutTemplate(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        name: name,
+        type: s.type,
+        sets: List.of(s.sets),
+      );
+}
+
 /// Sessions most-recent first (by start datetime).
 List<WorkoutSession> sortedByRecent(List<WorkoutSession> sessions) =>
     [...sessions]..sort((a, b) => b.start.compareTo(a.start));

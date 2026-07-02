@@ -199,6 +199,65 @@ class ApiClient {
     }
   }
 
+  /// Google connection status incl. which scopes the stored token is missing
+  /// (a token granted before a scope was added silently 403s those APIs until
+  /// the user reconnects). {} on any failure.
+  Future<Map<String, dynamic>> googleStatus() async {
+    try {
+      final r = await _client
+          .get(Uri.parse('$baseUrl/integrations/google/status'), headers: _headers())
+          .timeout(const Duration(seconds: 8));
+      if (r.statusCode != 200) return const {};
+      return jsonDecode(r.body) as Map<String, dynamic>;
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// Delete the signed-in user's cloud samples (all, or scoped by source/metric).
+  /// Returns how many were deleted. Throws on failure.
+  Future<int> deleteCloudSamples({String? source, String? metricId}) async {
+    final uri = Uri.parse('$baseUrl/me/samples').replace(queryParameters: {
+      if (source != null) 'source': source,
+      if (metricId != null) 'metric_id': metricId,
+    });
+    final r = await _client
+        .delete(uri, headers: _headers())
+        .timeout(const Duration(seconds: 30));
+    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
+    return ((jsonDecode(r.body) as Map)['deleted'] as num?)?.toInt() ?? 0;
+  }
+
+  /// LLM habit verification: sends the day's habits + evidence, returns one
+  /// verdict per habit [{id, done, reason}], or null when unavailable (offline /
+  /// unconfigured) so the caller can fall back to the rule-based check.
+  Future<List<Map<String, dynamic>>?> verifyHabits({
+    required String day,
+    required List<Map<String, dynamic>> habits,
+    List<Map<String, dynamic>> workouts = const [],
+    List<Map<String, dynamic>> food = const [],
+    Map<String, dynamic> metrics = const {},
+  }) async {
+    try {
+      final r = await _client
+          .post(Uri.parse('$baseUrl/me/habits/verify'),
+              headers: _headers({'Content-Type': 'application/json'}),
+              body: _safeEncode({
+                'day': day,
+                'habits': habits,
+                'workouts': workouts,
+                'food': food,
+                'metrics': metrics,
+              }))
+          .timeout(const Duration(seconds: 60));
+      if (r.statusCode != 200) return null;
+      final j = jsonDecode(r.body) as Map<String, dynamic>;
+      return ((j['verdicts'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// The Google consent URL for the signed-in user to open in a browser.
   Future<String> googleAuthorizeUrl() async {
     final r = await _client

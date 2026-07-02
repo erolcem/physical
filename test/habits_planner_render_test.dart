@@ -28,7 +28,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('TIME / MONTH'), findsOneWidget);
     expect(find.text('COST / MONTH'), findsOneWidget);
-    expect(find.text('TODAY’S TIMELINE'), findsOneWidget);
+    expect(find.text('TIMELINE'), findsOneWidget);
     expect(find.textContaining('CeraVe'), findsOneWidget); // product pill
   });
 }

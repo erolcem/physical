@@ -13,12 +13,17 @@ import 'providers.dart';
 class HabitsState {
   final List<Habit> habits;
   final Map<String, Set<String>> completions; // habitId → done date-keys
-  const HabitsState(this.habits, this.completions);
+  final Map<String, Map<String, bool>> aiVerdicts; // habitId → day → LLM verdict
+  const HabitsState(this.habits, this.completions,
+      [this.aiVerdicts = const {}]);
 
   bool doneToday(String habitId) =>
       completions[habitId]?.contains(todayKey()) ?? false;
 
   Set<String> doneFor(String habitId) => completions[habitId] ?? const {};
+
+  /// The LLM verifier's judgement for a habit+day, or null when it hasn't run.
+  bool? aiVerdictFor(String habitId, String day) => aiVerdicts[habitId]?[day];
 }
 
 final habitsProvider =
@@ -29,7 +34,8 @@ final habitsProvider =
 class HabitsNotifier extends StateNotifier<HabitsState> {
   final Repository repo;
   HabitsNotifier(this.repo)
-      : super(HabitsState(repo.loadHabits(), repo.loadCompletions()));
+      : super(HabitsState(
+            repo.loadHabits(), repo.loadCompletions(), repo.loadAiVerdicts()));
 
   void addHabit(String title,
       {String section = 'misc',
@@ -73,6 +79,12 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
     _reload();
   }
 
+  /// Update an existing habit in place (saveHabit upserts by id).
+  void updateHabit(Habit habit) {
+    repo.saveHabit(habit);
+    _reload();
+  }
+
   /// Retune an existing habit's quantitative target (the coach's adjust action).
   void adjustTarget(String title, double target, {String? compare}) {
     final matches = state.habits.where((h) => h.title.toLowerCase() == title.toLowerCase());
@@ -94,8 +106,19 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
     _reload();
   }
 
+  /// Toggle a habit's check-off for any [day] (the Habits tab can browse days).
+  void toggleOn(String id, String day) {
+    final done = state.completions[id]?.contains(day) ?? false;
+    repo.setCompletion(id, day, !done);
+    _reload();
+  }
+
+  /// Re-read from the repository (e.g. after AI verdicts were written by a sync).
+  void reload() => _reload();
+
   void _reload() {
-    state = HabitsState(repo.loadHabits(), repo.loadCompletions());
+    state = HabitsState(
+        repo.loadHabits(), repo.loadCompletions(), repo.loadAiVerdicts());
     // Keep the daily habit reminders in step with the current set (no-op off iOS/Android).
     unawaited(NotificationService.instance.syncHabitReminders(state.habits));
   }
