@@ -10,6 +10,18 @@ def test_authorize_url_uses_google_and_requests_offline_health_scopes():
     assert "googlehealth.sleep.readonly" in url
     assert "access_type=offline" in url and "prompt=consent" in url
     assert "state=user-123" in url
+    # Calendar must NEVER ride on the health consent: health.googleapis.com
+    # rejects tokens carrying calendar.events (403 DISALLOWED_OAUTH_SCOPES).
+    assert "calendar" not in url
+    # And incremental auth must be OFF, or Google would re-bundle a previously
+    # granted calendar scope back onto the fresh health token.
+    assert "include_granted_scopes" not in url
+
+
+def test_calendar_authorize_url_is_calendar_only():
+    url = oauth.authorize_url("user-123", scopes=oauth.CALENDAR_SCOPES)
+    assert "calendar.events" in url
+    assert "googlehealth" not in url
 
 
 def test_resting_hr_real_google_shape():
@@ -313,8 +325,11 @@ def test_status_reports_missing_scopes(client):
     body = r.json()
     assert body["connected"] is True
     missing = body["missing_scopes"]
-    assert any("calendar.events" in s for s in missing)
     assert any("nutrition" in s for s in missing)
+    # Calendar is NOT a health scope any more (separate token/consent).
+    assert not any("calendar" in s for s in missing)
+    assert body["calendar_connected"] is False
+    assert body["health_token_poisoned"] is False
 
 
 def test_google_complete_reports_missing_scopes(client, monkeypatch):
@@ -331,7 +346,7 @@ def test_google_complete_reports_missing_scopes(client, monkeypatch):
     body = r.json()
     assert body["email"] == "t@example.com"
     assert any("googlehealth" in s for s in body["missing_scopes"])
-    assert any("calendar" in s for s in body["missing_scopes"])
+    assert not any("calendar" in s for s in body["missing_scopes"])  # separate consent
     # And a full grant reports nothing missing.
     monkeypatch.setattr(gh_oauth, "exchange_code", lambda code: {
         "access_token": "a", "refresh_token": "r", "expires_in": 3600,
@@ -360,4 +375,46 @@ def test_debug_reports_token_scopes_even_when_refresh_fails(client, monkeypatch)
     assert "token_error" in out
     tok = out["_token"]
     assert "https://www.googleapis.com/auth/googlehealth.sleep.readonly" in tok["granted_scopes"]
-    assert any("calendar" in s for s in tok["missing_scopes"])
+    assert any("nutrition" in s for s in tok["missing_scopes"])
+
+
+def test_status_flags_poisoned_health_token(client):
+    import datetime as dt
+    from app.db import get_db
+    from app.main import app as _app
+    from app.models import GoogleHealthToken
+    gen = _app.dependency_overrides[get_db]()
+    db = next(gen)
+    # The pre-split token: health scopes AND calendar.events on one grant — the
+    # Health API rejects it wholesale (DISALLOWED_OAUTH_SCOPES: cl_events).
+    db.merge(GoogleHealthToken(
+        user_id="local-dev", access_token="a", refresh_token="r",
+        expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1),
+        scope=" ".join([*oauth.SCOPES, "https://www.googleapis.com/auth/calendar.events"])))
+    db.commit()
+    body = client.get("/integrations/google/status").json()
+    assert body["health_token_poisoned"] is True
+    assert body["missing_scopes"] == []  # every health scope IS granted
+
+
+def test_calendar_exchange_stores_a_separate_token(client, monkeypatch):
+    import datetime as dt
+    from app.db import get_db
+    from app.main import app as _app
+    from app.models import GoogleCalendarToken
+    monkeypatch.setattr(oauth, "exchange_code", lambda code: {
+        "access_token": "cal-a", "refresh_token": "cal-r", "expires_in": 3600,
+        "scope": "https://www.googleapis.com/auth/calendar.events"})
+    r = client.post("/integrations/google/calendar/exchange", params={"code": "c"})
+    assert r.status_code == 200 and r.json()["status"] == "calendar_connected"
+    gen = _app.dependency_overrides[get_db]()
+    db = next(gen)
+    row = db.get(GoogleCalendarToken, "local-dev")
+    assert row is not None and row.refresh_token == "cal-r"
+    assert "calendar.events" in (row.scope or "")
+
+
+def test_calendar_push_requires_the_calendar_token(client):
+    r = client.post("/me/calendar/push", json={"habits": [{"id": "h", "title": "T"}]})
+    assert r.status_code == 401
+    assert "calendar" in r.json()["detail"]

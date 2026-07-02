@@ -120,3 +120,9 @@ of guessed.
   `--dart-define=BACKEND_URL=…`.
 - **Google sign-in token expired** (after ~7 days, while in Google "testing" mode) →
   the app shows a one-tap **Reconnect Google Health** button; tap it.
+- **Every Google data type 403s with `DISALLOWED_OAUTH_SCOPES` (`cl_events`)** →
+  the health token also carried the Calendar scope, which the Google Health API
+  rejects outright. Health and Calendar are now TWO separate consents: tap
+  **Reconnect Google Health** (health-only — fixes the 403s), then optionally
+  **Connect Google Calendar** in the same Cloud sheet so habits auto-add to your
+  calendar. On each Google consent page, tick **every** checkbox.

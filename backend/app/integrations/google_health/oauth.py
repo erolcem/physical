@@ -16,31 +16,34 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 # Identity (so one Google authorization both signs the user in AND links health)
 # + read-only Google Health scopes covering the full data range we want.
+#
+# IMPORTANT: Calendar must NOT be in this list. health.googleapis.com REJECTS any
+# access token that carries non-health scopes — every data call 403s with
+# DISALLOWED_OAUTH_SCOPES (disallowed_scopes=cl_events) — so the calendar grant
+# lives on a SEPARATE token from a separate consent (CALENDAR_SCOPES below).
 SCOPES = [
     "openid", "email", "profile",
     "https://www.googleapis.com/auth/googlehealth.profile.readonly",
     "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
     "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
     "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
-    # Nutrition (food/macros) + hydration — needs its own scope. Adding it means users
-    # must RE-CONSENT (reconnect Google) for nutrition-log to return data.
+    # Nutrition (food/macros) + hydration — a health-domain scope, safe here.
     "https://www.googleapis.com/auth/googlehealth.nutrition.readonly",
-    # Calendar — write habits straight into the user's Google Calendar (automatic, not a
-    # subscription link). Also requires RE-CONSENT.
-    "https://www.googleapis.com/auth/calendar.events",
 ]
 
+# The second consent: write habits straight into the user's Google Calendar.
+CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
 
-def authorize_url(state: str) -> str:
+
+def authorize_url(state: str, scopes: list[str] | None = None) -> str:
     q = urlencode({
         "client_id": settings.google_client_id,
         "response_type": "code",
-        "scope": " ".join(SCOPES),
+        "scope": " ".join(scopes or SCOPES),
         "redirect_uri": settings.google_redirect_uri,
         "state": state,
         "access_type": "offline",
         "prompt": "consent",
-        "include_granted_scopes": "true",
     })
     return f"{AUTH_URL}?{q}"
 

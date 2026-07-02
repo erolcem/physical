@@ -31,6 +31,7 @@ class _CloudSheet extends ConsumerStatefulWidget {
 
 class _CloudSheetState extends ConsumerState<_CloudSheet> {
   bool _loading = true, _signedIn = false, _busy = false, _needsReconnect = false;
+  bool? _calendarConnected; // null until status is known
   String? _email, _msg;
 
   @override
@@ -47,21 +48,30 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
       // Signed-in == the backend confirms our identity. If a stored token can't be
       // confirmed (e.g. we switched to the hosted server), just prompt sign-in.
       final email = api.isSignedIn ? await api.whoAmI() : null;
-      // A Google token granted before a scope was added (calendar / nutrition)
-      // silently 403s those APIs — surface the one-tap reconnect immediately.
-      var missingScopes = false;
+      // Diagnose the stored health token: missing health scopes, or POISONED
+      // (it carries calendar.events, which makes the Health API 403 everything —
+      // a health-only reconnect fixes it). Also whether Calendar is linked.
+      var missingScopes = false, poisoned = false;
+      bool? calendarConnected;
       if (email != null) {
         final gs = await api.googleStatus();
         missingScopes = ((gs['missing_scopes'] as List?) ?? const []).isNotEmpty;
+        poisoned = gs['health_token_poisoned'] == true;
+        calendarConnected = gs['calendar_connected'] as bool?;
       }
       if (mounted) {
         setState(() {
           _signedIn = email != null;
           _email = email;
+          _calendarConnected = calendarConnected;
           _loading = false;
-          if (missingScopes) {
+          if (poisoned) {
             _needsReconnect = true;
-            _msg = 'Google needs new permissions (calendar/nutrition) — reconnect below.';
+            _msg = 'Google Health rejected the old permission (it bundled Calendar) — '
+                'tap Reconnect to grant a fresh health-only permission.';
+          } else if (missingScopes) {
+            _needsReconnect = true;
+            _msg = 'Google needs new permissions — reconnect below.';
           }
         });
       }
@@ -98,22 +108,26 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
         // in Testing mode). Say exactly what was NOT granted — otherwise the only
         // symptom is 403 on every sync and reconnecting looks broken.
         final missing = api.lastSignInMissingScopes;
-        final healthMissing = missing.where((s) => s.contains('googlehealth')).toList();
+        bool? calendarConnected;
+        try {
+          calendarConnected =
+              (await api.googleStatus())['calendar_connected'] as bool?;
+        } catch (_) {/* status is a nice-to-have here */}
         if (mounted) {
           setState(() {
             _signedIn = true;
             _email = email;
+            _calendarConnected = calendarConnected;
             _needsReconnect = missing.isNotEmpty;
             _msg = missing.isEmpty
-                ? 'Signed in ✓ — all permissions granted'
+                ? 'Signed in ✓ — health access granted'
+                    '${calendarConnected == false ? '. Connect Google Calendar below to auto-add habits.' : ''}'
                 : 'Signed in, but Google did NOT grant: '
                   '${missing.map(_scopeName).join(', ')}.\n'
-                  '${healthMissing.isNotEmpty
-                      ? 'Reconnect and TICK EVERY CHECKBOX on Google\'s consent page. '
-                        'If they were ticked, check in Google Cloud Console that the '
-                        'OAuth consent screen is in Testing mode, your email is under '
-                        'Test users, and the Google Health API is enabled.'
-                      : 'Reconnect and tick every checkbox to enable those features.'}';
+                  'Reconnect and TICK EVERY CHECKBOX on Google\'s consent page. '
+                  'If they were ticked, check in Google Cloud Console that the '
+                  'OAuth consent screen is in Testing mode, your email is under '
+                  'Test users, and the Google Health API is enabled.';
           });
         }
       }
@@ -171,19 +185,50 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
     if (mounted) setState(() { _signedIn = false; _email = null; _msg = 'Signed out'; });
   }
 
+  // The separate Calendar grant (auto-add habits). Health and Calendar can't share
+  // a token — the Health API rejects tokens carrying calendar.events — so this is
+  // its own consent, same code-paste flow as sign-in.
+  Future<void> _connectCalendar() async {
+    final api = ref.read(apiClientProvider);
+    setState(() { _busy = true; _msg = null; });
+    try {
+      final url = await api.googleCalendarAuthorizeUrl();
+      try {
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      } catch (_) {/* fall back to the copyable link in the dialog */}
+      if (!mounted) return;
+      final code = await _askForCode(url);
+      if (code != null && code.isNotEmpty) {
+        await api.googleCalendarExchange(code);
+        if (mounted) {
+          setState(() {
+            _calendarConnected = true;
+            _msg = 'Google Calendar connected ✓ — habits will auto-add from now on.';
+          });
+        }
+      }
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _msg = 'Calendar connect failed: ${e.message}');
+    } catch (_) {
+      if (mounted) setState(() => _msg = "Couldn't start the calendar connect.");
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _sync() async {
     setState(() { _busy = true; _msg = null; });
     try {
       final r = await cloudSync(ref);
       if (mounted) {
         setState(() {
-          // Either Google Health expiry OR a missing Calendar scope wants a reconnect.
-          _needsReconnect = r.needsReconnect || r.calendarNeedsReconnect;
+          _needsReconnect = r.needsReconnect;
+          if (r.calendarNeedsReconnect) _calendarConnected = false;
           final base = r.pulled > 0
               ? 'Pulled ${r.pulled} new readings · ${r.note}'
               : 'Up to date · ${r.note}';
           _msg = r.calendarNeedsReconnect
-              ? '$base\nReconnect Google to auto-add habits to your calendar.'
+              ? '$base\nConnect Google Calendar below to auto-add habits.'
               : base;
         });
       }
@@ -366,6 +411,16 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
                 label: const Text('Sync now'),
                 style: FilledButton.styleFrom(backgroundColor: _accent, minimumSize: const Size.fromHeight(46)),
               ),
+            if (_calendarConnected == false) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _connectCalendar,
+                icon: const Icon(Icons.event_available, size: 18),
+                label: const Text('Connect Google Calendar (auto-add habits)'),
+                style: OutlinedButton.styleFrom(
+                    foregroundColor: _accent, minimumSize: const Size.fromHeight(46)),
+              ),
+            ],
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: _busy ? null : _restore,

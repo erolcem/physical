@@ -222,6 +222,29 @@ class ApiClient {
     }
   }
 
+  /// The consent URL for the SEPARATE Google Calendar grant. Calendar can't ride
+  /// on the health token — the Health API rejects tokens carrying calendar.events.
+  Future<String> googleCalendarAuthorizeUrl() async {
+    final r = await _client
+        .get(Uri.parse('$baseUrl/integrations/google/calendar/authorize'),
+            headers: _headers())
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) {
+      throw ApiException('calendar authorize failed: ${r.body}', r.statusCode);
+    }
+    return (jsonDecode(r.body) as Map<String, dynamic>)['authorize_url'] as String;
+  }
+
+  /// Exchange the calendar consent code → stores the calendar token server-side.
+  Future<void> googleCalendarExchange(String code) async {
+    final uri = Uri.parse('$baseUrl/integrations/google/calendar/exchange')
+        .replace(queryParameters: {'code': code});
+    final r = await _client.post(uri, headers: _headers()).timeout(const Duration(seconds: 20));
+    if (r.statusCode != 200) {
+      throw ApiException('calendar exchange failed: ${r.body}', r.statusCode);
+    }
+  }
+
   /// Delete the signed-in user's cloud samples (all, or scoped by source/metric).
   /// Returns how many were deleted. Throws on failure.
   Future<int> deleteCloudSamples({String? source, String? metricId}) async {
