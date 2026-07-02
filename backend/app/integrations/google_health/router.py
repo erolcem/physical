@@ -122,13 +122,26 @@ def debug(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     token = db.get(GoogleHealthToken, user_id)
     if token is None:
         raise HTTPException(404, "Google Health not connected")
+    out = {}
+    # What the stored token is actually allowed to do (scope strings only — no
+    # secrets). All-403 syncs are almost always explained right here: Google
+    # granted the token WITHOUT the health scopes (consent checkboxes unticked,
+    # or a non-Testing/unverified consent screen silently dropping restricted
+    # scopes), and no amount of reconnecting fixes that until the consent does.
+    granted = set((token.scope or "").split())
+    out["_token"] = {
+        "granted_scopes": sorted(granted),
+        "missing_scopes": [s for s in oauth.SCOPES
+                           if s not in granted and s not in ("openid", "email", "profile")],
+        "expires_at": str(token.expires_at),
+    }
     try:
         access = _valid_access_token(db, token)
     except Exception as e:
         # If the refresh failed, re-run /authorize then /exchange to reconnect.
-        return {"token_error": str(e)[:500]}
+        out["token_error"] = str(e)[:500]
+        return out
     client = GoogleHealthClient(access)
-    out = {}
     # One real sample per data type so we can write precise field extractors.
     for metric_id, data_type in DATA_TYPES.items():
         try:
@@ -262,11 +275,27 @@ def sync_user(db: Session, user_id: str, days: int = 7, replace: bool = False) -
     except Exception as e:
         return {"pulled": len(samples), "ingested": 0, "skipped": 0,
                 "errors": {**errors, "ingest": str(e)[:300]}, "days": days}
-    # A 401/403 on any data type means the stored token predates a newly-added scope
-    # (e.g. nutrition / calendar) — the fix is a one-tap reconnect, so tell the app.
-    if any(("401" in v or "403" in v or "PERMISSION_DENIED" in v or "insufficient" in v.lower())
-           for v in errors.values()):
-        errors["scope"] = "reconnect Google to grant the newly added permissions"
+    # Classify auth-ish failures so the app can say WHAT to fix, not just "reconnect":
+    #   • api_disabled  — the Google Health API is off in the Cloud project (console fix)
+    #   • grant         — the token itself lacks the health scopes: Google dropped them
+    #                     at consent (unticked checkboxes / consent screen not in
+    #                     Testing / user not a test user) — reconnecting alone won't help
+    #   • scope         — a 403 with scopes present ⇒ stale token; reconnect fixes it
+    joined = " ".join(errors.values())
+    if "SERVICE_DISABLED" in joined or "has not been used in project" in joined or "it is disabled" in joined:
+        errors["api_disabled"] = ("the Google Health API is disabled for this Cloud "
+                                  "project — enable it in console.cloud.google.com")
+    elif any(("401" in v or "403" in v or "PERMISSION_DENIED" in v or "insufficient" in v.lower())
+             for v in errors.values()):
+        granted = set((token.scope or "").split())
+        health_missing = [s for s in oauth.SCOPES if "googlehealth" in s and s not in granted]
+        if health_missing:
+            errors["grant"] = ("Google did not grant the health scopes at the last consent — "
+                               "re-connect and TICK EVERY CHECKBOX on the consent page, and check "
+                               "the OAuth consent screen is in Testing mode with your email under "
+                               "Test users")
+        else:
+            errors["scope"] = "reconnect Google to grant the newly added permissions"
     return {"pulled": len(samples), "ingested": ingested, "skipped": skipped,
             "errors": errors, "days": days}
 

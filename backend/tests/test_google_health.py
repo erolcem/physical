@@ -315,3 +315,49 @@ def test_status_reports_missing_scopes(client):
     missing = body["missing_scopes"]
     assert any("calendar.events" in s for s in missing)
     assert any("nutrition" in s for s in missing)
+
+
+def test_google_complete_reports_missing_scopes(client, monkeypatch):
+    import jwt as pyjwt
+    from app.integrations.google_health import oauth as gh_oauth
+    id_tok = pyjwt.encode({"sub": "sub-1", "email": "t@example.com"}, "x", algorithm="HS256")
+    # Google "succeeded" but silently dropped every health scope (e.g. consent
+    # checkboxes unticked, or a non-Testing consent screen).
+    monkeypatch.setattr(gh_oauth, "exchange_code", lambda code: {
+        "access_token": "a", "refresh_token": "r", "expires_in": 3600,
+        "id_token": id_tok, "scope": "openid email profile"})
+    r = client.post("/auth/google/complete", json={"code": "c"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["email"] == "t@example.com"
+    assert any("googlehealth" in s for s in body["missing_scopes"])
+    assert any("calendar" in s for s in body["missing_scopes"])
+    # And a full grant reports nothing missing.
+    monkeypatch.setattr(gh_oauth, "exchange_code", lambda code: {
+        "access_token": "a", "refresh_token": "r", "expires_in": 3600,
+        "id_token": id_tok, "scope": " ".join(gh_oauth.SCOPES)})
+    assert client.post("/auth/google/complete", json={"code": "c"}).json()["missing_scopes"] == []
+
+
+def test_debug_reports_token_scopes_even_when_refresh_fails(client, monkeypatch):
+    import datetime as dt
+    from app.db import get_db
+    from app.main import app as _app
+    from app.models import GoogleHealthToken
+    from app.integrations.google_health import oauth as gh_oauth, router as gh_router
+    gen = _app.dependency_overrides[get_db]()
+    db = next(gen)
+    db.merge(GoogleHealthToken(
+        user_id="local-dev", access_token="a", refresh_token="r",
+        expires_at=dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1),  # expired
+        scope="openid https://www.googleapis.com/auth/googlehealth.sleep.readonly"))
+    db.commit()
+    monkeypatch.setattr(gh_oauth, "refresh_token",
+                        lambda r: (_ for _ in ()).throw(RuntimeError("invalid_grant")))
+    out = client.get("/integrations/google/debug").json()
+    # The granted-scope diagnosis is returned BEFORE the refresh attempt, so an
+    # expired token still shows exactly what it was allowed to do.
+    assert "token_error" in out
+    tok = out["_token"]
+    assert "https://www.googleapis.com/auth/googlehealth.sleep.readonly" in tok["granted_scopes"]
+    assert any("calendar" in s for s in tok["missing_scopes"])

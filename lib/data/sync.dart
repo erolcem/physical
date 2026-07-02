@@ -128,18 +128,25 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
   try {
     final g = await api.triggerGoogleSync();
     final errs = ((g['errors'] as Map?) ?? const {}).cast<String, dynamic>();
-    // A 'token' error means the refresh token expired; a 'scope' error means the
-    // stored token predates a newly-added permission (calendar/nutrition). Both
-    // are fixed by the same one-tap Google reconnect.
-    needsReconnect = errs.containsKey('token') || errs.containsKey('scope');
-    if (needsReconnect) {
+    // The backend classifies auth failures: 'token' = refresh expired, 'scope' =
+    // stale token predating a new permission (both fixed by a one-tap reconnect);
+    // 'grant' = the LAST consent didn't grant the health scopes (reconnect AND
+    // tick every checkbox / fix the consent screen); 'api_disabled' = the Google
+    // Health API is off in the Cloud project (console fix, not a reconnect).
+    if (errs.containsKey('api_disabled')) {
+      note = 'Google Health API is disabled in your Cloud project — enable it in the console';
+    } else if (errs.containsKey('grant')) {
+      needsReconnect = true;
+      note = 'Google didn\'t grant health access — reconnect and tick every checkbox';
+    } else if (errs.containsKey('token') || errs.containsKey('scope')) {
+      needsReconnect = true;
       note = 'Google sign-in expired';
     } else if (errs.isEmpty) {
       note = 'Google +${g['ingested']}';
     } else {
       // Name what failed instead of a blanket "partial sync" — the data that
       // works still synced fine.
-      final failed = errs.keys.where((k) => k != 'scope').take(3).join(', ');
+      final failed = errs.keys.take(3).join(', ');
       note = 'Google +${g['ingested']} · $failed unavailable';
     }
   } catch (_) {

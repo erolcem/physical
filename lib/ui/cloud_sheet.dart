@@ -70,6 +70,17 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
     }
   }
 
+  // Short friendly names for the app's Google scopes (for the "not granted" message).
+  static String _scopeName(String s) {
+    if (s.contains('calendar')) return 'Calendar';
+    if (s.contains('nutrition')) return 'Nutrition';
+    if (s.contains('sleep')) return 'Sleep';
+    if (s.contains('activity')) return 'Activity';
+    if (s.contains('health_metrics')) return 'Health metrics';
+    if (s.contains('googlehealth.profile')) return 'Health profile';
+    return s.split('/').last;
+  }
+
   Future<void> _signIn() async {
     final api = ref.read(apiClientProvider);
     setState(() { _busy = true; _msg = null; });
@@ -82,11 +93,28 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
       final code = await _askForCode(url);
       if (code != null && code.isNotEmpty) {
         final email = await api.googleSignInComplete(code);
-        // A successful sign-in also refreshes the Google Health token.
+        // Google can "succeed" while silently dropping scopes (unticked consent
+        // checkboxes; restricted health scopes when the OAuth consent screen isn't
+        // in Testing mode). Say exactly what was NOT granted — otherwise the only
+        // symptom is 403 on every sync and reconnecting looks broken.
+        final missing = api.lastSignInMissingScopes;
+        final healthMissing = missing.where((s) => s.contains('googlehealth')).toList();
         if (mounted) {
           setState(() {
-          _signedIn = true; _email = email; _needsReconnect = false; _msg = 'Signed in ✓';
-        });
+            _signedIn = true;
+            _email = email;
+            _needsReconnect = missing.isNotEmpty;
+            _msg = missing.isEmpty
+                ? 'Signed in ✓ — all permissions granted'
+                : 'Signed in, but Google did NOT grant: '
+                  '${missing.map(_scopeName).join(', ')}.\n'
+                  '${healthMissing.isNotEmpty
+                      ? 'Reconnect and TICK EVERY CHECKBOX on Google\'s consent page. '
+                        'If they were ticked, check in Google Cloud Console that the '
+                        'OAuth consent screen is in Testing mode, your email is under '
+                        'Test users, and the Google Health API is enabled.'
+                      : 'Reconnect and tick every checkbox to enable those features.'}';
+          });
         }
       }
     } on ApiException catch (e) {
