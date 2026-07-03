@@ -123,9 +123,11 @@ class PersistentRepository implements Repository {
     _habits.removeWhere((h) => h.id == id);
     _completions.remove(id);
     _aiVerdicts.remove(id);
+    _tombstones.add(entityKey('habit', id));
     _persistHabits();
     _persistDone();
     _persistVerdicts();
+    _persistTombstones();
   }
 
   @override
@@ -166,7 +168,9 @@ class PersistentRepository implements Repository {
   @override
   void deleteTemplate(String id) {
     _templates.removeWhere((t) => t.id == id);
+    _tombstones.add(entityKey('template', id));
     _persistTemplates();
+    _persistTombstones();
   }
 
   @override
@@ -186,7 +190,9 @@ class PersistentRepository implements Repository {
   @override
   void deleteFood(String id) {
     _food.removeWhere((e) => e.id == id);
+    _tombstones.add(entityKey('food', id));
     _persistFood();
+    _persistTombstones();
   }
 
   @override
@@ -206,7 +212,9 @@ class PersistentRepository implements Repository {
   @override
   void deleteWorkout(String id) {
     _workouts.removeWhere((w) => w.id == id);
+    _tombstones.add(entityKey('workout', id));
     _persistWorkouts();
+    _persistTombstones();
   }
 
   @override

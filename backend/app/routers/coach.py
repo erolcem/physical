@@ -46,7 +46,7 @@ def chat(body: CoachChatIn,
     system = compose_system(samples, body.habits, body.profile,
                             body.diet, body.training, body.aesthetics,
                             body.ranks, body.trends, body.correlations, body.workout_sets,
-                            body.metric_history, body.energy)
+                            body.metric_history, body.energy, body.meals)
     turns = [{"role": t.role, "text": t.text} for t in body.history]
     turns.append({"role": "user", "text": body.message})
     try:
@@ -75,7 +75,7 @@ def plan(body: CoachChatIn,
     system = compose_system(samples, body.habits, body.profile,
                             body.diet, body.training, body.aesthetics,
                             body.ranks, body.trends, body.correlations, body.workout_sets,
-                            body.metric_history, body.energy)
+                            body.metric_history, body.energy, body.meals)
     goal = (body.message or "").strip()
     instruction = PLAN_PROMPT + (f"\n\nMy emphasised goal: {goal}" if goal else "")
     try:

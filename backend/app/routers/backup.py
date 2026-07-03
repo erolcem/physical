@@ -32,3 +32,16 @@ def get_backup(user_id: str = Depends(current_user), db: Session = Depends(get_d
     if row is None:
         raise HTTPException(404, "no backup yet")
     return {"updated_at": row.updated_at.isoformat(), "data": json.loads(row.data)}
+
+
+@router.delete("")
+def delete_backup(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
+    """Delete the stored snapshot. Part of the app's 'reset cloud data': without
+    this, deleted local entities (habits!) ride back in on the next sync's
+    backup merge — the cloud copy resurrects them forever."""
+    row = db.get(Backup, user_id)
+    if row is None:
+        return {"deleted": False}
+    db.delete(row)
+    db.commit()
+    return {"deleted": True}

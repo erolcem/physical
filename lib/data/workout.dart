@@ -94,11 +94,17 @@ class WorkoutSession {
   final int? zoneMinutes; // active zone minutes (Google sessions)
   final String source; // 'manual' | 'google'
   final String? googleId; // dedup key for imported Google sessions
+  // The PDF's two-step verification: a manual set-logging session is only REAL
+  // once a watch-tracked Google exercise covers the same window. Auto-linked on
+  // import/sync (linkSessionsToWatch); unlinked manual sessions read as
+  // "unverified" and the AI verifier won't credit exercise habits from them.
+  final String? linkedGoogleId;
   final Map<String, double> summary; // Google cardio summary: calories/distanceKm/steps/avgHr
   const WorkoutSession({
     required this.id, required this.type, this.title, required this.start,
     this.durationMins, this.sets = const [], this.cardioLoad, this.zoneMinutes,
-    this.source = 'manual', this.googleId, this.summary = const {},
+    this.source = 'manual', this.googleId, this.linkedGoogleId,
+    this.summary = const {},
   });
 
   String get dateKey => start.length >= 10 ? start.substring(0, 10) : start;
@@ -108,14 +114,22 @@ class WorkoutSession {
   String get label => (title != null && title!.trim().isNotEmpty) ? title! : type;
   bool get fromGoogle => source == 'google';
 
-  WorkoutSession copyWith({List<WorkoutSet>? sets, String? title, int? durationMins}) =>
+  /// Anchored to a real tracked exercise: either it IS the watch session, or a
+  /// watch session covering the same window has been linked to it.
+  bool get watchVerified => fromGoogle || linkedGoogleId != null;
+
+  WorkoutSession copyWith(
+          {List<WorkoutSet>? sets, String? title, int? durationMins,
+          String? linkedGoogleId}) =>
       WorkoutSession(
         id: id, type: type, start: start,
         title: title ?? this.title,
         durationMins: durationMins ?? this.durationMins,
         sets: sets ?? this.sets,
         cardioLoad: cardioLoad, zoneMinutes: zoneMinutes,
-        source: source, googleId: googleId, summary: summary,
+        source: source, googleId: googleId,
+        linkedGoogleId: linkedGoogleId ?? this.linkedGoogleId,
+        summary: summary,
       );
 
   Map<String, dynamic> toJson() => {
@@ -126,6 +140,7 @@ class WorkoutSession {
         if (zoneMinutes != null) 'zm': zoneMinutes,
         if (source != 'manual') 'src': source,
         if (googleId != null) 'gid': googleId,
+        if (linkedGoogleId != null) 'lgid': linkedGoogleId,
         if (summary.isNotEmpty) 'sum': summary,
       };
 
@@ -141,6 +156,7 @@ class WorkoutSession {
         zoneMinutes: (j['zm'] as num?)?.toInt(),
         source: j['src'] as String? ?? 'manual',
         googleId: j['gid'] as String?,
+        linkedGoogleId: j['lgid'] as String?,
         summary: {
           for (final e in ((j['sum'] as Map?) ?? const {}).entries)
             e.key as String: (e.value as num).toDouble()
@@ -215,6 +231,38 @@ class WorkoutTemplate {
 /// Sessions most-recent first (by start datetime).
 List<WorkoutSession> sortedByRecent(List<WorkoutSession> sessions) =>
     [...sessions]..sort((a, b) => b.start.compareTo(a.start));
+
+/// Link manual set-logging sessions to the watch-tracked Google exercise that
+/// covers them (two-step verification): same day AND overlapping time windows,
+/// with [slackMins] of tolerance on both ends (you open the app a little before
+/// the watch starts / log sets after it stops). Returns the sessions that
+/// gained a link (updated copies). Pure + unit-tested.
+List<WorkoutSession> linkSessionsToWatch(List<WorkoutSession> sessions,
+    {int slackMins = 45}) {
+  final google = [for (final s in sessions) if (s.fromGoogle) s];
+  if (google.isEmpty) return const [];
+  final slack = Duration(minutes: slackMins);
+  final changed = <WorkoutSession>[];
+  for (final s in sessions) {
+    if (s.fromGoogle || s.linkedGoogleId != null) continue;
+    final start = DateTime.tryParse(s.start);
+    if (start == null) continue;
+    final end = start.add(Duration(minutes: s.durationMins ?? 60));
+    for (final g in google) {
+      if (g.dateKey != s.dateKey || g.googleId == null) continue;
+      final gStart = DateTime.tryParse(g.start);
+      if (gStart == null) continue;
+      final gEnd = gStart.add(Duration(minutes: g.durationMins ?? 60));
+      final overlaps = start.isBefore(gEnd.add(slack)) &&
+          gStart.isBefore(end.add(slack));
+      if (overlaps) {
+        changed.add(s.copyWith(linkedGoogleId: g.googleId));
+        break;
+      }
+    }
+  }
+  return changed;
+}
 
 /// Active calories burned on [day] (YYYY-MM-DD), summed from sessions' Google calorie
 /// summaries. Estimated (watch-derived) — feeds the diet energy-balance "out" figure.

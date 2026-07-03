@@ -11,6 +11,11 @@ import 'workout.dart';
 /// Stable key for a single log ("metricId@ts") — used for dedupe + tombstones.
 String logKey(String metricId, Log l) => '$metricId@${l.ts}';
 
+/// Tombstone key for a deleted ENTITY (habit/food/workout/template). Without
+/// these, a deleted habit rides back in on the next sync's cloud-backup merge —
+/// the union can't tell "deleted here" from "created there".
+String entityKey(String kind, String id) => '$kind:$id';
+
 abstract class Repository {
   Map<String, List<Log>> loadLogs();
   void saveLog(String metricId, Log log);
@@ -127,6 +132,7 @@ class InMemoryRepository implements Repository {
     _habits.removeWhere((h) => h.id == id);
     _completions.remove(id);
     _aiVerdicts.remove(id);
+    _tombstones.add(entityKey('habit', id));
   }
 
   @override
@@ -161,7 +167,10 @@ class InMemoryRepository implements Repository {
   }
 
   @override
-  void deleteTemplate(String id) => _templates.removeWhere((t) => t.id == id);
+  void deleteTemplate(String id) {
+    _templates.removeWhere((t) => t.id == id);
+    _tombstones.add(entityKey('template', id));
+  }
 
   @override
   List<FoodEntry> loadFood() => List.of(_food);
@@ -177,7 +186,10 @@ class InMemoryRepository implements Repository {
   }
 
   @override
-  void deleteFood(String id) => _food.removeWhere((e) => e.id == id);
+  void deleteFood(String id) {
+    _food.removeWhere((e) => e.id == id);
+    _tombstones.add(entityKey('food', id));
+  }
 
   @override
   List<WorkoutSession> loadWorkouts() => List.of(_workouts);
@@ -193,7 +205,10 @@ class InMemoryRepository implements Repository {
   }
 
   @override
-  void deleteWorkout(String id) => _workouts.removeWhere((w) => w.id == id);
+  void deleteWorkout(String id) {
+    _workouts.removeWhere((w) => w.id == id);
+    _tombstones.add(entityKey('workout', id));
+  }
 
   @override
   List<PinnedCorrelation> loadPins() => List.of(_pins);
@@ -291,7 +306,9 @@ void repoImport(Repository r, Map<String, dynamic> m) {
     }
   });
   for (final h in ((m['habits'] as List?) ?? const [])) {
-    r.saveHabit(Habit.fromJson((h as Map).cast<String, dynamic>()));
+    final j = (h as Map).cast<String, dynamic>();
+    if (tombs.contains(entityKey('habit', j['id'] as String))) continue;
+    r.saveHabit(Habit.fromJson(j));
   }
   ((m['completions'] as Map?) ?? const {}).forEach((hid, days) {
     for (final d in (days as List)) {
@@ -304,13 +321,19 @@ void repoImport(Repository r, Map<String, dynamic> m) {
     });
   });
   for (final f in ((m['food'] as List?) ?? const [])) {
-    r.saveFood(FoodEntry.fromJson((f as Map).cast<String, dynamic>()));
+    final j = (f as Map).cast<String, dynamic>();
+    if (tombs.contains(entityKey('food', j['id'] as String))) continue;
+    r.saveFood(FoodEntry.fromJson(j));
   }
   for (final w in ((m['workouts'] as List?) ?? const [])) {
-    r.saveWorkout(WorkoutSession.fromJson((w as Map).cast<String, dynamic>()));
+    final j = (w as Map).cast<String, dynamic>();
+    if (tombs.contains(entityKey('workout', j['id'] as String))) continue;
+    r.saveWorkout(WorkoutSession.fromJson(j));
   }
   for (final t in ((m['templates'] as List?) ?? const [])) {
-    r.saveTemplate(WorkoutTemplate.fromJson((t as Map).cast<String, dynamic>()));
+    final j = (t as Map).cast<String, dynamic>();
+    if (tombs.contains(entityKey('template', j['id'] as String))) continue;
+    r.saveTemplate(WorkoutTemplate.fromJson(j));
   }
   for (final p in ((m['pins'] as List?) ?? const [])) {
     r.addPin(PinnedCorrelation.fromJson((p as Map).cast<String, dynamic>()));
@@ -319,8 +342,10 @@ void repoImport(Repository r, Map<String, dynamic> m) {
 
 /// MERGE a snapshot into the existing store (union, never clears) — for multi-device
 /// sync so two devices converge instead of one clobbering the other. Dedup rules:
-/// logs by metric+timestamp, food/workouts/habits by id, completions set-union, pins
-/// by key. (Deletes don't propagate via union — a later refinement if needed.)
+/// logs by metric+timestamp, food/workouts/habits/templates by id, completions
+/// set-union, pins by key. DELETES PROPAGATE: log + entity tombstones from either
+/// side win over the other's copy, so a deleted habit can never ride back in on a
+/// backup merge.
 void repoMerge(Repository r, Map<String, dynamic> m) {
   // Union tombstones first, so deletions from EITHER device win over the other's copy.
   for (final t in ((m['tombstones'] as List?) ?? const [])) {
@@ -333,6 +358,19 @@ void repoMerge(Repository r, Map<String, dynamic> m) {
       if (tombs.contains(logKey(mid, list[i]))) r.deleteLog(mid, i);
     }
   });
+  // Purge local entities the snapshot knows were deleted elsewhere.
+  for (final h in r.loadHabits()) {
+    if (tombs.contains(entityKey('habit', h.id))) r.deleteHabit(h.id);
+  }
+  for (final f in r.loadFood()) {
+    if (tombs.contains(entityKey('food', f.id))) r.deleteFood(f.id);
+  }
+  for (final w in r.loadWorkouts()) {
+    if (tombs.contains(entityKey('workout', w.id))) r.deleteWorkout(w.id);
+  }
+  for (final t in r.loadTemplates()) {
+    if (tombs.contains(entityKey('template', t.id))) r.deleteTemplate(t.id);
+  }
   final existingLogs = r.loadLogs();
   ((m['logs'] as Map?) ?? const {}).forEach((mid, list) {
     final haveTs = {for (final l in (existingLogs[mid] ?? const <Log>[])) l.ts};
@@ -348,6 +386,7 @@ void repoMerge(Repository r, Map<String, dynamic> m) {
   final haveHabits = {for (final h in r.loadHabits()) h.id};
   for (final h in ((m['habits'] as List?) ?? const [])) {
     final j = (h as Map).cast<String, dynamic>();
+    if (tombs.contains(entityKey('habit', j['id'] as String))) continue;
     if (!haveHabits.contains(j['id'])) r.saveHabit(Habit.fromJson(j));
   }
   ((m['completions'] as Map?) ?? const {}).forEach((hid, days) {
@@ -368,16 +407,19 @@ void repoMerge(Repository r, Map<String, dynamic> m) {
   final haveFood = {for (final f in r.loadFood()) f.id};
   for (final f in ((m['food'] as List?) ?? const [])) {
     final j = (f as Map).cast<String, dynamic>();
+    if (tombs.contains(entityKey('food', j['id'] as String))) continue;
     if (!haveFood.contains(j['id'])) r.saveFood(FoodEntry.fromJson(j));
   }
   final haveWorkouts = {for (final w in r.loadWorkouts()) w.id};
   for (final w in ((m['workouts'] as List?) ?? const [])) {
     final j = (w as Map).cast<String, dynamic>();
+    if (tombs.contains(entityKey('workout', j['id'] as String))) continue;
     if (!haveWorkouts.contains(j['id'])) r.saveWorkout(WorkoutSession.fromJson(j));
   }
   final haveTemplates = {for (final t in r.loadTemplates()) t.id};
   for (final t in ((m['templates'] as List?) ?? const [])) {
     final j = (t as Map).cast<String, dynamic>();
+    if (tombs.contains(entityKey('template', j['id'] as String))) continue;
     if (!haveTemplates.contains(j['id'])) r.saveTemplate(WorkoutTemplate.fromJson(j));
   }
   final havePins = {for (final p in r.loadPins()) p.key};

@@ -158,6 +158,12 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
   backfillReadinessLogs(repo); // recompute readiness now that recovery data updated
   backfillRankLogs(repo); // log today's overall + category ranks for the rank graphs
   ref.read(logsProvider.notifier).reload();
+  // Google exercise SESSIONS → the Exercise section (deduped by id) — imported on
+  // every sync (not just when the Exercise screen opens) so watch-verification and
+  // the AI evening check always see the real tracked workouts. Best-effort.
+  try {
+    ref.read(workoutProvider.notifier).importGoogle(await api.googleExercises());
+  } catch (_) {/* exercise import is best-effort */}
   // Google Health food logs (nutrition-log) → the Diet section, deduped by id; then
   // ask the AI to fill the diet-health radar for foods that lack health axes.
   try {

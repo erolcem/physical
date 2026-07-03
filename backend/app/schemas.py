@@ -82,6 +82,7 @@ class CoachChatIn(BaseModel):
     workout_sets: list[dict] = []   # [{date, type, exercises:[{name, sets:[{w,r}], volume}]}]
     metric_history: dict | None = None  # {metric_id: [downsampled daily values, oldest→newest]}
     energy: dict | None = None      # {in:[daily kcal], out:[daily est kcal], bmr}
+    meals: list[dict] = []          # last-7-days food entries [{d, n, kcal, p, fib?}]
 
 
 class CoachChatOut(BaseModel):

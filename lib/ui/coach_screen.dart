@@ -162,6 +162,10 @@ class _CoachTabState extends ConsumerState<CoachTab>
     };
   }
 
+  // The actual meals of the last week (names + macros) — food quality/timing,
+  // not just totals.
+  List<Map<String, dynamic>> _mealsCtx() => coachMeals(ref.read(dietProvider));
+
   Map<String, dynamic> _dietCtx() {
     final t = todayDiet(ref.read(dietProvider));
     return {
@@ -211,7 +215,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
           diet: _dietCtx(), training: _trainingCtx(), aesthetics: _aestheticsCtx(),
           ranks: _ranksCtx(), trends: _trendsCtx(),
           correlations: _correlationsCtx(), workoutSets: _setsCtx(),
-          metricHistory: _historyCtx(), energy: _energyCtx());
+          metricHistory: _historyCtx(), energy: _energyCtx(), meals: _mealsCtx());
       final reply = (res['reply'] as String?) ?? '';
       final actions =
           ((res['actions'] as List?) ?? const []).cast<Map<String, dynamic>>();
@@ -319,7 +323,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
           habits: _habitsCtx(), profile: _profileCtx(), diet: _dietCtx(),
           training: _trainingCtx(), aesthetics: _aestheticsCtx(), ranks: _ranksCtx(),
           trends: _trendsCtx(), correlations: _correlationsCtx(), workoutSets: _setsCtx(),
-          metricHistory: _historyCtx(), energy: _energyCtx());
+          metricHistory: _historyCtx(), energy: _energyCtx(), meals: _mealsCtx());
     } on ApiException catch (e) {
       error = e.status == 503
           ? 'The AI coach isn\'t configured on the server yet.'

@@ -918,29 +918,21 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                   controller: titleCtrl,
                   decoration: const InputDecoration(labelText: 'Habit', border: OutlineInputBorder()),
                 ),
-                // Quantitative target (Table 2) — only for auto-measured sections.
+                // Quantitative target — only for auto-measured sections. Direction
+                // (≥ / ≤) comes from the preset (calories/body-fat presets are
+                // "stay under"); the AI verifier judges custom habits semantically,
+                // so there's nothing else to configure.
                 if (section != 'aesthetics' && section != 'misc') ...[
                   const SizedBox(height: 10),
-                  Row(children: [
-                    ToggleButtons(
-                      isSelected: [compare == 'gte', compare == 'lte'],
-                      onPressed: (i) => setLocal(() => compare = i == 0 ? 'gte' : 'lte'),
-                      borderRadius: BorderRadius.circular(8),
-                      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                      children: const [Text('≥'), Text('≤')],
+                  TextField(
+                    controller: targetCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText:
+                          'Target (optional)${unit.isEmpty ? '' : ' · ${compare == 'lte' ? 'stay under' : 'reach'} $unit'}',
+                      border: const OutlineInputBorder(),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: targetCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: InputDecoration(
-                          labelText: 'Target${unit.isEmpty ? ' (optional)' : ' ($unit)'}',
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                  ]),
+                  ),
                 ],
                 // Exercise: the habit can CARRY its workout plan (a saved template) —
                 // on due days it starts pre-filled from the Habits tab.
@@ -1013,6 +1005,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(
+                    flex: 3,
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.schedule, size: 16),
                       label: Text(time == null ? 'Ideal time' : _fmt12(time!)),
@@ -1028,18 +1021,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
+                    flex: 2,
                     child: TextField(
                       controller: durCtrl,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: 'Mins', border: OutlineInputBorder()),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: costCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Cost', prefixText: '£', border: OutlineInputBorder()),
                     ),
                   ),
                 ]),

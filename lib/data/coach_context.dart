@@ -17,7 +17,7 @@ import '../engine/rank_engine.dart' show Log, RankResult;
 /// coach see the real data over time and find its own connections. Excludes the derived
 /// rank pseudo-metrics (circular). Compact: {metricId: [oldest … newest]}.
 Map<String, List<double>> coachHistory(Map<String, List<Log>> logs,
-    {int window = 180, int maxPoints = 45}) {
+    {int window = 365, int maxPoints = 90}) {
   final cutoff = DateTime.now().subtract(Duration(days: window));
   final out = <String, List<double>>{};
   for (final e in logs.entries) {
@@ -58,6 +58,26 @@ Map<String, dynamic> coachEnergy(List<FoodEntry> entries, List<WorkoutSession> s
     out['bmr'] = bmr.round();
   }
   return out;
+}
+
+/// The actual MEALS of the last [days] days (name + macros per entry), newest
+/// day first — so the coach reasons about what was really eaten (food quality,
+/// timing, repetition), not just daily totals.
+List<Map<String, dynamic>> coachMeals(List<FoodEntry> entries,
+    {int days = 7, int cap = 60, DateTime? today}) {
+  final window = lastNDays(days, today: today).toSet();
+  final recent = [for (final e in entries) if (window.contains(e.dateKey)) e]
+    ..sort((a, b) => b.dateKey.compareTo(a.dateKey));
+  return [
+    for (final e in recent.take(cap))
+      {
+        'd': e.dateKey,
+        'n': e.name,
+        'kcal': e.calories.round(),
+        'p': e.protein.round(),
+        if (e.fibre > 0) 'fib': e.fibre.round(),
+      }
+  ];
 }
 
 Map<String, dynamic> _rr(RankResult r) =>
@@ -186,7 +206,7 @@ List<Map<String, dynamic>> coachCorrelations(Map<String, List<Log>> logs,
 
 /// Recent sessions with their individual sets, so the coach can read weight×reps,
 /// per-exercise volume, and progression.
-List<Map<String, dynamic>> coachWorkoutSets(List<WorkoutSession> sessions, {int take = 10}) {
+List<Map<String, dynamic>> coachWorkoutSets(List<WorkoutSession> sessions, {int take = 14}) {
   final recent = sortedByRecent(sessions).take(take);
   return [
     for (final s in recent)
