@@ -38,7 +38,9 @@ def test_habit_event_timed_and_untimed():
                          "dur": 60, "cadence": "weekly", "days": [1, 3, 5], "target": 12,
                          "unit": "sets", "cmp": "gte"}, tz="Europe/London", now=now)
     assert timed["summary"] == "Train"
-    assert timed["start"]["dateTime"] == "2026-06-28T07:30:00"
+    # Anchored on the next due weekday (Mon), not the Sunday "now" — otherwise
+    # Google renders a stray off-schedule first instance.
+    assert timed["start"]["dateTime"] == "2026-06-29T07:30:00"
     assert timed["start"]["timeZone"] == "Europe/London"
     assert timed["recurrence"] == ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"]
     assert timed["extendedProperties"]["private"] == {"app": "physical", "habit": "h1"}
@@ -87,3 +89,125 @@ def test_calendar_push_flags_disabled_api(client, monkeypatch):
     r = client.post("/me/calendar/push", json={"habits": [{"id": "h", "title": "T"}]})
     assert r.status_code == 412
     assert "calendar_api_disabled" in r.json()["detail"]
+
+
+def _seed_calendar_token(monkeypatch=None):
+    import datetime as dt
+    from app.db import get_db
+    from app.main import app as _app
+    from app.models import GoogleCalendarToken
+    gen = _app.dependency_overrides[get_db]()
+    db = next(gen)
+    db.merge(GoogleCalendarToken(
+        user_id="local-dev", access_token="a", refresh_token="r",
+        expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1),
+        scope="https://www.googleapis.com/auth/calendar.events"))
+    db.commit()
+
+
+def test_event_id_is_deterministic_and_calendar_safe():
+    from app.routers.calendar import habit_event_id
+    a, b = habit_event_id("h1"), habit_event_id("h1")
+    assert a == b and a != habit_event_id("h2")
+    # Google event ids must use the base32hex charset [0-9a-v] — sha1 hex fits.
+    assert all(c in "0123456789abcdefghijklmnopqrstuv" for c in a)
+    assert 5 <= len(a) <= 1024
+
+
+def test_calendar_push_reconciles_duplicates_and_removed(client, monkeypatch):
+    """Racy pushes tripled the calendar; the reconcile keeps ONE deterministic
+    event per habit, deletes the strays, and prunes habits that no longer exist."""
+    import httpx
+    from app.routers.calendar import habit_event_id
+    _seed_calendar_token()
+    canonical = habit_event_id("h1")
+    deleted, puts, posts = [], [], []
+
+    def fake_get(url, **kw):
+        return httpx.Response(200, json={"items": [
+            {"id": canonical, "extendedProperties": {"private": {"habit": "h1"}}},
+            {"id": "legacyA", "extendedProperties": {"private": {"habit": "h1"}}},
+            {"id": "legacyB", "extendedProperties": {"private": {"habit": "h1"}}},
+            {"id": "legacyC", "extendedProperties": {"private": {"habit": "gone"}}},
+        ]}, request=httpx.Request("GET", url))
+
+    def fake_put(url, json=None, **kw):
+        puts.append((url, json))
+        return httpx.Response(200, json={}, request=httpx.Request("PUT", url))
+
+    def fake_post(url, json=None, **kw):
+        posts.append((url, json))
+        return httpx.Response(200, json={}, request=httpx.Request("POST", url))
+
+    def fake_delete(url, **kw):
+        deleted.append(url.rsplit("/", 1)[-1])
+        return httpx.Response(204, request=httpx.Request("DELETE", url))
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(httpx, "put", fake_put)
+    monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setattr(httpx, "delete", fake_delete)
+
+    r = client.post("/me/calendar/push", json={
+        "habits": [{"id": "h1", "title": "Train", "time": "18:00", "dur": 60}],
+        "tz": "Australia/Sydney"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body == {"added": 0, "updated": 1, "removed": 1, "deduped": 2, "failed": 0}
+    # The canonical slot was updated in place with the fixed id + confirmed status…
+    assert puts and puts[0][0].endswith(canonical)
+    assert puts[0][1]["id"] == canonical and puts[0][1]["status"] == "confirmed"
+    assert not posts
+    # …and every stray copy + the orphaned habit's event were deleted.
+    assert sorted(deleted) == ["legacyA", "legacyB", "legacyC"]
+
+
+def test_calendar_push_insert_conflict_falls_back_to_update(client, monkeypatch):
+    """A concurrent push (or a previously-deleted 'cancelled' slot) makes the
+    fixed-id insert 409 — the push must update/resurrect instead of failing."""
+    import httpx
+    from app.routers.calendar import habit_event_id
+    _seed_calendar_token()
+    calls = []
+
+    def fake_get(url, **kw):
+        return httpx.Response(200, json={"items": []}, request=httpx.Request("GET", url))
+
+    def fake_post(url, json=None, **kw):
+        calls.append("post")
+        return httpx.Response(409, text="duplicate id", request=httpx.Request("POST", url))
+
+    def fake_put(url, json=None, **kw):
+        calls.append("put")
+        assert url.endswith(habit_event_id("h1"))
+        return httpx.Response(200, json={}, request=httpx.Request("PUT", url))
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setattr(httpx, "put", fake_put)
+    monkeypatch.setattr(httpx, "delete",
+                        lambda url, **kw: httpx.Response(204, request=httpx.Request("DELETE", url)))
+
+    r = client.post("/me/calendar/push", json={"habits": [{"id": "h1", "title": "Train"}]})
+    assert r.status_code == 200
+    assert r.json()["updated"] == 1 and r.json()["failed"] == 0
+    assert calls == ["post", "put"]
+
+
+def test_recurring_events_anchor_on_a_matching_weekday():
+    """A weekly Mon/Thu habit anchored on a Wednesday renders a stray
+    off-schedule first instance — the anchor must move to the next due day."""
+    import datetime as dt
+    from app.calendar_feed import build_ics, habit_event
+    wednesday = dt.datetime(2026, 7, 1, 9, 0)  # 2026-07-01 is a Wednesday
+    h = {"id": "h", "title": "Push day", "time": "18:00", "dur": 60,
+         "cadence": "weekly", "days": [1, 4]}  # Mon + Thu
+    ev = habit_event(h, tz="Australia/Sydney", now=wednesday)
+    assert ev["start"]["dateTime"].startswith("2026-07-02")  # Thursday
+    assert "BYDAY=MO,TH" in ev["recurrence"][0]
+    # Daily habits stay anchored on today.
+    ev2 = habit_event({"id": "d", "title": "Read", "time": "21:00"}, now=wednesday)
+    assert ev2["start"]["dateTime"].startswith("2026-07-01")
+    # The ICS feed anchors the same way.
+    ics = build_ics([h], now=wednesday)
+    assert "DTSTART:20260702T180000" in ics

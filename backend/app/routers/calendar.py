@@ -3,6 +3,7 @@
     (automatic; needs the calendar.events scope — re-consent).
   • /me/calendar-feed + /calendar/{token}/physical.ics — a subscription feed fallback for
     any calendar app (no extra scope)."""
+import hashlib
 import json
 
 import httpx
@@ -21,15 +22,29 @@ router = APIRouter(tags=["calendar"])
 _CAL = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 
 
+def habit_event_id(habit_id: str) -> str:
+    """The DETERMINISTIC Google Calendar event id for a habit. The Calendar API
+    lets the caller choose the event id (base32hex charset — sha1 hexdigest is a
+    subset), so one habit can only ever occupy one event slot: concurrent pushes
+    (connect-flow + sync + habit-change debounce) collide on the same id instead
+    of each inserting their own copy. This is what makes duplicates impossible
+    by construction, rather than relying on list-then-insert (whose read can
+    race other writers AND Google's eventually-consistent search index)."""
+    return "ph" + hashlib.sha1(f"physical:{habit_id}".encode()).hexdigest()
+
+
 @router.post("/me/calendar/push")
 def push_to_google_calendar(
     body: dict = Body(...),
     user_id: str = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    """Upsert the app-supplied habits as recurring events in the user's Google Calendar.
-    Tagged with a private extended property so re-pushes update (never duplicate), and
-    habits that no longer exist are removed. Returns {added, updated, removed}.
+    """Reconcile the app-supplied habits with the user's Google Calendar:
+    one deterministic event per habit (insert-or-update, resurrecting a
+    previously-deleted slot), any stray copies of a habit deleted (heals
+    calendars that were duplicated by older racy pushes), and events for
+    habits that no longer exist removed. Returns {added, updated, removed,
+    deduped, failed[, error]}.
 
     Uses the SEPARATE calendar token (from /integrations/google/calendar/exchange):
     the calendar grant can't ride on the health token — health.googleapis.com rejects
@@ -45,9 +60,11 @@ def push_to_google_calendar(
     tz = body.get("tz")
     headers = {"Authorization": f"Bearer {access}"}
 
-    # Existing Physical events on the calendar, keyed by habit id.
+    # Every Physical event currently on the calendar, keyed by habit id — a habit
+    # can (wrongly) own several from older racy pushes; keep them ALL so the
+    # reconcile pass below can delete the strays.
     try:
-        existing: dict[str, str] = {}
+        existing: dict[str, list[str]] = {}
         page = None
         while True:
             params = {"privateExtendedProperty": "app=physical", "maxResults": 250,
@@ -71,7 +88,7 @@ def push_to_google_calendar(
             for ev in data.get("items", []):
                 hid = ev.get("extendedProperties", {}).get("private", {}).get("habit")
                 if hid:
-                    existing[hid] = ev["id"]
+                    existing.setdefault(hid, []).append(ev["id"])
             page = data.get("nextPageToken")
             if not page:
                 break
@@ -80,7 +97,11 @@ def push_to_google_calendar(
     except Exception as e:
         raise HTTPException(502, f"Calendar unavailable: {str(e)[:160]}")
 
-    added = updated = removed = failed = 0
+    def _delete(eid: str) -> bool:
+        r = httpx.delete(f"{_CAL}/{eid}", headers=headers, timeout=30)
+        return r.status_code < 400 or r.status_code == 410
+
+    added = updated = removed = deduped = failed = 0
     first_error: str | None = None
     seen: set[str] = set()
     for h in habits:
@@ -88,16 +109,31 @@ def push_to_google_calendar(
         if not hid:
             continue
         seen.add(hid)
+        eid = habit_event_id(hid)
         ev = habit_event(h, tz=tz)
-        if hid in existing:
-            r = httpx.put(f"{_CAL}/{existing[hid]}", headers=headers, json=ev, timeout=30)
+        # Fixed id + confirmed status: an insert that collides (already exists,
+        # or exists as a previously-deleted "cancelled" slot) falls through to
+        # an update that also resurrects it.
+        ev["id"] = eid
+        ev["status"] = "confirmed"
+        canonical_exists = eid in existing.get(hid, [])
+        if canonical_exists:
+            r = httpx.put(f"{_CAL}/{eid}", headers=headers, json=ev, timeout=30)
         else:
             r = httpx.post(_CAL, headers=headers, json=ev, timeout=30)
+            if r.status_code == 409:  # id taken (concurrent push / cancelled slot)
+                r = httpx.put(f"{_CAL}/{eid}", headers=headers, json=ev, timeout=30)
+                canonical_exists = True
         if r.status_code < 400:
-            if hid in existing:
+            if canonical_exists:
                 updated += 1
             else:
                 added += 1
+            # Heal duplicates: any OTHER event claiming this habit (legacy
+            # random-id events, racy copies) is a stray — delete it.
+            for stray in existing.get(hid, []):
+                if stray != eid and _delete(stray):
+                    deduped += 1
         else:
             # Don't swallow per-event failures — a systematic one (e.g. a missing
             # timeZone on recurring events) used to report "synced" with an
@@ -106,12 +142,13 @@ def push_to_google_calendar(
             if first_error is None:
                 first_error = r.text[:200]
     # Remove events for habits that no longer exist.
-    for hid, eid in existing.items():
+    for hid, eids in existing.items():
         if hid not in seen:
-            r = httpx.delete(f"{_CAL}/{eid}", headers=headers, timeout=30)
-            if r.status_code < 400 or r.status_code == 410:
-                removed += 1
-    out: dict = {"added": added, "updated": updated, "removed": removed, "failed": failed}
+            for eid in eids:
+                if _delete(eid):
+                    removed += 1
+    out: dict = {"added": added, "updated": updated, "removed": removed,
+                 "deduped": deduped, "failed": failed}
     if first_error:
         out["error"] = first_error
     return out

@@ -448,6 +448,10 @@ class _CoachTabState extends ConsumerState<CoachTab>
     );
   }
 
+  // Monotonic uniquifier — proposals apply in a tight loop and microsecond
+  // timestamps can collide (an id collision silently overwrites a template).
+  static int _planSeq = 0;
+
   // One proposal → (optionally) its workout template + the habit carrying it.
   void _applyProposal(Map<String, dynamic> h) {
     String? templateId;
@@ -463,7 +467,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
           )
       ];
       final t = WorkoutTemplate(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        id: '${DateTime.now().microsecondsSinceEpoch}-p${_planSeq++}',
         name: (p['name'] as String?) ?? (h['title'] as String? ?? 'Workout'),
         type: (p['type'] as String?) ?? 'Weightlifting',
         sets: sets,

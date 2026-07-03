@@ -804,7 +804,9 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       final r = await ref.read(apiClientProvider).pushCalendar(habits, tz);
       final n = (r['added'] ?? 0) + (r['updated'] ?? 0);
       final failed = (r['failed'] ?? 0) as num;
+      final deduped = (r['deduped'] ?? 0) as num;
       msg = '$n habit${n == 1 ? '' : 's'} synced to Google Calendar'
+          '${deduped > 0 ? ' · $deduped duplicate${deduped == 1 ? '' : 's'} cleaned' : ''}'
           '${(r['removed'] ?? 0) != 0 ? ' · ${r['removed']} removed' : ''}'
           '${failed > 0 ? ' · $failed failed: ${(r['error'] ?? '').toString().replaceAll('\n', ' ')}' : ''}.';
     } on ApiException catch (e) {

@@ -33,6 +33,10 @@ final habitsProvider =
 
 class HabitsNotifier extends StateNotifier<HabitsState> {
   final Repository repo;
+  // Monotonic uniquifier: applying an AI plan adds habits in a tight loop, and
+  // two microsecond timestamps CAN collide (the upsert would silently swallow
+  // one habit).
+  static int _seq = 0;
   HabitsNotifier(this.repo)
       : super(HabitsState(
             repo.loadHabits(), repo.loadCompletions(), repo.loadAiVerdicts()));
@@ -55,7 +59,7 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
     final t = title.trim();
     if (t.isEmpty) return;
     repo.saveHabit(Habit(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: '${DateTime.now().microsecondsSinceEpoch}-${_seq++}',
       title: t,
       section: section,
       verify: verify ?? sectionOf(section).verify,

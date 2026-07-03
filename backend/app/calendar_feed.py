@@ -38,6 +38,20 @@ def _rrule(cadence: str, days: list) -> str:
     return "RRULE:FREQ=DAILY"
 
 
+def _first_due(now: dt.datetime, cadence: str, days: list) -> dt.datetime:
+    """Anchor a recurring event's start on a day that MATCHES its rule — a weekly
+    Mon/Thu habit anchored on a Wednesday renders a stray off-schedule first
+    instance in Google Calendar."""
+    if cadence == "weekly" and days:
+        valid = {int(d) for d in days if 1 <= int(d) <= 7}
+        if valid:
+            for i in range(7):
+                cand = now + dt.timedelta(days=i)
+                if cand.isoweekday() in valid:
+                    return cand
+    return now
+
+
 def habit_event(h: dict, *, tz: str | None = None, now: dt.datetime | None = None) -> dict:
     """A Google Calendar API event body for a habit (recurring; tagged so re-pushes
     update rather than duplicate). Timed → a timed event in [tz]; untimed → all-day."""
@@ -46,6 +60,7 @@ def habit_event(h: dict, *, tz: str | None = None, now: dt.datetime | None = Non
     section = str(h.get("cat") or h.get("section") or "misc")
     time = h.get("time")
     dur = int(h.get("dur") or h.get("durationMins") or 0)
+    anchor = _first_due(now, h.get("cadence") or "daily", h.get("days") or [])
     desc = f"Physical habit · {section}"
     if h.get("target") is not None:
         cmp = "≤" if (h.get("compare") or h.get("cmp")) == "lte" else "≥"
@@ -57,7 +72,7 @@ def habit_event(h: dict, *, tz: str | None = None, now: dt.datetime | None = Non
             hh, mm = (int(x) for x in str(time).split(":")[:2])
         except Exception:
             hh, mm = 7, 0
-        start = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        start = anchor.replace(hour=hh, minute=mm, second=0, microsecond=0)
         end = start + dt.timedelta(minutes=dur if dur > 0 else 30)
         # The Calendar API REJECTS recurring events whose dateTime carries no
         # timeZone ("Missing time zone definition for recurring event"), so a
@@ -67,8 +82,8 @@ def habit_event(h: dict, *, tz: str | None = None, now: dt.datetime | None = Non
         start_obj = {"dateTime": start.strftime("%Y-%m-%dT%H:%M:%S"), **tzkw}
         end_obj = {"dateTime": end.strftime("%Y-%m-%dT%H:%M:%S"), **tzkw}
     else:
-        start_obj = {"date": now.strftime("%Y-%m-%d")}
-        end_obj = {"date": (now + dt.timedelta(days=1)).strftime("%Y-%m-%d")}
+        start_obj = {"date": anchor.strftime("%Y-%m-%d")}
+        end_obj = {"date": (anchor + dt.timedelta(days=1)).strftime("%Y-%m-%d")}
     return {
         "summary": title,
         "description": desc,
@@ -110,20 +125,21 @@ def build_ics(habits: list[dict], *, now: dt.datetime | None = None) -> str:
         days = h.get("days") or []
         dur = int(h.get("dur") or 0)
         section = str(h.get("cat") or "misc")
+        anchor = _first_due(now, cadence, days)
 
         if time:
             try:
                 hh, mm = (int(x) for x in str(time).split(":")[:2])
             except Exception:
                 hh, mm = 7, 0
-            start = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+            start = anchor.replace(hour=hh, minute=mm, second=0, microsecond=0)
             end = start + dt.timedelta(minutes=dur if dur > 0 else 30)
             dstart = f"DTSTART:{start.strftime('%Y%m%dT%H%M%S')}"
             dend = f"DTEND:{end.strftime('%Y%m%dT%H%M%S')}"
         else:
             # Untimed "anytime" habit → an all-day event so it still appears.
-            dstart = f"DTSTART;VALUE=DATE:{now.strftime('%Y%m%d')}"
-            dend = f"DTEND;VALUE=DATE:{(now + dt.timedelta(days=1)).strftime('%Y%m%d')}"
+            dstart = f"DTSTART;VALUE=DATE:{anchor.strftime('%Y%m%d')}"
+            dend = f"DTEND;VALUE=DATE:{(anchor + dt.timedelta(days=1)).strftime('%Y%m%d')}"
 
         rrule = _rrule(cadence, days)
 
