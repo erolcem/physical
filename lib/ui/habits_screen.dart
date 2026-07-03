@@ -8,7 +8,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../data/ai_verify.dart' show runAiVerification;
 import '../data/api_client.dart' show ApiException;
 import '../data/habits.dart';
@@ -316,7 +315,10 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         padding: const EdgeInsets.all(16),
         child: Row(children: [
           stat('${b.hoursPerMonth.toStringAsFixed(b.hoursPerMonth < 10 ? 1 : 0)} h', 'TIME / MONTH', _accent),
-          stat('£${b.costPerMonth.toStringAsFixed(b.costPerMonth < 100 ? 0 : 0)}', 'COST / MONTH', _teal),
+          // Cost only shows when a habit actually carries one (the field is no
+          // longer part of habit creation — legacy habits may still have it).
+          if (b.costPerMonth > 0)
+            stat('£${b.costPerMonth.toStringAsFixed(0)}', 'COST / MONTH', _teal),
           stat('${habits.length}', 'HABITS', Colors.white),
         ]),
       ),
@@ -690,14 +692,10 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                         icon: const Icon(Icons.edit_outlined),
                         onPressed: () => _showAddDialog(context, ref, edit: h),
                       ),
-                      if (h.time != null)
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          iconSize: 18, color: _muted,
-                          tooltip: 'Add to calendar',
-                          icon: const Icon(Icons.event),
-                          onPressed: () => _addToCalendar(h),
-                        ),
+                      // (No per-habit "add to calendar" button: it created an
+                      // UNTAGGED event via a template URL that the reconciler
+                      // can't see or prune — a guaranteed duplicate of the
+                      // auto-pushed tagged event. The roster mirrors itself.)
                     ]),
                   ),
                 ),
@@ -767,11 +765,6 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         decoration: BoxDecoration(color: c.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(20)),
         child: Text(text, style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 12)),
       );
-
-  Future<void> _addToCalendar(Habit h) async {
-    final url = googleCalendarUrl(h);
-    if (url != null) await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-  }
 
   // Start the habit's planned workout: a new session pre-filled from its
   // template, opened for logging what actually happened.

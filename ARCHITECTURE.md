@@ -544,3 +544,58 @@ exercise-session dual-auth — is blocked by Google not exposing a sessions endp
 **Next unblock:** an in-app **Cloud → Inspect Google data** button now copies the raw
 Google field shapes — paste that to wire the live-data items (workout dual-auth,
 height/DOB, deeper sleep, step/energy names).
+
+---
+
+## 18. Owner review rounds 3–5 (July 2026) — the AI-verification era
+
+Major architectural additions since §17, in the order they shipped:
+
+**Habits are AI-verified, strictly.** A data-verifiable habit (metric/diet/workout)
+counts ONLY from real evidence; manual ticks work only for inherently manual habits.
+`POST /me/habits/verify` (`habit_check.py`) sends the day's full evidence — sessions
+with sets, food log, every metric reading — to Gemini with an **evidence-exclusivity**
+rule (one workout can't tick two habits) and binding numeric targets. Verdicts are
+stored per habit+day (`aiVerdicts` in the repo) and OVERRIDE the rule-based check
+(`habitDoneOn`); verification re-runs on every sync and (debounced) whenever local
+evidence changes, plus an on-demand "AI check" button.
+
+**Sets are watch-anchored (the PDF's two-step verification).** Google exercise
+sessions import on every sync; manual set-logging sessions auto-link to the tracked
+watch exercise covering the same window (`linkSessionsToWatch`, ±45 min slack).
+Sessions render "✓ watch" / "⚠ unverified", and the verifier is instructed never to
+credit exercise habits from unverified typed sets.
+
+**The habit carries the plan.** `Habit.templateId` links an exercise habit to its
+`WorkoutTemplate` (exercises + sets). Due habits offer one-tap "start" (pre-filled
+session; edit to what actually happened); the Exercise page opens with a Today's-Plan
+card; a template editor + Hevy-style template chips cover manual management.
+
+**"Plan my week" (AI roster builder).** `POST /me/coach/plan` (`planner.py`): the
+Pro-tier coach reads the full context + an optional emphasised goal and proposes a
+complete scaffolded roster — habits with targets/times/days AND the workout plans —
+sanitised defensively and applied via a review sheet (optionally replacing the
+current roster).
+
+**Coach context, maximal.** 365-day downsampled history (90 pts/metric, up to 80
+metrics), 14 sessions of individual sets, real day-aligned correlations, energy
+balance, and the actual MEALS of the last week. Two model tiers: `GEMINI_MODEL`
+(pro; chat/digest/planner) + `GEMINI_FAST_MODEL` (flash; nudges/nutrition/verify).
+
+**Google integration, split-token.** health.googleapis.com rejects tokens carrying
+non-health scopes (`DISALLOWED_OAUTH_SCOPES: cl_events`), so Calendar lives on its
+own consent + `google_calendar_tokens` row. Calendar pushes use **deterministic
+event ids** (sha1 of the habit id) making duplicates structurally impossible, with a
+reconcile pass that heals strays and prunes removed habits; weekly events anchor on
+the next matching weekday; pushes are auto-triggered on habit changes and serialized
+app-side. Status/debug endpoints diagnose missing scopes, poisoned tokens, and
+disabled APIs by name.
+
+**Deletes stick.** Entity tombstones (`habit:`/`food:`/`workout:`/`template:` keys)
+ride the backup snapshot, so deletions survive merges and propagate across devices;
+"Reset cloud data" wipes both the sample store and the backup blob (`DELETE
+/me/samples`, `DELETE /me/backup`). Google-synced daily values (steps etc.) upsert on
+revision instead of freezing at first sight; rank/readiness history is live
+(backfills replace stale days) and fully resettable.
+
+Tests: **302 Flutter + 121 backend.**
