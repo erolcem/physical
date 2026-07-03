@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import '../data/ai_verify.dart' show runAiVerification;
 import '../data/habits.dart' show Habit;
 import '../data/notifications.dart';
 import '../data/sync.dart' show apiClientProvider, cloudSync;
 import '../state/habit_providers.dart';
+import '../state/log_providers.dart' show dietProvider, workoutProvider;
+import '../state/providers.dart' show repositoryProvider;
 import 'cloud_sheet.dart';
 import 'coach_screen.dart';
 import 'guide_sheet.dart';
@@ -70,8 +73,37 @@ class _MainScreenState extends ConsumerState<MainScreen>
     });
   }
 
+  // ── Verdict freshness: the AI check runs at sync time (often morning) and can
+  // store done=false for "Train"; logging the workout that afternoon would then
+  // sit UNDER the stale verdict until the next sync. Whenever local evidence
+  // changes (a set logged, food imported), re-run the verification for today —
+  // debounced so a burst of set-logging becomes one cheap (flash-tier) call. ──
+  Timer? _verifyDebounce;
+  bool _verifyInFlight = false;
+
+  void _scheduleReverify() {
+    _verifyDebounce?.cancel();
+    _verifyDebounce = Timer(const Duration(seconds: 25), () async {
+      if (_verifyInFlight) return;
+      _verifyInFlight = true;
+      try {
+        final api = ref.read(apiClientProvider);
+        await api.loadPersistedToken();
+        if (!api.isSignedIn) return;
+        final judged =
+            await runAiVerification(api, ref.read(repositoryProvider));
+        if (judged != null && judged > 0 && mounted) {
+          ref.read(habitsProvider.notifier).reload();
+        }
+      } catch (_) {/* best-effort — the sync-time check remains */} finally {
+        _verifyInFlight = false;
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _verifyDebounce?.cancel();
     _calendarDebounce?.cancel();
     _tabController.dispose();
     super.dispose();
@@ -87,6 +119,13 @@ class _MainScreenState extends ConsumerState<MainScreen>
           _habitsFingerprint(prev.habits) != _habitsFingerprint(next.habits)) {
         _scheduleCalendarPush(next.habits);
       }
+    });
+    // Fresh evidence → fresh verdicts (see _scheduleReverify).
+    ref.listen(workoutProvider, (prev, next) {
+      if (prev != null && !identical(prev, next)) _scheduleReverify();
+    });
+    ref.listen(dietProvider, (prev, next) {
+      if (prev != null && !identical(prev, next)) _scheduleReverify();
     });
     return Scaffold(
       backgroundColor: const Color(0xFF08091A),
