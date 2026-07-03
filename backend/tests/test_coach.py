@@ -200,3 +200,16 @@ def test_nudge_endpoint(client, monkeypatch):
     })
     assert r.status_code == 200
     assert r.json()["nudge"] == "Readiness 78 — great day to push legs."
+
+
+def test_context_includes_meals_and_watch_rule():
+    from app.coach import build_context
+    from app.habit_check import VERIFY_PROMPT
+    ctx = build_context([], meals=[
+        {"d": "2026-07-01", "n": "Oats + whey", "kcal": 420, "p": 38, "fib": 6},
+        {"d": "2026-07-01", "n": "Chicken rice", "kcal": 650, "p": 45},
+    ])
+    assert "Meals (last days" in ctx
+    assert "Oats + whey (420kcal, 38g P, 6g fib)" in ctx
+    # And the verifier knows typed sets need a tracked watch exercise.
+    assert "WATCH ANCHORING" in VERIFY_PROMPT and "watch_verified" in VERIFY_PROMPT

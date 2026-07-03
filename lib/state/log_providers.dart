@@ -174,7 +174,9 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
   }
 
   /// Import Google exercise sessions (dedup by googleId), returning how many were new.
-  /// Existing imports keep any sets the user has logged into them.
+  /// Existing imports keep any sets the user has logged into them. After import,
+  /// manual set-logging sessions are auto-linked to the watch exercise that covers
+  /// them (two-step verification: sets anchored to a REAL tracked exercise).
   int importGoogle(List<Map<String, dynamic>> sessions) {
     final have = {for (final s in state) if (s.googleId != null) s.googleId};
     var added = 0;
@@ -184,8 +186,18 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
       repo.saveWorkout(WorkoutSession.fromGoogle(g));
       added++;
     }
+    relinkToWatch();
     if (added > 0) state = repo.loadWorkouts();
     return added;
+  }
+
+  /// Re-run the manual-session ↔ watch-exercise linking (also called on sync).
+  void relinkToWatch() {
+    final linked = linkSessionsToWatch(repo.loadWorkouts());
+    for (final s in linked) {
+      repo.saveWorkout(s);
+    }
+    if (linked.isNotEmpty) state = repo.loadWorkouts();
   }
 }
 

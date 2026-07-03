@@ -403,6 +403,15 @@ class ApiClient {
     return ((jsonDecode(r.body) as Map)['bytes'] as num?)?.toInt() ?? 0;
   }
 
+  /// Delete the cloud snapshot — part of 'reset cloud data' (without it, deleted
+  /// entities ride back in on the next sync's backup merge).
+  Future<void> deleteBackup() async {
+    final r = await _client
+        .delete(Uri.parse('$baseUrl/me/backup'), headers: _headers())
+        .timeout(const Duration(seconds: 20));
+    if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
+  }
+
   /// Pull the cloud snapshot (GET /me/backup), or null if none exists yet.
   Future<Map<String, dynamic>?> pullBackup() async {
     final r = await _client
@@ -502,6 +511,7 @@ class ApiClient {
     List<Map<String, dynamic>> workoutSets = const [],
     Map<String, List<double>> metricHistory = const {},
     Map<String, dynamic>? energy,
+    List<Map<String, dynamic>> meals = const [],
   }) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/coach/chat'),
@@ -520,6 +530,7 @@ class ApiClient {
               if (workoutSets.isNotEmpty) 'workout_sets': workoutSets,
               if (metricHistory.isNotEmpty) 'metric_history': metricHistory,
               if (energy != null && energy.isNotEmpty) 'energy': energy,
+              if (meals.isNotEmpty) 'meals': meals,
             }))
         .timeout(const Duration(seconds: 120));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
@@ -542,6 +553,7 @@ class ApiClient {
     List<Map<String, dynamic>> workoutSets = const [],
     Map<String, List<double>> metricHistory = const {},
     Map<String, dynamic>? energy,
+    List<Map<String, dynamic>> meals = const [],
   }) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/coach/plan'),
@@ -559,6 +571,7 @@ class ApiClient {
               if (workoutSets.isNotEmpty) 'workout_sets': workoutSets,
               if (metricHistory.isNotEmpty) 'metric_history': metricHistory,
               if (energy != null && energy.isNotEmpty) 'energy': energy,
+              if (meals.isNotEmpty) 'meals': meals,
             }))
         .timeout(const Duration(seconds: 120));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);

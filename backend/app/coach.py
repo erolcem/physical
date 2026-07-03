@@ -321,10 +321,10 @@ def _history_lines(hist) -> str | None:
     if not hist:
         return None
     rows = []
-    for mid, vals in list(hist.items())[:60]:
+    for mid, vals in list(hist.items())[:80]:
         if not vals:
             continue
-        rows.append(f"{mid}: " + ", ".join(f"{v:g}" for v in vals[-45:]))
+        rows.append(f"{mid}: " + ", ".join(f"{v:g}" for v in vals[-90:]))
     return ("Full metric history (downsampled daily, oldest→newest):\n  " + "\n  ".join(rows)) if rows else None
 
 
@@ -339,6 +339,23 @@ def _energy_lines(energy) -> str | None:
     if energy.get("bmr"):
         parts.append(f"BMR ~{int(energy['bmr'])}")
     return ("Energy balance (daily, oldest→newest): " + "; ".join(parts)) if parts else None
+
+
+def _meals_lines(meals) -> str | None:
+    """The actual meals of the last days — food quality/timing/repetition, not
+    just totals."""
+    if not meals:
+        return None
+    by_day: dict[str, list[str]] = {}
+    for m in meals[:60]:
+        d = str(m.get("d", "?"))
+        bits = f"{m.get('n', '?')} ({int(m.get('kcal') or 0)}kcal, {int(m.get('p') or 0)}g P"
+        if m.get("fib"):
+            bits += f", {int(m['fib'])}g fib"
+        bits += ")"
+        by_day.setdefault(d, []).append(bits)
+    rows = [f"{d}: " + "; ".join(items) for d, items in list(by_day.items())[:8]]
+    return "Meals (last days, newest first):\n  " + "\n  ".join(rows)
 
 
 def _sets_lines(workout_sets) -> str | None:
@@ -387,7 +404,8 @@ def _habit_lines(habits) -> str | None:
 
 def build_context(samples, habits=None, profile=None, diet=None, training=None,
                   aesthetics=None, ranks=None, trends=None, correlations=None,
-                  workout_sets=None, metric_history=None, energy=None) -> str:
+                  workout_sets=None, metric_history=None, energy=None,
+                  meals=None) -> str:
     """A compact, PII-free analyst brief from app-computed context (+ sample fallback)."""
     habits = habits or []
     lines: list[str] = []
@@ -410,7 +428,8 @@ def build_context(samples, habits=None, profile=None, diet=None, training=None,
     lines += _rank_lines(ranks, samples)
 
     for line in (_trend_lines(trends), _correlation_lines(correlations),
-                 _energy_lines(energy), _diet_line(diet), _training_line(training),
+                 _energy_lines(energy), _diet_line(diet), _meals_lines(meals),
+                 _training_line(training),
                  _sets_lines(workout_sets), _aesthetics_line(aesthetics),
                  _habit_lines(habits), _history_lines(metric_history)):
         if line:
@@ -422,11 +441,13 @@ def build_context(samples, habits=None, profile=None, diet=None, training=None,
 
 def compose_system(samples, habits=None, profile=None, diet=None, training=None,
                    aesthetics=None, ranks=None, trends=None, correlations=None,
-                   workout_sets=None, metric_history=None, energy=None) -> str:
+                   workout_sets=None, metric_history=None, energy=None,
+                   meals=None) -> str:
     # Bulletproof: a malformed value on one device must never crash the coach for it.
     try:
         ctx = build_context(samples, habits, profile, diet, training, aesthetics,
-                            ranks, trends, correlations, workout_sets, metric_history, energy)
+                            ranks, trends, correlations, workout_sets, metric_history,
+                            energy, meals)
     except Exception:
         try:
             ctx = "\n".join(_rank_lines(ranks, samples))  # minimal safe fallback

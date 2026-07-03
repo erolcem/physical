@@ -47,6 +47,9 @@ Map<String, dynamic> dayEvidence(Repository repo, String day) {
           'type': s.type,
           if (s.title != null) 'title': s.title,
           if (s.durationMins != null) 'duration_mins': s.durationMins,
+          // Anchored to a real tracked exercise (IS a watch session, or linked
+          // to one covering the same window) vs self-reported typing.
+          'watch_verified': s.watchVerified,
           if (s.summary.isNotEmpty) ...s.summary,
           'sets': [
             for (final st in s.sets)

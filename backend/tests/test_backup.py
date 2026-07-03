@@ -17,3 +17,12 @@ def test_backup_last_write_wins(client):
     client.put("/me/backup", json={"a": 1})
     client.put("/me/backup", json={"a": 2})
     assert client.get("/me/backup").json()["data"] == {"a": 2}
+
+
+def test_delete_backup_wipes_the_snapshot(client):
+    client.put("/me/backup", json={"habits": [{"id": "h1"}]})
+    assert client.get("/me/backup").status_code == 200
+    assert client.delete("/me/backup").json()["deleted"] is True
+    # Gone — a sync can no longer resurrect deleted entities from it.
+    assert client.get("/me/backup").status_code == 404
+    assert client.delete("/me/backup").json()["deleted"] is False

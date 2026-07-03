@@ -7,8 +7,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/api_client.dart';
+import '../data/repository.dart' show repoExport;
 import '../data/sync.dart';
 import '../state/habit_providers.dart' show habitsProvider;
+import '../state/providers.dart' show repositoryProvider;
 
 const _accent = Color(0xFF5B6AF8);
 const _teal = Color(0xFF4CE0C3);
@@ -301,17 +303,20 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
     }
   }
 
-  // Wipe the CLOUD copy of the samples (server store) — the fix for deleted data
-  // living on in the server-side ranks/coach fallback. Local data stays.
+  // Wipe the CLOUD copy — BOTH stores: the sample store (server-side ranks /
+  // coach fallback) AND the backup snapshot (which otherwise resurrects deleted
+  // habits/food/workouts on the next sync merge). Local data stays and is
+  // re-uploaded immediately so cloud == device.
   Future<void> _resetCloud() async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _bg,
         title: const Text('Delete cloud data?'),
-        content: const Text('This deletes ALL samples stored in the cloud for your account '
-            '(manual + Google-synced). Data on this device stays; the next "Sync now" '
-            're-uploads your current local logs so the cloud matches what you see.'),
+        content: const Text('This deletes EVERYTHING stored in the cloud for your account — '
+            'the sample store (manual + Google-synced) AND the backup snapshot '
+            '(habits, food, workouts…). Data on this device stays and is re-uploaded '
+            'right away so the cloud matches exactly what you see.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(
@@ -324,12 +329,16 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
     if (ok != true) return;
     setState(() { _busy = true; _msg = null; });
     try {
-      final n = await ref.read(apiClientProvider).deleteCloudSamples();
+      final api = ref.read(apiClientProvider);
+      final n = await api.deleteCloudSamples();
+      await api.deleteBackup();
       // Push the current local truth straight back up so cloud == device.
       final synced = await syncNow(ref);
+      await api.pushBackup(repoExport(ref.read(repositoryProvider)));
       if (mounted) {
-        setState(() =>
-            _msg = 'Cloud reset: $n samples deleted, ${synced.ingested} re-uploaded from this device.');
+        setState(() => _msg =
+            'Cloud reset: $n samples + the backup deleted; ${synced.ingested} logs and a '
+            'fresh snapshot re-uploaded from this device.');
       }
     } catch (_) {
       if (mounted) setState(() => _msg = "Couldn't reset the cloud data — check your connection.");

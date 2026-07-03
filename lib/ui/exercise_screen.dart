@@ -29,6 +29,13 @@ String _shortDate(String iso) {
   return d == null ? '' : '${d.day}/${d.month}';
 }
 
+/// Watch-anchoring badge: sets only "count" when the session is (or is linked
+/// to) a real tracked watch exercise — unverified = self-reported typing.
+Widget watchBadge(WorkoutSession s) => s.watchVerified
+    ? const Text('✓ watch', style: TextStyle(fontSize: 11, color: _teal, fontWeight: FontWeight.w700))
+    : const Text('⚠ unverified',
+        style: TextStyle(fontSize: 11, color: Color(0xFFF6CF3E), fontWeight: FontWeight.w700));
+
 /// The stat chips to show for a session — duration + (for Google sessions) the cardio
 /// summary, plus sets/volume when present.
 List<(String, String)> sessionStats(WorkoutSession s) {
@@ -353,6 +360,7 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
             if (s.fromGoogle)
               const Padding(padding: EdgeInsets.only(left: 6),
                   child: Icon(Icons.cloud, size: 13, color: _muted)),
+            Padding(padding: const EdgeInsets.only(left: 6), child: watchBadge(s)),
           ]),
           subtitle: Text(
               '${_shortDate(s.start)} · ${sessionStats(s).map((e) => '${e.$1} ${e.$2}').take(3).join(' · ')}',
@@ -487,6 +495,13 @@ class SessionDetailScreen extends ConsumerWidget {
                     '${s.type} · ${_shortDate(s.start)}'
                     '${s.fromGoogle ? ' · ☁ from Google' : ''}',
                     style: const TextStyle(fontSize: 12, color: _muted)),
+                const SizedBox(height: 2),
+                watchBadge(s),
+                if (!s.watchVerified)
+                  const Text(
+                      'No tracked watch exercise covers this window yet — start the '
+                      'exercise on your watch; it links up on the next sync.',
+                      style: TextStyle(fontSize: 10.5, color: _muted)),
               ]),
             ),
           ]),
