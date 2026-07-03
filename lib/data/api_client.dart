@@ -338,17 +338,30 @@ class ApiClient {
     }
   }
 
-  /// Recent Google Health food logs (nutrition-log, parsed) for the Diet section.
-  /// Push habits straight into the user's Google Calendar (upsert + prune). Returns the
-  /// {added, updated, removed} counts. Throws ApiException(401/403) if calendar consent is
-  /// needed (reconnect Google).
+  // Calendar pushes are SERIALIZED app-wide: the connect flow, the sync, and the
+  // habit-change debounce can all fire around the same moment, and overlapping
+  // reconciles waste calls (the deterministic event ids server-side already make
+  // duplicates impossible; this keeps the traffic clean too).
+  static Future<void> _calendarPushChain = Future.value();
+
+  /// Push habits into the user's Google Calendar (reconcile: upsert one event
+  /// per habit, delete strays + removed habits). Returns {added, updated,
+  /// removed, deduped, failed}. Throws ApiException(401/403) when the calendar
+  /// consent is needed, 412 when the Calendar API is disabled in the project.
   Future<Map<String, dynamic>> pushCalendar(
+      List<Map<String, dynamic>> habits, String? tz) {
+    final result = _calendarPushChain.then((_) => _pushCalendarNow(habits, tz));
+    _calendarPushChain = result.then((_) {}, onError: (_) {});
+    return result;
+  }
+
+  Future<Map<String, dynamic>> _pushCalendarNow(
       List<Map<String, dynamic>> habits, String? tz) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/calendar/push'),
             headers: _headers({'Content-Type': 'application/json'}),
             body: _safeEncode({'habits': habits, if (tz != null) 'tz': tz}))
-        .timeout(const Duration(seconds: 45));
+        .timeout(const Duration(seconds: 60));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
