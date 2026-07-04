@@ -46,10 +46,13 @@ class SyncResult {
 
 /// Pure: push all logs, then read back the server's overall rank. No Riverpod,
 /// so it's unit-testable with a fake [ApiClient]. (Caller signs in first.)
+/// Derived rank/readiness series never leave the device — they're recomputable,
+/// and cloud copies used to resurrect pre-reset rank history.
 Future<SyncResult> performSync(ApiClient api, Map<String, List<Log>> logs) async {
   final samples = [
-    for (final list in logs.values)
-      for (final log in list) canonicalSample(log)
+    for (final e in logs.entries)
+      if (!derivedSeriesIds.contains(e.key))
+        for (final log in e.value) canonicalSample(log)
   ];
   final res = await api.ingestSamples(samples);
   String? overall;

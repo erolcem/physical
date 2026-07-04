@@ -320,11 +320,15 @@ def _correlation_lines(correlations) -> str | None:
 def _history_lines(hist) -> str | None:
     if not hist:
         return None
+    # Deliberately HUGE: Pro-class context windows take this easily, and the coach
+    # is explicitly instructed to read the raw series and draw its own connections
+    # (not just the pre-computed correlations). Up to 100 metrics × 180 points ≈
+    # two downsampled years of everything.
     rows = []
-    for mid, vals in list(hist.items())[:80]:
+    for mid, vals in list(hist.items())[:100]:
         if not vals:
             continue
-        rows.append(f"{mid}: " + ", ".join(f"{v:g}" for v in vals[-90:]))
+        rows.append(f"{mid}: " + ", ".join(f"{v:g}" for v in vals[-180:]))
     return ("Full metric history (downsampled daily, oldest→newest):\n  " + "\n  ".join(rows)) if rows else None
 
 
@@ -347,14 +351,14 @@ def _meals_lines(meals) -> str | None:
     if not meals:
         return None
     by_day: dict[str, list[str]] = {}
-    for m in meals[:60]:
+    for m in meals[:120]:
         d = str(m.get("d", "?"))
         bits = f"{m.get('n', '?')} ({int(m.get('kcal') or 0)}kcal, {int(m.get('p') or 0)}g P"
         if m.get("fib"):
             bits += f", {int(m['fib'])}g fib"
         bits += ")"
         by_day.setdefault(d, []).append(bits)
-    rows = [f"{d}: " + "; ".join(items) for d, items in list(by_day.items())[:8]]
+    rows = [f"{d}: " + "; ".join(items) for d, items in list(by_day.items())[:14]]
     return "Meals (last days, newest first):\n  " + "\n  ".join(rows)
 
 

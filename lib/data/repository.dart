@@ -16,6 +16,16 @@ String logKey(String metricId, Log l) => '$metricId@${l.ts}';
 /// the union can't tell "deleted here" from "created there".
 String entityKey(String kind, String id) => '$kind:$id';
 
+/// The derived, fully recomputable log series (rank history + readiness). These
+/// are EXCLUDED from backup export/merge and from the cloud sample push: they're
+/// pure functions of the real logs, and letting old copies ride the cloud
+/// snapshot meant "Rebuild rank history" was undone by the very next sync
+/// (stale category ranks resurrected from the backup blob).
+const List<String> derivedSeriesIds = [
+  'overall_rank', 'strength_rank', 'performance_rank', 'recovery_rank',
+  'aesthetics_rank', 'daily_readiness',
+];
+
 abstract class Repository {
   Map<String, List<Log>> loadLogs();
   void saveLog(String metricId, Log log);
@@ -270,10 +280,11 @@ Map<String, dynamic> repoExport(Repository r) => {
       'v': 1,
       'logs': {
         for (final e in r.loadLogs().entries)
-          e.key: [
-            for (final l in e.value)
-              {'v': l.value, if (l.bodyweight != null) 'bw': l.bodyweight, 'ts': l.ts}
-          ]
+          if (!derivedSeriesIds.contains(e.key))
+            e.key: [
+              for (final l in e.value)
+                {'v': l.value, if (l.bodyweight != null) 'bw': l.bodyweight, 'ts': l.ts}
+            ]
       },
       'habits': [for (final h in r.loadHabits()) h.toJson()],
       'completions': {for (final e in r.loadCompletions().entries) e.key: e.value.toList()},
@@ -297,6 +308,7 @@ void repoImport(Repository r, Map<String, dynamic> m) {
     r.addTombstone(t);
   }
   ((m['logs'] as Map?) ?? const {}).forEach((mid, list) {
+    if (derivedSeriesIds.contains(mid)) return; // recomputed, never restored
     for (final d in (list as List)) {
       final j = (d as Map);
       final ts = j['ts'] as String?;
@@ -373,6 +385,9 @@ void repoMerge(Repository r, Map<String, dynamic> m) {
   }
   final existingLogs = r.loadLogs();
   ((m['logs'] as Map?) ?? const {}).forEach((mid, list) {
+    // Derived rank/readiness series are recomputed locally, never merged — old
+    // snapshot copies used to undo "Rebuild rank history" on the next sync.
+    if (derivedSeriesIds.contains(mid)) return;
     final haveTs = {for (final l in (existingLogs[mid] ?? const <Log>[])) l.ts};
     for (final d in (list as List)) {
       final j = (d as Map);

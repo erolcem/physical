@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/api_client.dart';
-import '../data/repository.dart' show repoExport;
+import '../data/repository.dart' show derivedSeriesIds, repoExport;
 import '../data/sync.dart';
 import '../state/habit_providers.dart' show habitsProvider;
 import '../state/providers.dart' show repositoryProvider;
@@ -291,10 +291,18 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
   }
 
   // Rebuild the rank + readiness history purely from the data that exists now —
-  // deleting logs used to leave the old category-rank climb behind.
+  // deleting logs used to leave the old category-rank climb behind. Also clears
+  // any derived samples an older app version pushed to the cloud store, so
+  // nothing stale can flow back from anywhere.
   Future<void> _recomputeHistory() async {
     setState(() { _busy = true; _msg = null; });
     final n = recomputeDerivedHistory(ref);
+    try {
+      final api = ref.read(apiClientProvider);
+      for (final id in derivedSeriesIds) {
+        await api.deleteCloudSamples(metricId: id);
+      }
+    } catch (_) {/* cloud cleanup is best-effort */}
     if (mounted) {
       setState(() {
         _busy = false;

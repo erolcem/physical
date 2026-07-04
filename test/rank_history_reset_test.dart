@@ -43,4 +43,27 @@ void main() {
     expect(backfillRankLogs(repo), greaterThan(0));
     expect(repo.loadLogs()['overall_rank'], isNotEmpty);
   });
+
+  test('derived series never ride the backup — a sync cannot undo a reset', () {
+    // The bug: rank history was reset locally, but old *_rank logs in the cloud
+    // backup snapshot merged straight back in on the next sync.
+    final repo = InMemoryRepository();
+    repo.saveLog('bench', Log('bench', 140, bodyweight: 80, ts: '2026-06-01T08:00:00'));
+    backfillRankLogs(repo);
+    final cloud = repoExport(repo); // snapshot taken while rank history existed
+    expect((cloud['logs'] as Map).containsKey('overall_rank'), isFalse); // excluded
+    expect((cloud['logs'] as Map).containsKey('bench'), isTrue);
+    // Even a LEGACY snapshot that still carries derived logs can't reinfect.
+    final legacy = repoExport(repo);
+    (legacy['logs'] as Map)['overall_rank'] = [
+      {'v': 7.5, 'ts': '2026-05-01T12:00:00'}
+    ];
+    resetDerivedHistory(repo, readinessBackfill: backfillReadinessLogs);
+    repoMerge(repo, legacy);
+    final ranks = repo.loadLogs()['overall_rank'] ?? const <Log>[];
+    expect(ranks.where((l) => l.ts.startsWith('2026-05-01')), isEmpty);
+    final restored = InMemoryRepository();
+    repoImport(restored, legacy);
+    expect(restored.loadLogs()['overall_rank'] ?? const <Log>[], isEmpty);
+  });
 }

@@ -232,6 +232,35 @@ class WorkoutTemplate {
 List<WorkoutSession> sortedByRecent(List<WorkoutSession> sessions) =>
     [...sessions]..sort((a, b) => b.start.compareTo(a.start));
 
+/// Absorb every linked manual session INTO its parent watch exercise: the sets
+/// become CHILDREN of the real tracked exercise (one workout = one entry, the
+/// watch session), and the manual container is deleted. The parent keeps its
+/// cardio summary and gains the sets + the manual title (e.g. "Push day") when
+/// it has a custom one. Returns (updated parents, manual ids to delete).
+/// Pure + unit-tested.
+(List<WorkoutSession>, List<String>) absorbLinkedSessions(
+    List<WorkoutSession> sessions) {
+  final byGid = {
+    for (final s in sessions)
+      if (s.fromGoogle && s.googleId != null) s.googleId!: s
+  };
+  final parents = <String, WorkoutSession>{};
+  final remove = <String>[];
+  for (final s in sessions) {
+    if (s.fromGoogle || s.linkedGoogleId == null) continue;
+    final parent = parents[s.linkedGoogleId!] ?? byGid[s.linkedGoogleId!];
+    if (parent == null) continue;
+    parents[s.linkedGoogleId!] = parent.copyWith(
+      sets: [...parent.sets, ...s.sets],
+      title: (s.title != null && s.title!.trim().isNotEmpty)
+          ? s.title
+          : parent.title,
+    );
+    remove.add(s.id);
+  }
+  return (parents.values.toList(), remove);
+}
+
 /// Link manual set-logging sessions to the watch-tracked Google exercise that
 /// covers them (two-step verification): same day AND overlapping time windows,
 /// with [slackMins] of tolerance on both ends (you open the app a little before

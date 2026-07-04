@@ -145,20 +145,26 @@ def _sleep_score(container: dict, summary: dict, asleep_min, efficiency_pct,
 
 
 def _sleep_day(c: dict) -> str | None:
-    """The night's LOCAL calendar day — startTime adjusted by its UTC offset — so a
-    night beginning late local-evening is attributed to the right day (the raw
-    startTime is UTC, e.g. 2026-06-24T15:54Z + 10h = the 25th locally)."""
+    """The night's local WAKE day — endTime adjusted by its UTC offset — matching
+    how Fitbit attributes sleep (dateOfSleep = the morning you woke up). Wake-day
+    attribution is what lets a pre-midnight main sleep (23:00→05:00) and a
+    post-midnight back-to-sleep (06:30→08:00) aggregate onto the SAME day;
+    start-day attribution split them across two days, so 'today' only ever
+    showed the morning fragment. Falls back to the start time when no end is
+    present."""
     interval = c.get("interval") or {}
-    start = interval.get("startTime")
-    if not isinstance(start, str):
-        return _find_date(c)
-    try:
-        dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
-        off = str(interval.get("startUtcOffset", "0s")).rstrip("s")
-        local = dt + timedelta(seconds=int(off or 0))
-        return f"{local.year:04d}-{local.month:02d}-{local.day:02d}"
-    except Exception:
-        return start[:10]
+    for tkey, offkey in (("endTime", "endUtcOffset"), ("startTime", "startUtcOffset")):
+        t = interval.get(tkey)
+        if not isinstance(t, str):
+            continue
+        try:
+            d = datetime.fromisoformat(t.replace("Z", "+00:00"))
+            off = str(interval.get(offkey, "0s")).rstrip("s")
+            local = d + timedelta(seconds=int(off or 0))
+            return f"{local.year:04d}-{local.month:02d}-{local.day:02d}"
+        except Exception:
+            return t[:10]
+    return _find_date(c)
 
 
 def _local_hour(interval: dict):
@@ -195,54 +201,93 @@ def _count_long_awake(stages: list, min_secs: int) -> int:
 
 
 def _sleep_samples(datapoints: list[dict], rhr_by_day=None, baseline_rhr=None) -> list[dict]:
-    """One night → sleep_score (ranked) + duration, efficiency, deep/REM, time-to-sleep,
-    schedule (bedtime), interruptions (all AWAKE events) and full awakenings (long AWAKE
-    blocks). [rhr_by_day]/[baseline_rhr] feed the score's resting-HR restoration term.
-    (restlessness + sound-sleep aren't exposed by the API — proprietary accelerometer.)"""
+    """Sleep records → ONE sample set per local day. A night broken by a full
+    wake-up (or a nap) arrives as SEVERAL records for the same day — Fitbit splits
+    them — and emitting one set per record used to mean the per-day dedupe kept
+    only the FIRST segment ("it only adopted the partially complete data"). All of
+    a day's records are AGGREGATED first: minutes (asleep/deep/REM/interruptions/
+    awakenings) sum, efficiency = Σasleep/Σin-bed, bedtime + time-to-fall-asleep
+    come from the MAIN (longest) record, and the score prefers the vendor's number
+    for a single-record night but is derived from the aggregated totals when the
+    night was split (the vendor score only covers the main segment).
+    [rhr_by_day]/[baseline_rhr] feed the score's resting-HR restoration term.
+    (restlessness + sound-sleep aren't exposed by the API — proprietary.)"""
     rhr_by_day = rhr_by_day or {}
-    out = []
+    by_day: dict[str, list[dict]] = {}
     for p in datapoints:
         c = _container(p)
         if not c:
             continue
-        summary = c.get("summary") or {}
         day = _sleep_day(c)
-        if not day:
-            continue
-        asleep = _to_float(summary.get("minutesAsleep"))
-        period = _to_float(summary.get("minutesInSleepPeriod"))
-        deep = rem = eff = None
-        if asleep is not None:
-            out.append(_sample("sleep_duration", day, asleep / 60.0, summary))
-        if asleep and period:
-            eff = round(asleep / period * 100, 1)
-            out.append(_sample("sleep_efficiency", day, eff, summary))
-        ttfa = _to_float(summary.get("minutesToFallAsleep"))
+        if day:
+            by_day.setdefault(day, []).append(c)
+
+    out = []
+    for day, records in by_day.items():
+        # The main record = the one with the most sleep (anchors bedtime/ttfa/score).
+        def _asleep(c):
+            return _to_float((c.get("summary") or {}).get("minutesAsleep")) or 0.0
+        records.sort(key=_asleep, reverse=True)
+        main = records[0]
+        main_summary = main.get("summary") or {}
+
+        asleep_total = period_total = deep_total = rem_total = 0.0
+        interruptions = awakenings = 0.0
+        saw_asleep = saw_period = saw_deep = saw_rem = saw_int = False
+        for c in records:
+            summary = c.get("summary") or {}
+            a = _to_float(summary.get("minutesAsleep"))
+            if a is not None:
+                asleep_total += a
+                saw_asleep = True
+            pmin = _to_float(summary.get("minutesInSleepPeriod"))
+            if pmin is not None:
+                period_total += pmin
+                saw_period = True
+            for st in (summary.get("stagesSummary") or []):
+                mins = _to_float(st.get("minutes"))
+                if st.get("type") == "DEEP" and mins is not None:
+                    deep_total += mins
+                    saw_deep = True
+                elif st.get("type") == "REM" and mins is not None:
+                    rem_total += mins
+                    saw_rem = True
+                elif st.get("type") == "AWAKE":
+                    cnt = _to_float(st.get("count"))
+                    if cnt is not None:
+                        interruptions += cnt
+                        saw_int = True
+            awakenings += _count_long_awake(c.get("stages") or [], 300)
+
+        eff = None
+        if saw_asleep:
+            out.append(_sample("sleep_duration", day, asleep_total / 60.0,
+                               {"records": len(records)}))
+        if saw_asleep and saw_period and period_total > 0:
+            eff = round(asleep_total / period_total * 100, 1)
+            out.append(_sample("sleep_efficiency", day, eff, {"records": len(records)}))
+        ttfa = _to_float(main_summary.get("minutesToFallAsleep"))
         if ttfa is not None:
-            out.append(_sample("time_to_sleep", day, ttfa, summary))
-        for st in (summary.get("stagesSummary") or []):
-            t = st.get("type")
-            mins = _to_float(st.get("minutes"))
-            if t == "DEEP" and mins is not None:
-                deep = mins
-                out.append(_sample("deep_sleep", day, mins, st))
-            elif t == "REM" and mins is not None:
-                rem = mins
-                out.append(_sample("rem_sleep", day, mins, st))
-            elif t == "AWAKE":
-                cnt = _to_float(st.get("count"))
-                if cnt is not None:  # every AWAKE event = an interruption
-                    out.append(_sample("sleep_interruptions", day, cnt, st))
-        # Schedule (bedtime) + full awakenings (AWAKE blocks ≥ 5 min) from the stages.
-        sched = _local_hour(c.get("interval") or {})
+            out.append(_sample("time_to_sleep", day, ttfa, main_summary))
+        if saw_deep:
+            out.append(_sample("deep_sleep", day, deep_total, {"records": len(records)}))
+        if saw_rem:
+            out.append(_sample("rem_sleep", day, rem_total, {"records": len(records)}))
+        if saw_int:
+            out.append(_sample("sleep_interruptions", day, interruptions,
+                               {"records": len(records)}))
+        sched = _local_hour(main.get("interval") or {})
         if sched is not None:
-            out.append(_sample("sleep_schedule", day, sched, c.get("interval") or {}))
-        out.append(_sample("full_awakenings", day,
-                           _count_long_awake(c.get("stages") or [], 300), {"min_seconds": 300}))
-        score = _sleep_score(c, summary, asleep, eff, deep, rem,
-                             resting_hr=rhr_by_day.get(day), baseline_rhr=baseline_rhr)
+            out.append(_sample("sleep_schedule", day, sched, main.get("interval") or {}))
+        out.append(_sample("full_awakenings", day, awakenings, {"min_seconds": 300}))
+        score = _sleep_score(
+            main if len(records) == 1 else {},          # vendor score: single record only
+            main_summary if len(records) == 1 else {},
+            asleep_total if saw_asleep else None, eff,
+            deep_total if saw_deep else None, rem_total if saw_rem else None,
+            resting_hr=rhr_by_day.get(day), baseline_rhr=baseline_rhr)
         if score is not None:
-            out.append(_sample("sleep_score", day, score, summary))
+            out.append(_sample("sleep_score", day, score, {"records": len(records)}))
     return out
 
 
