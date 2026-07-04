@@ -418,3 +418,40 @@ def test_calendar_push_requires_the_calendar_token(client):
     r = client.post("/me/calendar/push", json={"habits": [{"id": "h", "title": "T"}]})
     assert r.status_code == 401
     assert "calendar" in r.json()["detail"]
+
+
+def test_split_night_aggregates_all_records_for_the_day():
+    """Waking up and going back to sleep produces SEVERAL sleep records for the
+    same local day — they must aggregate, not first-wins ('it only adopted the
+    partially complete data')."""
+    def rec(start, end, asleep, period, deep, rem, score=None):
+        summary = {"minutesAsleep": asleep, "minutesInSleepPeriod": period,
+                   "stagesSummary": [
+                       {"type": "DEEP", "minutes": deep},
+                       {"type": "REM", "minutes": rem},
+                       {"type": "AWAKE", "count": 1},
+                   ]}
+        if score is not None:
+            summary["sleepScore"] = score
+        return {"sleep": {"interval": {"startTime": start, "startUtcOffset": "36000s",
+                                       "endTime": end, "endUtcOffset": "36000s"},
+                          "summary": summary}}
+    # Main sleep 23:00→05:00 + back-to-sleep 06:30→08:00 — BOTH wake on the 25th
+    # local, so both attribute to the 25th (wake-day attribution) and aggregate.
+    pts = [rec("2026-06-24T13:00:00Z", "2026-06-24T19:00:00Z", 300, 330, 60, 70, score=80),
+           rec("2026-06-24T20:30:00Z", "2026-06-24T22:00:00Z", 80, 90, 15, 10)]
+    out = {s["metric_id"]: s["value"] for s in mapping.to_samples("sleep", pts)}
+    assert out["sleep_duration"] == (300 + 80) / 60.0        # both segments count
+    assert out["deep_sleep"] == 75.0 and out["rem_sleep"] == 80.0
+    assert out["sleep_interruptions"] == 2.0
+    assert abs(out["sleep_efficiency"] - (380 / 420 * 100)) < 0.1
+    # Split night → the vendor score (main segment only) is NOT used; the score
+    # is derived from the aggregated totals.
+    assert out["sleep_score"] != 80
+    # Everything landed on the WAKE day (the 25th local).
+    days = {s["ts"][:10] for s in mapping.to_samples("sleep", pts)}
+    assert days == {"2026-06-25"}
+    # A single-record night still prefers the vendor score.
+    single = mapping.to_samples("sleep", [rec("2026-06-24T13:00:00Z", "2026-06-24T19:00:00Z",
+                                              300, 330, 60, 70, score=80)])
+    assert next(s["value"] for s in single if s["metric_id"] == "sleep_score") == 80

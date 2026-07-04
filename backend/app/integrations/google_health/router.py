@@ -393,14 +393,18 @@ def _valid_access_token(db: Session, token) -> str:
 
 
 def _ingest(db: Session, user_id: str, samples: list[dict]) -> tuple[int, int]:
-    ingested = skipped = 0
-    seen: set[tuple] = set()  # de-dupe within this batch (Google returns several
-    for s in samples:         # points per metric+day; source_id collapses them)
+    # In-batch dedupe is LAST-WINS: several points can share a metric+day
+    # source_id (e.g. two weigh-ins in one day) and first-wins silently kept an
+    # arbitrary earlier one. (Sleep is aggregated per day upstream in mapping.)
+    unique: dict[tuple, dict] = {}
+    skipped = 0
+    for s in samples:
         key = (s["metric_id"], s["source"], s["source_id"])
-        if key in seen:
+        if key in unique:
             skipped += 1
-            continue
-        seen.add(key)
+        unique[key] = s
+    ingested = 0
+    for s in unique.values():
         dupe = db.scalar(select(Sample).where(
             Sample.user_id == user_id, Sample.metric_id == s["metric_id"],
             Sample.source == s["source"], Sample.source_id == s["source_id"]))

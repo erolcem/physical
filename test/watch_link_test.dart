@@ -46,6 +46,24 @@ void main() {
     expect(linked, hasLength(1)); // within the 45-min slack
   });
 
+  test('linked manual sessions are ABSORBED into the parent watch exercise', () {
+    // The sets become children of the real tracked exercise; the manual
+    // container disappears — one workout, one entry.
+    final m = manual('m1', '2026-07-01T18:05:00', dur: 60)
+        .copyWith(title: 'Push day', linkedGoogleId: 'gid1');
+    final g = google('gid1', '2026-07-01T18:00:00', dur: 55);
+    final (parents, removed) = absorbLinkedSessions([m, g]);
+    expect(removed, ['m1']);
+    final parent = parents.single;
+    expect(parent.googleId, 'gid1');
+    expect(parent.sets, hasLength(1)); // the manual sets migrated in
+    expect(parent.sets.single.name, 'Bench');
+    expect(parent.label, 'Push day'); // custom title carried onto the parent
+    expect(parent.watchVerified, isTrue);
+    // Unlinked manual sessions are never absorbed.
+    expect(absorbLinkedSessions([manual('m2', '2026-07-01T09:00:00'), g]).$2, isEmpty);
+  });
+
   test('google sessions and already-linked sessions are untouched; link round-trips', () {
     final pre = manual('m1', '2026-07-01T18:00:00')
         .copyWith(linkedGoogleId: 'existing');

@@ -77,12 +77,6 @@ int backfillRankLogs(Repository repo) {
   return changed;
 }
 
-/// The derived, fully recomputable series (rank history + readiness).
-const List<String> derivedSeriesIds = [
-  'overall_rank', 'strength_rank', 'performance_rank', 'recovery_rank',
-  'aesthetics_rank', 'daily_readiness',
-];
-
 /// Wipe the derived rank/readiness history so it rebuilds purely from whatever
 /// data exists NOW (the owner's "reset ranks" — deleting data used to leave the
 /// old category-rank climb behind). Purges without tombstones (the series

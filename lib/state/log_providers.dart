@@ -191,13 +191,23 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
     return added;
   }
 
-  /// Re-run the manual-session ↔ watch-exercise linking (also called on sync).
+  /// Re-run the manual-session ↔ watch-exercise linking, then ABSORB each linked
+  /// manual session into its parent watch exercise: the sets become children of
+  /// the real tracked exercise and the manual container disappears — one workout,
+  /// one entry (also called on sync).
   void relinkToWatch() {
     final linked = linkSessionsToWatch(repo.loadWorkouts());
     for (final s in linked) {
       repo.saveWorkout(s);
     }
-    if (linked.isNotEmpty) state = repo.loadWorkouts();
+    final (parents, removeIds) = absorbLinkedSessions(repo.loadWorkouts());
+    for (final p in parents) {
+      repo.saveWorkout(p);
+    }
+    for (final id in removeIds) {
+      repo.deleteWorkout(id);
+    }
+    if (linked.isNotEmpty || parents.isNotEmpty) state = repo.loadWorkouts();
   }
 }
 
