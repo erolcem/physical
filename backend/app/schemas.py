@@ -100,6 +100,9 @@ class CoachContextIn(BaseModel):
     trends: dict | None = None
     correlations: list[dict] = []
     workout_sets: list[dict] = []
+    metric_history: dict | None = None  # {metric_id: [daily values]} — summarised, not echoed
+    energy: dict | None = None          # {in:[daily kcal], out:[daily est kcal], bmr}
+    meals: list[dict] = []              # recent food entries [{d, n, kcal, p, fib?}]
 
 
 class HabitVerifyIn(BaseModel):

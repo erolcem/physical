@@ -332,6 +332,20 @@ def _history_lines(hist) -> str | None:
     return ("Full metric history (downsampled daily, oldest→newest):\n  " + "\n  ".join(rows)) if rows else None
 
 
+def _history_summary(hist) -> str | None:
+    """Transparency-sheet form of the raw history: what's shared, not the values
+    themselves (100 metrics × 180 points would drown the sheet)."""
+    if not hist:
+        return None
+    series = [(mid, len(vals)) for mid, vals in list(hist.items())[:100] if vals]
+    if not series:
+        return None
+    pts = max(n for _, n in series)
+    return (f"Raw daily history for {len(series)} metric"
+            f"{'s' if len(series) != 1 else ''} × up to {min(pts, 180)} points each "
+            "(downsampled, up to 2 years)")
+
+
 def _energy_lines(energy) -> str | None:
     if not energy:
         return None
@@ -462,7 +476,8 @@ def compose_system(samples, habits=None, profile=None, diet=None, training=None,
 
 def context_sections(samples, habits=None, profile=None, diet=None, training=None,
                      aesthetics=None, ranks=None, trends=None, correlations=None,
-                     workout_sets=None) -> dict:
+                     workout_sets=None, metric_history=None, energy=None,
+                     meals=None) -> dict:
     """The exact context the coach holds, as labelled sections — powers the
     transparency view so the user sees precisely what is (and isn't) shared."""
     habits = habits or []
@@ -472,6 +487,8 @@ def context_sections(samples, habits=None, profile=None, diet=None, training=Non
         "trends": _trend_lines(trends), "correlations": _correlation_lines(correlations),
         "diet": _diet_line(diet), "training": _training_line(training),
         "sets": _sets_lines(workout_sets), "aesthetics": _aesthetics_line(aesthetics),
+        "meals": _meals_lines(meals), "energy": _energy_lines(energy),
+        "history": _history_summary(metric_history),
         "coverage": None, "habits": [],
         "note": ("Only this data is sent to your AI coach. Your email, name, and "
                  "account id are never shared."),

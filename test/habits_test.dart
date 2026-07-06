@@ -74,6 +74,34 @@ void main() {
     test('a gap breaks it', () => expect(currentStreak({k(0), k(2), k(3)}, today: today), 1));
   });
 
+  group('dueStreak (weekly habits count in due-day steps)', () {
+    // 2026-06-24 is a Wednesday; the habit is due Mon(1) + Thu(4).
+    const weekly = Habit(id: 'w', title: 'Lift', cadence: 'weekly', days: [1, 4], createdAt: 'x');
+    final wed = DateTime(2026, 6, 24);
+    test('non-due days are skipped, not treated as misses', () {
+      // Mon 22nd + Thu 18th done → streak 2 (calendar-day counting froze this at 1).
+      expect(dueStreak(weekly, {'2026-06-22', '2026-06-18'}, today: wed), 2);
+    });
+    test('an unchecked TODAY does not break the run', () {
+      final mon = DateTime(2026, 6, 22); // due today, not ticked yet
+      expect(dueStreak(weekly, {'2026-06-18', '2026-06-15'}, today: mon), 2);
+    });
+    test('a missed PAST due day does break it', () {
+      // Mon 22nd done, Thu 18th missed, Mon 15th done → only 1.
+      expect(dueStreak(weekly, {'2026-06-22', '2026-06-15'}, today: wed), 1);
+    });
+    test('daily habit matches currentStreak', () {
+      const daily = Habit(id: 'd', title: 'Walk', createdAt: 'x');
+      String k(int o) => dateKey(wed.subtract(Duration(days: o)));
+      expect(dueStreak(daily, {k(0), k(1), k(2)}, today: wed),
+          currentStreak({k(0), k(1), k(2)}, today: wed));
+      expect(dueStreak(daily, {k(1), k(2)}, today: wed), 2); // today pending
+    });
+    test('horizon caps the walk', () {
+      expect(dueStreak(weekly, {'2026-06-22', '2026-06-18'}, today: wed, horizon: 3), 1);
+    });
+  });
+
   group('weekly history', () {
     final today = DateTime(2026, 6, 24);
     test('lastNDays: n keys, oldest first, ending today', () {

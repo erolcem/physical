@@ -198,7 +198,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 _habitTile(context, ref, h,
                     day: dayKey0,
                     done: done(h, dayKey0),
-                    streak: currentStreak(_doneDaysOf(h, done)),
+                    streak: dueStreak(h, _doneDaysOf(h, done), horizon: 60),
                     status: verified(h, dayKey0)
                         ? HabitStatus.verified
                         : ((st.completions[h.id]?.contains(dayKey0) ?? false)
@@ -212,7 +212,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
             for (final h in (habits.where((h) => !isDueOn(h, _selected)).toList()..sort(byTime)))
               _habitTile(context, ref, h,
                   day: dayKey0,
-                  done: done(h, dayKey0), streak: currentStreak(_doneDaysOf(h, done)),
+                  done: done(h, dayKey0), streak: dueStreak(h, _doneDaysOf(h, done), horizon: 60),
                   status: HabitStatus.notDone, aiJudged: false,
                   measuredToday: null, last7: lastNDays(7),
                   doneDays: _doneDaysOf(h, done), dimmed: true),

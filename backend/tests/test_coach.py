@@ -115,6 +115,26 @@ def test_coach_context_sections(client):
     assert "never shared" in body["note"]
 
 
+def test_coach_context_sections_show_meals_energy_history(client):
+    # The transparency sheet must reflect EVERYTHING the coach is given —
+    # meals, energy balance, and the raw-history footprint included.
+    r = client.post("/me/coach/context", json={
+        "meals": [{"d": "2026-07-05", "n": "Chicken bowl", "kcal": 650, "p": 45, "fib": 9}],
+        "energy": {"in": [2100, 2300], "out": [2500, 2600], "bmr": 1800},
+        "metric_history": {"sleep_score": [70, 75, 80], "steps": [9000, 11000]},
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert "Chicken bowl" in body["meals"] and "650" in body["meals"]
+    assert "kcal in" in body["energy"] and "BMR ~1800" in body["energy"]
+    assert "2 metrics" in body["history"]  # summarised footprint, not the raw dump
+    assert "sleep_score" not in body["history"]
+    # Absent extras stay null so the sheet simply skips those rows.
+    r2 = client.post("/me/coach/context", json={})
+    b2 = r2.json()
+    assert b2["meals"] is None and b2["energy"] is None and b2["history"] is None
+
+
 def test_coach_requires_auth():
     from fastapi.testclient import TestClient
     from app.main import app
