@@ -168,7 +168,11 @@ def _sleep_day(c: dict) -> str | None:
 
 
 def _local_hour(interval: dict):
-    """Local bedtime as a decimal hour (e.g. 22.5 = 10:30pm) — startTime + UTC offset."""
+    """Local bedtime as a decimal hour on a MONOTONIC evening scale: 22.5 = 10:30pm,
+    and post-midnight bedtimes continue past 24 (00:30 → 24.5, 01:54 → 25.9).
+    Bedtime is circular; on a plain 0–24 scale a 00:30 bedtime reads as 0.5 and
+    PASSES an "in bed by ≤ 23:00" target despite being the latest bedtime of all.
+    The wrap point is noon: hours before 12:00 belong to the previous evening."""
     start = interval.get("startTime")
     if not isinstance(start, str):
         return None
@@ -176,7 +180,8 @@ def _local_hour(interval: dict):
         dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
         off = int(str(interval.get("startUtcOffset", "0s")).rstrip("s") or 0)
         local = dt + timedelta(seconds=off)
-        return round(local.hour + local.minute / 60.0, 2)
+        hour = round(local.hour + local.minute / 60.0, 2)
+        return hour + 24 if hour < 12 else hour
     except Exception:
         return None
 

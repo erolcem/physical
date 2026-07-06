@@ -6,6 +6,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import '../data/ai_verify.dart' show runAiVerification;
@@ -407,7 +408,10 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
             onTap: h.verify == 'manual'
-                ? () => ref.read(habitsProvider.notifier).toggleOn(h.id, dayKey0)
+                ? () {
+                    HapticFeedback.lightImpact();
+                    ref.read(habitsProvider.notifier).toggleOn(h.id, dayKey0);
+                  }
                 : () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     duration: const Duration(seconds: 2),
                     content: Text('"${h.title}" counts only from real data (watch/sets/food).'))),
@@ -621,7 +625,10 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
             onTap: dimmed
                 ? null
                 : (h.verify == 'manual'
-                    ? () => ref.read(habitsProvider.notifier).toggleOn(h.id, day)
+                    ? () {
+                        HapticFeedback.lightImpact();
+                        ref.read(habitsProvider.notifier).toggleOn(h.id, day);
+                      }
                     : () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         duration: const Duration(seconds: 3),
                         content: Text('"${h.title}" counts only from real data — '
@@ -634,11 +641,22 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     child: Row(children: [
-                      Icon(
-                          done
-                              ? Icons.check_circle
-                              : (h.verify == 'manual' ? Icons.circle_outlined : Icons.sensors),
-                          color: done ? _teal : _muted, size: 26),
+                      // Checking off pops (scale-in) instead of snapping — small
+                      // but constant immersion win on the most-tapped control.
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        switchInCurve: Curves.easeOutBack,
+                        transitionBuilder: (child, anim) =>
+                            ScaleTransition(scale: anim, child: child),
+                        child: Icon(
+                            done
+                                ? Icons.check_circle
+                                : (h.verify == 'manual'
+                                    ? Icons.circle_outlined
+                                    : Icons.sensors),
+                            key: ValueKey(done),
+                            color: done ? _teal : _muted, size: 26),
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
