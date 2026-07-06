@@ -285,6 +285,30 @@ int currentStreak(Set<String> done, {DateTime? today}) {
   return streak;
 }
 
+/// Streak counted over the habit's DUE days only: a weekly Mon/Thu habit builds
+/// its streak in Mon/Thu steps (non-due days are skipped, not "missed").
+/// Counting raw calendar days froze every weekly habit's streak at 0–1 forever.
+/// An unchecked TODAY doesn't break the run (the day isn't over); an unchecked
+/// past due day does. [horizon] caps the walk (match the caller's done-window).
+int dueStreak(Habit h, Set<String> done, {DateTime? today, int horizon = 366}) {
+  final t = today ?? DateTime.now();
+  var d = DateTime(t.year, t.month, t.day);
+  final todayK = dateKey(d);
+  var streak = 0;
+  for (var i = 0; i < horizon; i++) {
+    if (isDueOn(h, d)) {
+      final key = dateKey(d);
+      if (done.contains(key)) {
+        streak++;
+      } else if (key != todayK) {
+        break;
+      }
+    }
+    d = d.subtract(const Duration(days: 1));
+  }
+  return streak;
+}
+
 /// A Google Calendar "create event" URL for a timed habit — opens it pre-filled
 /// (daily, or weekly on the chosen days). Null if the habit has no ideal time.
 String? googleCalendarUrl(Habit h, {DateTime? now}) {

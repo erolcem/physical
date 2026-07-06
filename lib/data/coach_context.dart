@@ -361,7 +361,7 @@ List<Map<String, dynamic>> coachHabits(
           if (h.verify != 'manual')
             'measured': habitMeasured(h, tkey, logs: logs, food: food, workouts: workouts),
           'met': metOn(tkey),
-          'streak': currentStreak(doneDays, today: t),
+          'streak': dueStreak(h, doneDays, today: t, horizon: 30),
           if (adherence != null) 'adherence': adherence,
           if (h.products.isNotEmpty) 'products': h.products,
         };

@@ -202,7 +202,13 @@ class _CoachTabState extends ConsumerState<CoachTab>
     final text = raw.trim();
     if (text.isEmpty || _sending) return;
     final api = ref.read(apiClientProvider);
-    final history = [for (final m in _messages) {'role': m.role, 'text': m.text}];
+    // Cap the replayed transcript: the full data context is rebuilt fresh every
+    // message anyway, so only recent conversational turns matter — an unbounded
+    // history just grows each request until it crowds out the data itself.
+    final turns = _messages.length > 24
+        ? _messages.sublist(_messages.length - 24)
+        : _messages;
+    final history = [for (final m in turns) {'role': m.role, 'text': m.text}];
     setState(() {
       _messages.add(_Msg('user', text));
       _sending = true;
@@ -508,6 +514,9 @@ class _CoachTabState extends ConsumerState<CoachTab>
     final trends = _trendsCtx();
     final correlations = _correlationsCtx();
     final sets = _setsCtx();
+    final history = _historyCtx();
+    final energy = _energyCtx();
+    final meals = _mealsCtx();
     if (!mounted) return;
     showModalBottomSheet(
       context: context,
@@ -518,7 +527,8 @@ class _CoachTabState extends ConsumerState<CoachTab>
       builder: (_) => FutureBuilder<Map<String, dynamic>>(
         future: api.coachContext(
             habits: habits, profile: profile, diet: diet, training: training, aesthetics: aesthetics,
-            ranks: ranks, trends: trends, correlations: correlations, workoutSets: sets),
+            ranks: ranks, trends: trends, correlations: correlations, workoutSets: sets,
+            metricHistory: history, energy: energy, meals: meals),
         builder: (ctx, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const SizedBox(height: 220, child: Center(child: CircularProgressIndicator()));
@@ -569,8 +579,11 @@ class _CoachTabState extends ConsumerState<CoachTab>
           if (c['trends'] != null) row('Trends', c['trends'] as String),
           if (c['correlations'] != null) row('Correlations', c['correlations'] as String),
           if (c['diet'] != null) row('Diet', c['diet'] as String),
+          if (c['energy'] != null) row('Energy', c['energy'] as String),
+          if (c['meals'] != null) row('Meals', c['meals'] as String),
           if (c['training'] != null) row('Training', c['training'] as String),
           if (c['sets'] != null) row('Sets', c['sets'] as String),
+          if (c['history'] != null) row('History', c['history'] as String),
           if (c['aesthetics'] != null) row('Aesthetics', c['aesthetics'] as String),
           row('Habits', habits.isEmpty ? '—' : habits.join('\n')),
           const SizedBox(height: 14),
