@@ -179,7 +179,9 @@ def test_sleep_real_shape_local_day_and_subfields():
     assert out["time_to_sleep"]["value"] == 0.0
     assert out["sleep_interruptions"]["value"] == 2.0  # every AWAKE event
     assert out["full_awakenings"]["value"] == 1.0      # only the ≥5-min AWAKE block
-    assert out["sleep_schedule"]["value"] == 1.9       # 01:54 local bedtime
+    # 01:54 local bedtime → 25.9 on the monotonic evening scale (post-midnight
+    # continues past 24, so "in bed by ≤ 23" correctly FAILS for late nights).
+    assert out["sleep_schedule"]["value"] == 25.9
     assert out["deep_sleep"]["value"] == 73.0 and out["rem_sleep"]["value"] == 80.0
     assert out["sleep_efficiency"]["value"] == 95.9  # 349/364×100
 
@@ -455,3 +457,11 @@ def test_split_night_aggregates_all_records_for_the_day():
     single = mapping.to_samples("sleep", [rec("2026-06-24T13:00:00Z", "2026-06-24T19:00:00Z",
                                               300, 330, 60, 70, score=80)])
     assert next(s["value"] for s in single if s["metric_id"] == "sleep_score") == 80
+
+
+def test_bedtime_is_monotonic_across_midnight():
+    from app.integrations.google_health.mapping import _local_hour
+    # 22:30 local stays 22.5; 00:30 local becomes 24.5 (NOT 0.5, which would
+    # wrongly satisfy an "in bed by ≤ 23:00" habit target).
+    assert _local_hour({"startTime": "2026-06-24T12:30:00Z", "startUtcOffset": "36000s"}) == 22.5
+    assert _local_hour({"startTime": "2026-06-24T14:30:00Z", "startUtcOffset": "36000s"}) == 24.5

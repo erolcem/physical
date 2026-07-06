@@ -430,7 +430,18 @@ class SessionDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(workoutProvider).where((x) => x.id == sessionId).firstOrNull;
     if (s == null) {
-      return const Scaffold(backgroundColor: _bg, body: Center(child: Text('Workout removed', style: TextStyle(color: _muted))));
+      // Deleted — or absorbed into its tracked watch exercise by a sync while
+      // this screen was open (the sets live on in the parent session).
+      return const Scaffold(
+          backgroundColor: _bg,
+          body: Center(
+              child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Text(
+                'This workout was removed or merged into its tracked watch '
+                'exercise — your sets are in that session on the Exercise page.',
+                textAlign: TextAlign.center, style: TextStyle(color: _muted)),
+          )));
     }
     final grouped = groupByExercise(s.sets);
     // Original indices for delete, keyed by identity order.
