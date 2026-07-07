@@ -176,7 +176,9 @@ def test_sleep_real_shape_local_day_and_subfields():
     out = {s["metric_id"]: s for s in mapping.to_samples("sleep", pts)}
     # +10h offset moves the UTC start (24th) to the LOCAL 25th.
     assert all(s["ts"] == "2026-06-25T00:00:00" for s in out.values())
-    assert out["time_to_sleep"]["value"] == 0.0
+    # Time to SOUND sleep = bedtime (15:54) → first DEEP stage (16:07) = 13 min.
+    # (minutesToFallAsleep is a flat 0 from Fitbit — never trusted at 0.)
+    assert out["time_to_sleep"]["value"] == 13.0
     assert out["sleep_interruptions"]["value"] == 2.0  # every AWAKE event
     assert out["full_awakenings"]["value"] == 1.0      # only the ≥5-min AWAKE block
     # 01:54 local bedtime → 25.9 on the monotonic evening scale (post-midnight
@@ -184,6 +186,28 @@ def test_sleep_real_shape_local_day_and_subfields():
     assert out["sleep_schedule"]["value"] == 25.9
     assert out["deep_sleep"]["value"] == 73.0 and out["rem_sleep"]["value"] == 80.0
     assert out["sleep_efficiency"]["value"] == 95.9  # 349/364×100
+
+
+def test_time_to_sound_sleep_never_logs_a_lying_zero():
+    # No stage timeline + minutesToFallAsleep 0 → NO sample (0 was meaningless);
+    # a genuinely reported nonzero minutesToFallAsleep is still honoured.
+    def night(mtfa, stages=None):
+        return [{"dataSource": {}, "sleep": {
+            "interval": {"startTime": "2026-06-25T14:00:00Z"},
+            **({"stages": stages} if stages else {}),
+            "summary": {"minutesInSleepPeriod": "480", "minutesAsleep": "450",
+                        "minutesToFallAsleep": mtfa}}}]
+    zero = {s["metric_id"] for s in mapping.to_samples("sleep", night("0"))}
+    assert "time_to_sleep" not in zero
+    honest = {s["metric_id"]: s for s in mapping.to_samples("sleep", night("12"))}
+    assert honest["time_to_sleep"]["value"] == 12.0
+    # With stages, the first DEEP block wins even over a nonzero summary field.
+    staged = {s["metric_id"]: s for s in mapping.to_samples("sleep", night("12", stages=[
+        {"type": "LIGHT", "startTime": "2026-06-25T14:00:00Z", "endTime": "2026-06-25T14:40:00Z"},
+        {"type": "DEEP", "startTime": "2026-06-25T14:40:00Z", "endTime": "2026-06-25T15:20:00Z"},
+        {"type": "DEEP", "startTime": "2026-06-25T18:00:00Z", "endTime": "2026-06-25T18:30:00Z"},
+    ]))}
+    assert staged["time_to_sleep"]["value"] == 40.0
 
 
 def test_sleep_score_derived_lands_near_population_mean():

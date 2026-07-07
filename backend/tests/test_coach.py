@@ -23,6 +23,18 @@ def test_parse_actions_pin_correlation():
     assert none == []
 
 
+def test_parse_actions_pin_note():
+    _, actions = parse_actions(
+        '```action\n{"type":"pin_note","text":"Cutting to 78 kg by September"}\n```')
+    assert actions == [{"type": "pin_note", "text": "Cutting to 78 kg by September"}]
+    # Empty text is dropped; long text is clipped to 120 chars.
+    _, none = parse_actions('```action\n{"type":"pin_note","text":"  "}\n```')
+    assert none == []
+    _, clipped = parse_actions(
+        '```action\n{"type":"pin_note","text":"' + 'x' * 200 + '"}\n```')
+    assert len(clipped[0]["text"]) == 120
+
+
 def test_parse_actions_sanitises_and_ignores_bad_blocks():
     # bad category → 'other', bad json → ignored, unknown type → ignored, no title → ignored.
     text = ('```action\n{"type":"add_habit","title":"X","category":"bogus"}\n```'
@@ -133,6 +145,16 @@ def test_coach_context_sections_show_meals_energy_history(client):
     r2 = client.post("/me/coach/context", json={})
     b2 = r2.json()
     assert b2["meals"] is None and b2["energy"] is None and b2["history"] is None
+    assert b2["pins"] is None
+
+
+def test_coach_context_shows_user_pins(client):
+    r = client.post("/me/coach/context", json={
+        "pins": ["Cutting to 78 kg by September", "Knee rehab — no deep squats"]})
+    assert r.status_code == 200
+    pins = r.json()["pins"]
+    assert "Cutting to 78 kg by September" in pins and "no deep squats" in pins
+    assert "Pinned by user" in pins  # framed as standing context
 
 
 def test_coach_requires_auth():

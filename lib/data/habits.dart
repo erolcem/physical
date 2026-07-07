@@ -108,7 +108,12 @@ const List<HabitPreset> habitPresets = [
   HabitPreset('recovery', 'Morning sunlight', 'manual'),
   HabitPreset('recovery', 'HRV', 'metric', linkedMetricId: 'hrv', target: 50, unit: 'ms'),
   HabitPreset('recovery', 'Resting HR', 'metric', linkedMetricId: 'resting_hr', compare: 'lte', target: 60, unit: 'bpm'),
-  // ── misc — manual to-dos worth tracking ──
+  // ── diet — measurement reminders ──
+  HabitPreset('diet', 'Morning weigh-in', 'metric', linkedMetricId: 'bodyweight'),
+  // ── misc — rank upkeep + manual to-dos worth tracking ──
+  // Rank check-in: done when ≥1 manually-tested RANKED metric (a lift, a jump,
+  // plank, 5k…) got a fresh log that day — the reminder that keeps ranks live.
+  HabitPreset('misc', 'Rank check-in', 'rank_log', unit: 'tests'),
   HabitPreset('misc', 'Journaling', 'manual'),
   HabitPreset('misc', 'Posture check', 'manual'),
   HabitPreset('misc', 'Ab vacuum', 'manual'),

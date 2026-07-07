@@ -6,6 +6,7 @@ import '../engine/rank_engine.dart' show Log, strengthValue;
 import 'correlation.dart';
 import 'diet.dart';
 import 'habits.dart';
+import 'pins.dart';
 import 'workout.dart';
 
 /// Stable key for a single log ("metricId@ts") — used for dedupe + tombstones.
@@ -81,6 +82,18 @@ abstract class Repository {
   List<PinnedCorrelation> loadPins();
   void addPin(PinnedCorrelation pin);
   void removePin(String key);
+
+  // Profile facts (ride the backup blob). DOB drives the auto-refreshed 'age'
+  // log — age is derived on birthdays, never left frozen at what was typed.
+  String? loadDob(); // ISO date, YYYY-MM-DD
+  void saveDob(String dob);
+
+  // AI pins — free-text goals/context the coach must always remember (the
+  // Habits tab's pin section; sent with every coach request). Tombstoned like
+  // other entities so a delete sticks across devices.
+  List<AiPin> loadAiPins();
+  void saveAiPin(AiPin pin);
+  void deleteAiPin(String id);
 }
 
 class InMemoryRepository implements Repository {
@@ -93,6 +106,8 @@ class InMemoryRepository implements Repository {
   final List<WorkoutSession> _workouts = [];
   final List<WorkoutTemplate> _templates = [];
   final List<PinnedCorrelation> _pins = [];
+  final List<AiPin> _aiPins = [];
+  String? _dob;
 
   @override
   Map<String, List<Log>> loadLogs() =>
@@ -232,6 +247,31 @@ class InMemoryRepository implements Repository {
   void removePin(String key) => _pins.removeWhere((p) => p.key == key);
 
   @override
+  String? loadDob() => _dob;
+
+  @override
+  void saveDob(String dob) => _dob = dob;
+
+  @override
+  List<AiPin> loadAiPins() => List.of(_aiPins);
+
+  @override
+  void saveAiPin(AiPin pin) {
+    final i = _aiPins.indexWhere((p) => p.id == pin.id);
+    if (i >= 0) {
+      _aiPins[i] = pin;
+    } else {
+      _aiPins.add(pin);
+    }
+  }
+
+  @override
+  void deleteAiPin(String id) {
+    _aiPins.removeWhere((p) => p.id == id);
+    _tombstones.add(entityKey('aipin', id));
+  }
+
+  @override
   void clear() {
     _logs.clear();
     _tombstones.clear();
@@ -242,6 +282,8 @@ class InMemoryRepository implements Repository {
     _workouts.clear();
     _templates.clear();
     _pins.clear();
+    _aiPins.clear();
+    _dob = null;
   }
 
   InMemoryRepository seedDemo() {
@@ -296,6 +338,8 @@ Map<String, dynamic> repoExport(Repository r) => {
       'workouts': [for (final w in r.loadWorkouts()) w.toJson()],
       'templates': [for (final t in r.loadTemplates()) t.toJson()],
       'pins': [for (final p in r.loadPins()) p.toJson()],
+      'aiPins': [for (final p in r.loadAiPins()) p.toJson()],
+      if (r.loadDob() != null) 'dob': r.loadDob(),
       'tombstones': r.loadTombstones().toList(),
     };
 
@@ -350,6 +394,13 @@ void repoImport(Repository r, Map<String, dynamic> m) {
   for (final p in ((m['pins'] as List?) ?? const [])) {
     r.addPin(PinnedCorrelation.fromJson((p as Map).cast<String, dynamic>()));
   }
+  for (final p in ((m['aiPins'] as List?) ?? const [])) {
+    final j = (p as Map).cast<String, dynamic>();
+    if (tombs.contains(entityKey('aipin', j['id'] as String))) continue;
+    r.saveAiPin(AiPin.fromJson(j));
+  }
+  final dob = m['dob'] as String?;
+  if (dob != null) r.saveDob(dob);
 }
 
 /// MERGE a snapshot into the existing store (union, never clears) — for multi-device
@@ -382,6 +433,9 @@ void repoMerge(Repository r, Map<String, dynamic> m) {
   }
   for (final t in r.loadTemplates()) {
     if (tombs.contains(entityKey('template', t.id))) r.deleteTemplate(t.id);
+  }
+  for (final p in r.loadAiPins()) {
+    if (tombs.contains(entityKey('aipin', p.id))) r.deleteAiPin(p.id);
   }
   final existingLogs = r.loadLogs();
   ((m['logs'] as Map?) ?? const {}).forEach((mid, list) {
@@ -442,4 +496,13 @@ void repoMerge(Repository r, Map<String, dynamic> m) {
     final pin = PinnedCorrelation.fromJson((p as Map).cast<String, dynamic>());
     if (!havePins.contains(pin.key)) r.addPin(pin);
   }
+  final haveAiPins = {for (final p in r.loadAiPins()) p.id};
+  for (final p in ((m['aiPins'] as List?) ?? const [])) {
+    final j = (p as Map).cast<String, dynamic>();
+    if (tombs.contains(entityKey('aipin', j['id'] as String))) continue;
+    if (!haveAiPins.contains(j['id'])) r.saveAiPin(AiPin.fromJson(j));
+  }
+  // DOB is an immutable fact — fill the gap, never overwrite a local value.
+  final dob = m['dob'] as String?;
+  if (dob != null && r.loadDob() == null) r.saveDob(dob);
 }

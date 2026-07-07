@@ -6,10 +6,11 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import '../data/ai_verify.dart' show runAiVerification;
 import '../data/habits.dart' show Habit;
 import '../data/notifications.dart';
+import '../data/profile.dart' show syncAgeFromDob;
 import '../data/sync.dart' show apiClientProvider, cloudSync;
 import '../state/habit_providers.dart';
 import '../state/log_providers.dart' show dietProvider, workoutProvider;
-import '../state/providers.dart' show repositoryProvider;
+import '../state/providers.dart' show logsProvider, repositoryProvider;
 import 'cloud_sheet.dart';
 import 'coach_screen.dart';
 import 'guide_sheet.dart';
@@ -35,7 +36,13 @@ class _MainScreenState extends ConsumerState<MainScreen>
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     // Auto-sync once on launch (best-effort, silent) so the app opens up to date.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _autoSync());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Age derives from DOB — refresh on launch so birthdays auto-correct.
+      if (syncAgeFromDob(ref.read(repositoryProvider)) != null) {
+        ref.read(logsProvider.notifier).reload();
+      }
+      _autoSync();
+    });
   }
 
   Future<void> _autoSync() async {

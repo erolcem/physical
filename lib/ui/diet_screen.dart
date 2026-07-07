@@ -1,6 +1,8 @@
 // ui/diet_screen.dart — a holistic diet page (PDF Part 1/Part 2 per-domain layout):
 // today's energy + a macro breakdown bar (protein/carbs/fat by kcal) + fibre, a
 // 7-day calorie trend, and the day's food entries. Feeds the coach.
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -344,13 +346,49 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
     final wPts = [for (var i = 0; i < days.length; i++)
         if (weightSeries[i] != null) FlSpot(i.toDouble(), weightSeries[i]!)];
 
-    double maxKcal = 100;
-    for (final v in [...inSeries, ...outSeries]) {
-      if (v != null && v > maxKcal) maxKcal = v;
+    // Averages over the days that actually have data — the numbers that make the
+    // two lines MEAN something (net energy ↔ expected weight change).
+    double inSum = 0, outSum = 0;
+    int inN = 0, outN = 0;
+    final nets = <double>[];
+    for (var i = 0; i < days.length; i++) {
+      final vi = inSeries[i], vo = outSeries[i];
+      if (vi != null) { inSum += vi; inN++; }
+      if (vo != null) { outSum += vo; outN++; }
+      if (vi != null && vo != null) nets.add(vi - vo);
     }
+    final avgIn = inN > 0 ? inSum / inN : null;
+    final avgOut = outN > 0 ? outSum / outN : null;
+    final avgNet = nets.length >= 3 ? nets.reduce((a, b) => a + b) / nets.length : null;
+    final kgPerWeek = avgNet == null ? null : avgNet * 7 / 7700; // ≈7700 kcal per kg
+
     final firstW = weightSeries.firstWhere((v) => v != null, orElse: () => null);
     final lastW = weightSeries.lastWhere((v) => v != null, orElse: () => null);
     final dW = (firstW != null && lastW != null) ? lastW - firstW : null;
+
+    // Band the kcal axis around the data (a line chart needs no zero baseline —
+    // squashing 2000-vs-2600 into a 0..3000 band hid the surplus/deficit gap).
+    double lo = double.infinity, hi = 0;
+    for (final v in [...inSeries, ...outSeries]) {
+      if (v != null) {
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      }
+    }
+    final hasKcal = lo.isFinite && hi > 0;
+    final minY = hasKcal ? math.max(0.0, (lo * 0.92 / 100).floorToDouble() * 100) : 0.0;
+    final maxY = hasKcal ? (hi * 1.06 / 100).ceilToDouble() * 100 : 100.0;
+    final tick = math.max(100.0, ((maxY - minY) / 3 / 100).roundToDouble() * 100);
+    String kfmt(double v) =>
+        v >= 1000 ? '${(v / 1000).toStringAsFixed(1)}k' : '${v.round()}';
+    String dayLabel(int i) {
+      if (i < 0 || i >= days.length) return '';
+      final d = days[i];
+      return '${int.parse(d.substring(8, 10))}/${int.parse(d.substring(5, 7))}';
+    }
+
+    const axisStyle = TextStyle(fontSize: 9, color: _muted);
+    final dateTicks = {0, days.length ~/ 2, days.length - 1};
 
     return Card(
       color: _card,
@@ -374,19 +412,86 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
               ),
           ]),
           const SizedBox(height: 10),
+          // The headline: what the window's energy balance actually says.
+          Row(children: [
+            _avgStat('AVG IN', avgIn == null ? '—' : '${avgIn.round()}', _gold),
+            _avgStat('AVG OUT', avgOut == null ? '—' : '${avgOut.round()}', _teal),
+            _avgStat(
+                avgNet == null ? 'NET' : (avgNet >= 0 ? 'SURPLUS' : 'DEFICIT'),
+                avgNet == null ? '—' : '${avgNet >= 0 ? '+' : ''}${avgNet.round()}',
+                avgNet == null ? _muted : (avgNet >= 0 ? _pink : _teal)),
+          ]),
+          if (kgPerWeek != null) ...[
+            const SizedBox(height: 6),
+            Text(
+                'At this net: ${kgPerWeek >= 0 ? '+' : ''}${kgPerWeek.toStringAsFixed(2)} kg/week expected'
+                '${dW != null ? ' · scale says ${dW >= 0 ? '+' : ''}${dW.toStringAsFixed(1)} kg this window' : ''}',
+                style: const TextStyle(fontSize: 11, color: _muted)),
+          ],
+          const SizedBox(height: 10),
           Row(children: [
             _legend('In', _gold), const SizedBox(width: 14), _legend('Out (est)', _teal),
           ]),
           const SizedBox(height: 8),
+          if (!hasKcal)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 28),
+              child: Center(child: Text('No energy data in this window yet — sync (☁) to pull meals.',
+                  style: TextStyle(fontSize: 12, color: _muted))),
+            )
+          else
           SizedBox(
-            height: 130,
+            height: 150,
             child: LineChart(LineChartData(
-              minY: 0, maxY: maxKcal * 1.15,
+              minY: minY, maxY: maxY,
               minX: 0, maxX: (days.length - 1).toDouble(),
-              titlesData: const FlTitlesData(show: false),
-              gridData: const FlGridData(show: false),
+              titlesData: FlTitlesData(
+                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true, reservedSize: 34, interval: tick,
+                    getTitlesWidget: (v, _) => Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Text(kfmt(v), style: axisStyle, textAlign: TextAlign.right),
+                    ),
+                  ),
+                ),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true, reservedSize: 18, interval: 1,
+                    getTitlesWidget: (v, _) {
+                      final i = v.round();
+                      if ((v - i).abs() > 0.001 || !dateTicks.contains(i)) {
+                        return const SizedBox.shrink();
+                      }
+                      return Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(dayLabel(i), style: axisStyle));
+                    },
+                  ),
+                ),
+              ),
+              gridData: FlGridData(
+                show: true, drawVerticalLine: false, horizontalInterval: tick,
+                getDrawingHorizontalLine: (_) =>
+                    const FlLine(color: Color(0x0AFFFFFF), strokeWidth: 1),
+              ),
               borderData: FlBorderData(show: false),
-              lineTouchData: const LineTouchData(enabled: false),
+              lineTouchData: LineTouchData(
+                touchTooltipData: LineTouchTooltipData(
+                  getTooltipColor: (_) => const Color(0xFF1E213E),
+                  getTooltipItems: (spots) => [
+                    for (var i = 0; i < spots.length; i++)
+                      LineTooltipItem(
+                        '${i == 0 ? '${dayLabel(spots[i].x.round())}\n' : ''}'
+                        '${spots[i].bar.color == _gold ? 'in' : 'out'} ${spots[i].y.round()} kcal',
+                        TextStyle(color: spots[i].bar.color ?? Colors.white,
+                            fontSize: 11, fontWeight: FontWeight.w700),
+                      ),
+                  ],
+                ),
+              ),
               lineBarsData: [
                 // Days without data render as GAPS (split segments), not dips to 0.
                 ..._gapSegments(inSeries, _gold, fill: true),
@@ -406,23 +511,70 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
             ]),
             const SizedBox(height: 6),
             SizedBox(
-              height: 70,
-              child: LineChart(LineChartData(
-                titlesData: const FlTitlesData(show: false),
-                gridData: const FlGridData(show: false),
-                borderData: FlBorderData(show: false),
-                lineTouchData: const LineTouchData(enabled: false),
-                lineBarsData: [
-                  LineChartBarData(spots: wPts, isCurved: true, color: _accent,
-                      barWidth: 2, dotData: const FlDotData(show: false)),
-                ],
-              )),
+              height: 80,
+              child: () {
+                // Same x-range as the kcal chart so the two strips line up
+                // day-for-day; y padded so a steady weight doesn't zigzag.
+                var wLo = wPts.first.y, wHi = wPts.first.y;
+                for (final p in wPts) {
+                  if (p.y < wLo) wLo = p.y;
+                  if (p.y > wHi) wHi = p.y;
+                }
+                final pad = math.max(0.5, (wHi - wLo) * 0.2);
+                return LineChart(LineChartData(
+                  minX: 0, maxX: (days.length - 1).toDouble(),
+                  minY: wLo - pad, maxY: wHi + pad,
+                  titlesData: FlTitlesData(
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true, reservedSize: 34,
+                        interval: math.max(0.1, ((wHi - wLo + 2 * pad) / 2 * 10).roundToDouble() / 10),
+                        getTitlesWidget: (v, _) => Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: Text(v.toStringAsFixed(1), style: axisStyle,
+                              textAlign: TextAlign.right),
+                        ),
+                      ),
+                    ),
+                  ),
+                  gridData: const FlGridData(show: false),
+                  borderData: FlBorderData(show: false),
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipColor: (_) => const Color(0xFF1E213E),
+                      getTooltipItems: (spots) => [
+                        for (final s in spots)
+                          LineTooltipItem(
+                              '${dayLabel(s.x.round())}\n${s.y.toStringAsFixed(1)} kg',
+                              const TextStyle(color: _accent, fontSize: 11,
+                                  fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                  lineBarsData: [
+                    LineChartBarData(spots: wPts, isCurved: true, color: _accent,
+                        barWidth: 2, dotData: const FlDotData(show: false)),
+                  ],
+                ));
+              }(),
             ),
           ],
         ]),
       ),
     );
   }
+
+  Widget _avgStat(String label, String value, Color c) => Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(value,
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: c)),
+          const SizedBox(height: 1),
+          Text('$label kcal', style: const TextStyle(fontSize: 9, letterSpacing: 1, color: _muted)),
+        ]),
+      );
 
   // Split a nullable series into contiguous line segments so missing days read
   // as gaps rather than plunges to zero.

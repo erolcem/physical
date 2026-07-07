@@ -63,7 +63,9 @@ SYSTEM_PROMPT = (
     "AGENTIC ACTIONS — when you recommend a concrete change, propose it by CALLING the "
     "provided function so the user can apply it in one tap (they always confirm): "
     "add_habit, remove_habit, adjust_habit_target (retune a target that's too easy/hard), "
-    "or pin_correlation (watch a metric pair). ALWAYS also explain it in your text reply — "
+    "pin_correlation (watch a metric pair), or pin_note (save a short standing goal/context "
+    "note — e.g. a target weight + date, an injury constraint — that you'll then see in every "
+    "future chat under 'Pinned by user'). ALWAYS also explain it in your text reply — "
     "never reply with only a function call. category is one of "
     "sleep|exercise|diet|aesthetics|recovery|misc; metric ids look like sleep_score, hrv, "
     "resting_hr, vo2max, bench, squat, ohp, pullup, body_fat_pct. Propose at most two "
@@ -105,10 +107,20 @@ ACTION_TOOLS = [
         "parameters": {"type": "object", "properties": {
             "a": {"type": "string"}, "b": {"type": "string"}}, "required": ["a", "b"]},
     },
+    {
+        "name": "pin_note",
+        "description": ("Pin a short standing goal/context note the coach should always "
+                        "remember (lives in the user's pin section; user confirms)."),
+        "parameters": {"type": "object", "properties": {
+            "text": {"type": "string",
+                     "description": "≤120 chars, e.g. 'Cutting to 78 kg by September'"}},
+            "required": ["text"]},
+    },
 ]
 
 _ACTION_RE = re.compile(r"```action\s*(\{.*?\})\s*```", re.DOTALL)
-_ACTION_TYPES = {"add_habit", "remove_habit", "adjust_habit_target", "pin_correlation"}
+_ACTION_TYPES = {"add_habit", "remove_habit", "adjust_habit_target", "pin_correlation",
+                 "pin_note"}
 _CATEGORIES = {"sleep", "exercise", "diet", "aesthetics", "recovery", "misc"}
 _TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
 
@@ -121,6 +133,9 @@ def _validate_action(obj: dict) -> dict | None:
     if t == "pin_correlation":
         a, b = str(obj.get("a", "")).strip(), str(obj.get("b", "")).strip()
         return {"type": t, "a": a, "b": b} if (a and b and a != b) else None
+    if t == "pin_note":
+        text = str(obj.get("text", "")).strip()[:120]
+        return {"type": t, "text": text} if text else None
     title = str(obj.get("title", "")).strip()[:60]
     if not title:
         return None
@@ -177,7 +192,8 @@ def actions_from_calls(calls) -> list[dict]:
 def dedupe_actions(actions: list[dict]) -> list[dict]:
     seen, out = set(), []
     for a in actions:
-        key = (a.get("type"), a.get("title", ""), a.get("a", ""), a.get("b", ""))
+        key = (a.get("type"), a.get("title", ""), a.get("a", ""), a.get("b", ""),
+               a.get("text", ""))
         if key in seen:
             continue
         seen.add(key)
@@ -332,6 +348,15 @@ def _history_lines(hist) -> str | None:
     return ("Full metric history (downsampled daily, oldest→newest):\n  " + "\n  ".join(rows)) if rows else None
 
 
+def _pins_lines(pins) -> str | None:
+    """The user's standing pins — goals/context the coach must always honour."""
+    items = [str(p).strip()[:160] for p in (pins or []) if str(p).strip()]
+    if not items:
+        return None
+    return "Pinned by user (standing goals/context — always factor these in):\n  " + \
+        "\n  ".join(f"📌 {p}" for p in items[:20])
+
+
 def _history_summary(hist) -> str | None:
     """Transparency-sheet form of the raw history: what's shared, not the values
     themselves (100 metrics × 180 points would drown the sheet)."""
@@ -423,7 +448,7 @@ def _habit_lines(habits) -> str | None:
 def build_context(samples, habits=None, profile=None, diet=None, training=None,
                   aesthetics=None, ranks=None, trends=None, correlations=None,
                   workout_sets=None, metric_history=None, energy=None,
-                  meals=None) -> str:
+                  meals=None, pins=None) -> str:
     """A compact, PII-free analyst brief from app-computed context (+ sample fallback)."""
     habits = habits or []
     lines: list[str] = []
@@ -445,7 +470,7 @@ def build_context(samples, habits=None, profile=None, diet=None, training=None,
 
     lines += _rank_lines(ranks, samples)
 
-    for line in (_trend_lines(trends), _correlation_lines(correlations),
+    for line in (_pins_lines(pins), _trend_lines(trends), _correlation_lines(correlations),
                  _energy_lines(energy), _diet_line(diet), _meals_lines(meals),
                  _training_line(training),
                  _sets_lines(workout_sets), _aesthetics_line(aesthetics),
@@ -460,12 +485,12 @@ def build_context(samples, habits=None, profile=None, diet=None, training=None,
 def compose_system(samples, habits=None, profile=None, diet=None, training=None,
                    aesthetics=None, ranks=None, trends=None, correlations=None,
                    workout_sets=None, metric_history=None, energy=None,
-                   meals=None) -> str:
+                   meals=None, pins=None) -> str:
     # Bulletproof: a malformed value on one device must never crash the coach for it.
     try:
         ctx = build_context(samples, habits, profile, diet, training, aesthetics,
                             ranks, trends, correlations, workout_sets, metric_history,
-                            energy, meals)
+                            energy, meals, pins)
     except Exception:
         try:
             ctx = "\n".join(_rank_lines(ranks, samples))  # minimal safe fallback
@@ -477,7 +502,7 @@ def compose_system(samples, habits=None, profile=None, diet=None, training=None,
 def context_sections(samples, habits=None, profile=None, diet=None, training=None,
                      aesthetics=None, ranks=None, trends=None, correlations=None,
                      workout_sets=None, metric_history=None, energy=None,
-                     meals=None) -> dict:
+                     meals=None, pins=None) -> dict:
     """The exact context the coach holds, as labelled sections — powers the
     transparency view so the user sees precisely what is (and isn't) shared."""
     habits = habits or []
@@ -489,6 +514,7 @@ def context_sections(samples, habits=None, profile=None, diet=None, training=Non
         "sets": _sets_lines(workout_sets), "aesthetics": _aesthetics_line(aesthetics),
         "meals": _meals_lines(meals), "energy": _energy_lines(energy),
         "history": _history_summary(metric_history),
+        "pins": _pins_lines(pins),
         "coverage": None, "habits": [],
         "note": ("Only this data is sent to your AI coach. Your email, name, and "
                  "account id are never shared."),

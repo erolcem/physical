@@ -11,8 +11,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import '../data/ai_verify.dart' show runAiVerification;
 import '../data/api_client.dart' show ApiException;
+import '../data/correlation.dart' show correlationLabel, correlationOf;
 import '../data/habits.dart';
 import '../data/habit_verify.dart';
+import '../data/metrics.dart' show metricById;
 import '../data/repository.dart' show Repository;
 import '../data/sync.dart' show apiClientProvider;
 import '../state/habit_providers.dart';
@@ -217,9 +219,232 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                   measuredToday: null, last7: lastNDays(7),
                   doneDays: _doneDaysOf(h, done), dimmed: true),
           ],
+          _pinsSection(context, ref),
         ],
       ),
     );
+  }
+
+  // ── 📌 Pins: standing goals/context the AI coach always remembers, plus the
+  // coach's pinned metric-pair insights (moved off the front page). Added here
+  // or by the coach (pin_note action); deleted manually when no longer true. ──
+  Widget _pinsSection(BuildContext context, WidgetRef ref) {
+    final pins = ref.watch(aiPinsProvider);
+    final corr = ref.watch(pinsProvider);
+    final logs = ref.watch(logsProvider);
+    String label(String id) {
+      try {
+        return metricById(id).label;
+      } catch (_) {
+        return id;
+      }
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 20),
+      Row(children: [
+        const Expanded(
+            child: Text('📌 PINS — WHAT YOUR COACH REMEMBERS',
+                style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted))),
+        TextButton.icon(
+          onPressed: () => _addPinDialog(context, ref),
+          icon: const Icon(Icons.push_pin_outlined, size: 16),
+          label: const Text('Pin'),
+          style: TextButton.styleFrom(
+              foregroundColor: _teal, visualDensity: VisualDensity.compact),
+        ),
+      ]),
+      if (pins.isEmpty && corr.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 6),
+          child: Text(
+              'Pin goals or context ("cutting to 78 kg by September", "knee rehab — '
+              'no deep squats") — the coach factors them into every reply, plan and nudge.',
+              style: TextStyle(fontSize: 12, color: _muted)),
+        ),
+      for (final p in pins)
+        Card(
+          color: _card,
+          margin: const EdgeInsets.only(bottom: 4),
+          child: ListTile(
+            dense: true,
+            leading: const Icon(Icons.push_pin, size: 18, color: _teal),
+            title: Text(p.text, style: const TextStyle(fontSize: 13.5)),
+            trailing: IconButton(
+              icon: const Icon(Icons.close, size: 16, color: _muted),
+              onPressed: () => ref.read(aiPinsProvider.notifier).remove(p.id),
+            ),
+          ),
+        ),
+      for (final c in corr)
+        () {
+          final r = correlationOf(logs[c.a] ?? const [], logs[c.b] ?? const []);
+          return Card(
+            color: _card,
+            margin: const EdgeInsets.only(bottom: 4),
+            child: ListTile(
+              dense: true,
+              leading: const Icon(Icons.insights, size: 18, color: _accent),
+              title: Text('${label(c.a)}  ↔  ${label(c.b)}',
+                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+              subtitle: Text(
+                  r == null
+                      ? 'Not enough overlapping data yet'
+                      : 'r = ${r.toStringAsFixed(2)} · ${correlationLabel(r)}',
+                  style: const TextStyle(fontSize: 11.5, color: _muted)),
+              trailing: IconButton(
+                icon: const Icon(Icons.close, size: 16, color: _muted),
+                onPressed: () => ref.read(pinsProvider.notifier).remove(c.key),
+              ),
+            ),
+          );
+        }(),
+    ]);
+  }
+
+  // ── Habit detail: an 8-week due-day heatmap + adherence % + due-streak —
+  // the habit's story at a glance, with edit/delete a tap away. ──
+  void _habitDetail(BuildContext context, WidgetRef ref, Habit h,
+      Set<String> doneDays, int streak) {
+    final sec = sectionOf(h.section);
+    final cc = Color(sec.color);
+    // Weekday-anchored grid: 8 columns (weeks, oldest→newest), rows Mon→Sun —
+    // so a Mon/Thu habit reads as clean rows, not a zigzag.
+    final now = DateTime.now();
+    final today0 = DateTime(now.year, now.month, now.day);
+    final gridStart = today0.subtract(Duration(days: today0.weekday - 1 + 49));
+    DateTime at(int w, int d) => gridStart.add(Duration(days: w * 7 + d));
+    final past = [
+      for (var i = 0; i < 56; i++)
+        if (!at(i ~/ 7, i % 7).isAfter(today0)) at(i ~/ 7, i % 7)
+    ];
+    final dueDays = [for (final d in past) if (isDueOn(h, d)) dateKey(d)];
+    final hit = dueDays.where(doneDays.contains).length;
+    final adherence =
+        dueDays.isEmpty ? null : (hit / dueDays.length * 100).round();
+    Color cell(DateTime d) {
+      if (d.isAfter(today0)) return Colors.transparent; // this week's future days
+      if (!isDueOn(h, d)) return Colors.white.withValues(alpha: 0.04);
+      final key = dateKey(d);
+      if (doneDays.contains(key)) return _teal;
+      if (key == todayKey()) return Colors.white.withValues(alpha: 0.16); // pending
+      return const Color(0x40FA3737); // due + missed
+    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _bg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Text('${sec.emoji} ', style: const TextStyle(fontSize: 20)),
+              Expanded(
+                  child: Text(h.title,
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900))),
+              IconButton(
+                tooltip: 'Edit',
+                icon: const Icon(Icons.edit_outlined, size: 20, color: _teal),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _showAddDialog(context, ref, edit: h);
+                },
+              ),
+              IconButton(
+                tooltip: 'Delete',
+                icon: const Icon(Icons.delete_outline, size: 20, color: Color(0xFFFA3737)),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  ref.read(habitsProvider.notifier).removeHabit(h.id);
+                },
+              ),
+            ]),
+            const SizedBox(height: 4),
+            Row(children: [
+              _detailStat('${streak > 0 ? '🔥 ' : ''}$streak', 'due-day streak', cc),
+              _detailStat(adherence == null ? '—' : '$adherence%', 'adherence · 8 wks', _teal),
+              _detailStat('$hit/${dueDays.length}', 'due days hit', _accent),
+            ]),
+            const SizedBox(height: 14),
+            const Text('LAST 8 WEEKS · oldest → newest',
+                style: TextStyle(fontSize: 9, letterSpacing: 1.5, color: _muted)),
+            const SizedBox(height: 6),
+            // GitHub-style heatmap: a column per week, a row per weekday (Mon top).
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Column(children: [
+                for (var d = 0; d < 7; d++)
+                  SizedBox(
+                    height: 19,
+                    child: Center(
+                        child: Text(weekdayShort[d],
+                            style: const TextStyle(fontSize: 8.5, color: _muted))),
+                  ),
+              ]),
+              for (var w = 0; w < 8; w++)
+                Column(children: [
+                  for (var d = 0; d < 7; d++)
+                    Container(
+                      width: 16, height: 16,
+                      margin: const EdgeInsets.all(1.5),
+                      decoration: BoxDecoration(
+                        color: cell(at(w, d)),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                ]),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              _legendDot(_teal, 'done'),
+              const SizedBox(width: 12),
+              _legendDot(const Color(0x40FA3737), 'missed'),
+              const SizedBox(width: 12),
+              _legendDot(Colors.white.withValues(alpha: 0.04), 'not due'),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailStat(String v, String l, Color c) => Expanded(
+        child: Column(children: [
+          Text(v, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: c)),
+          const SizedBox(height: 2),
+          Text(l, style: const TextStyle(fontSize: 9.5, color: _muted)),
+        ]),
+      );
+
+  Widget _legendDot(Color c, String label) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 10, height: 10,
+            decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(3))),
+        const SizedBox(width: 4),
+        Text(label, style: const TextStyle(fontSize: 10, color: _muted)),
+      ]);
+
+  Future<void> _addPinDialog(BuildContext context, WidgetRef ref) async {
+    final ctrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _card,
+        title: const Text('Pin for your coach'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLength: 120,
+          decoration: const InputDecoration(
+              hintText: 'e.g. Cutting to 78 kg by September',
+              border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Pin')),
+        ],
+      ),
+    );
+    if (ok == true) ref.read(aiPinsProvider.notifier).add(ctrl.text);
   }
 
   // Run the LLM verification for the shown day and refresh the roster.
@@ -617,8 +842,8 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           color: _card,
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
-            // Long-press to edit any habit (title, target, time, days…).
-            onLongPress: () => _showAddDialog(context, ref, edit: h),
+            // Long-press → the habit's story (8-week heatmap, adherence, edit/delete).
+            onLongPress: () => _habitDetail(context, ref, h, doneDays, streak),
             // Manual habits toggle on tap. Data-verifiable ones are STRICT:
             // only real evidence counts (watch session, logged sets, food
             // totals) — that's what keeps the AI's picture honest.
@@ -1040,6 +1265,10 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                     ),
                   ),
                 ]),
+                const SizedBox(height: 6),
+                const Text(
+                    '⏰ Habits with a time get a daily phone reminder and a Google Calendar block.',
+                    style: TextStyle(fontSize: 10.5, color: _muted)),
               ]),
             ),
             actions: [

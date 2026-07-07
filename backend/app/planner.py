@@ -40,7 +40,9 @@ PLAN_PROMPT = (
 )
 
 _SECTIONS = {"sleep", "exercise", "diet", "aesthetics", "recovery", "misc"}
-_VERIFY = {"metric", "workout", "diet", "manual"}
+# rank_log: rank check-in habits — verified app-side by counting the day's
+# manually-tested ranked-metric logs (the planner may propose one).
+_VERIFY = {"metric", "workout", "diet", "manual", "rank_log"}
 _TYPES = {"Weightlifting", "Run", "Walk", "Cycle", "Swim", "Sport", "Other"}
 _TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
 

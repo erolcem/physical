@@ -512,6 +512,7 @@ class ApiClient {
     Map<String, List<double>> metricHistory = const {},
     Map<String, dynamic>? energy,
     List<Map<String, dynamic>> meals = const [],
+    List<String> pins = const [],
   }) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/coach/chat'),
@@ -531,6 +532,7 @@ class ApiClient {
               if (metricHistory.isNotEmpty) 'metric_history': metricHistory,
               if (energy != null && energy.isNotEmpty) 'energy': energy,
               if (meals.isNotEmpty) 'meals': meals,
+              if (pins.isNotEmpty) 'pins': pins,
             }))
         .timeout(const Duration(seconds: 120));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
@@ -554,6 +556,7 @@ class ApiClient {
     Map<String, List<double>> metricHistory = const {},
     Map<String, dynamic>? energy,
     List<Map<String, dynamic>> meals = const [],
+    List<String> pins = const [],
   }) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/coach/plan'),
@@ -572,6 +575,7 @@ class ApiClient {
               if (metricHistory.isNotEmpty) 'metric_history': metricHistory,
               if (energy != null && energy.isNotEmpty) 'energy': energy,
               if (meals.isNotEmpty) 'meals': meals,
+              if (pins.isNotEmpty) 'pins': pins,
             }))
         .timeout(const Duration(seconds: 120));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
@@ -587,6 +591,7 @@ class ApiClient {
     Map<String, dynamic>? trends,
     Map<String, dynamic>? profile,
     Map<String, dynamic>? diet,
+    List<String> pins = const [],
   }) async {
     try {
       final r = await _client
@@ -599,6 +604,7 @@ class ApiClient {
                 if (trends != null) 'trends': trends,
                 if (profile != null) 'profile': profile,
                 if (diet != null) 'diet': diet,
+                if (pins.isNotEmpty) 'pins': pins,
               }))
           .timeout(const Duration(seconds: 30));
       if (r.statusCode != 200) return null;
@@ -661,6 +667,7 @@ class ApiClient {
     Map<String, dynamic>? metricHistory,
     Map<String, dynamic>? energy,
     List<Map<String, dynamic>> meals = const [],
+    List<String> pins = const [],
   }) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/coach/context'),
@@ -678,6 +685,7 @@ class ApiClient {
               if (metricHistory != null) 'metric_history': metricHistory,
               if (energy != null) 'energy': energy,
               if (meals.isNotEmpty) 'meals': meals,
+              if (pins.isNotEmpty) 'pins': pins,
             }))
         .timeout(const Duration(seconds: 15));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);

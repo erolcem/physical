@@ -34,7 +34,7 @@ def context(body: CoachContextIn,
     return context_sections(samples, body.habits, body.profile,
                             body.diet, body.training, body.aesthetics,
                             body.ranks, body.trends, body.correlations, body.workout_sets,
-                            body.metric_history, body.energy, body.meals)
+                            body.metric_history, body.energy, body.meals, body.pins)
 
 
 @router.post("/chat", response_model=CoachChatOut)
@@ -47,7 +47,7 @@ def chat(body: CoachChatIn,
     system = compose_system(samples, body.habits, body.profile,
                             body.diet, body.training, body.aesthetics,
                             body.ranks, body.trends, body.correlations, body.workout_sets,
-                            body.metric_history, body.energy, body.meals)
+                            body.metric_history, body.energy, body.meals, body.pins)
     turns = [{"role": t.role, "text": t.text} for t in body.history]
     turns.append({"role": "user", "text": body.message})
     try:
@@ -76,7 +76,7 @@ def plan(body: CoachChatIn,
     system = compose_system(samples, body.habits, body.profile,
                             body.diet, body.training, body.aesthetics,
                             body.ranks, body.trends, body.correlations, body.workout_sets,
-                            body.metric_history, body.energy, body.meals)
+                            body.metric_history, body.energy, body.meals, body.pins)
     goal = (body.message or "").strip()
     instruction = PLAN_PROMPT + (f"\n\nMy emphasised goal: {goal}" if goal else "")
     try:
@@ -112,7 +112,7 @@ def nudge(body: CoachChatIn,
     samples = list(db.scalars(select(Sample).where(Sample.user_id == user_id)))
     system = compose_system(samples, body.habits, body.profile, body.diet, body.training,
                             body.aesthetics, body.ranks, body.trends, body.correlations,
-                            body.workout_sets)
+                            body.workout_sets, pins=body.pins)
     instruction = _NUDGE + _SLOTS.get((body.message or "").strip().lower(), "")
     try:
         reply = gemini.generate(system, [{"role": "user", "text": instruction}],
