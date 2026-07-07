@@ -10,9 +10,14 @@ import 'habits.dart';
 import 'repository.dart';
 import 'workout.dart' show WorkoutTemplate;
 
-/// The habits the AI can judge on [date]: due that day and not manual.
-List<Habit> verifiableHabitsOn(List<Habit> habits, DateTime date) =>
-    [for (final h in habits) if (h.verify != 'manual' && isDueOn(h, date)) h];
+/// The habits the AI can judge on [date]: due that day, not manual, and not
+/// 'rank_log' (rank check-ins are a deterministic count of ranked-test logs —
+/// the model can't know which metrics are ranked, so its verdict would only
+/// be able to corrupt a rule that's already exact).
+List<Habit> verifiableHabitsOn(List<Habit> habits, DateTime date) => [
+      for (final h in habits)
+        if (h.verify != 'manual' && h.verify != 'rank_log' && isDueOn(h, date)) h
+    ];
 
 /// One habit → the compact dict the verifier reasons over. When the habit
 /// carries a workout [plan], the verifier can judge the actual session against

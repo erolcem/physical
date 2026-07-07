@@ -2,7 +2,9 @@
 // exercise covering the same window (two-step verification — sets can't be
 // fabricated free-floating).
 import 'package:flutter_test/flutter_test.dart';
+import 'package:physical/data/repository.dart';
 import 'package:physical/data/workout.dart';
+import 'package:physical/state/log_providers.dart' show WorkoutNotifier;
 
 void main() {
   WorkoutSession manual(String id, String start, {int? dur}) => WorkoutSession(
@@ -72,5 +74,37 @@ void main() {
     final back = WorkoutSession.fromJson(pre.toJson());
     expect(back.linkedGoogleId, 'existing');
     expect(back.watchVerified, isTrue);
+  });
+
+  test('absorption records the trail (absorbedIds) and it round-trips json', () {
+    final m = manual('m1', '2026-07-01T18:05:00', dur: 60)
+        .copyWith(linkedGoogleId: 'gid1');
+    final g = google('gid1', '2026-07-01T18:00:00', dur: 55);
+    final parent = absorbLinkedSessions([m, g]).$1.single;
+    expect(parent.absorbedIds, contains('m1'));
+    expect(WorkoutSession.fromJson(parent.toJson()).absorbedIds, contains('m1'));
+  });
+
+  test('sets are CHILDREN: a new session absorbs into a covering watch exercise '
+      'instantly — no separate instance is ever visible', () {
+    final repo = InMemoryRepository();
+    final now = DateTime.now();
+    repo.saveWorkout(WorkoutSession(
+        id: 'g:live', type: 'Weightlifting',
+        start: now.subtract(const Duration(minutes: 30)).toIso8601String(),
+        durationMins: 60, source: 'google', googleId: 'live'));
+    final n = WorkoutNotifier(repo);
+    final s = n.createFromTemplate(const WorkoutTemplate(
+        id: 't1', name: 'Push day',
+        sets: [WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 80, reps: 5)]));
+    // The returned session IS the watch parent, already holding the sets.
+    expect(s.googleId, 'live');
+    expect(s.watchVerified, isTrue);
+    expect(s.sets.single.name, 'Bench');
+    expect(n.state, hasLength(1)); // one workout, one entry
+    // Adding a set through the old holder id lands in the parent too.
+    final holderId = s.absorbedIds.single;
+    n.addSet(holderId, const WorkoutSet(name: 'Fly', mode: SetMode.weightReps, weight: 20, reps: 12));
+    expect(n.resolve(holderId)!.sets, hasLength(2));
   });
 }

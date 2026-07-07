@@ -21,7 +21,8 @@ void main() {
     // not pumpAndSettle, so the spinner animation doesn't block.
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('New workout'), findsOneWidget);
+    // Sets are children of a tracked exercise now — the FAB is "Log sets".
+    expect(find.text('Log sets'), findsOneWidget);
   });
 
   testWidgets('sleep screen opens without layout crash', (tester) async {

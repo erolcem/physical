@@ -6,6 +6,7 @@ import '../data/api_client.dart' show ApiClient, InferredNutrition;
 import '../data/correlation.dart';
 import '../data/diet.dart';
 import '../data/habits.dart' show todayKey;
+import '../data/pins.dart';
 import '../data/readiness.dart';
 import '../data/repository.dart';
 import '../data/workout.dart';
@@ -122,7 +123,9 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
   final Repository repo;
   WorkoutNotifier(this.repo) : super(repo.loadWorkouts());
 
-  /// Create a new session (a workout you then log sets into).
+  /// Create a new set-holder (sets are CHILDREN of a tracked exercise: if a
+  /// watch session already covers this window it absorbs the holder instantly,
+  /// and the sets land inside the real exercise — no separate instance).
   WorkoutSession createSession({required String type, String? title, int? durationMins}) {
     final s = WorkoutSession(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -130,12 +133,14 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
       start: DateTime.now().toIso8601String(),
     );
     repo.saveWorkout(s);
+    relinkToWatch();
     state = repo.loadWorkouts();
-    return s;
+    return resolve(s.id) ?? s;
   }
 
   /// Start a new session pre-filled with a template's sets (fast logging —
-  /// tweak the odd weight instead of retyping the whole workout).
+  /// tweak the odd weight instead of retyping the whole workout). Same child
+  /// rule: absorbs straight into a covering watch exercise when one exists.
   WorkoutSession createFromTemplate(WorkoutTemplate t) {
     final s = WorkoutSession(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -144,9 +149,16 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
       sets: List.of(t.sets),
     );
     repo.saveWorkout(s);
+    relinkToWatch();
     state = repo.loadWorkouts();
-    return s;
+    return resolve(s.id) ?? s;
   }
+
+  /// The live session for [id], following the absorption trail: when a manual
+  /// holder has merged into its watch parent, the parent is the answer.
+  WorkoutSession? resolve(String id) =>
+      state.where((x) => x.id == id).firstOrNull ??
+      state.where((x) => x.absorbedIds.contains(id)).firstOrNull;
 
   void updateSession(WorkoutSession s) {
     repo.saveWorkout(s);
@@ -154,14 +166,15 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
   }
 
   void addSet(String sessionId, WorkoutSet set) {
-    final s = state.where((x) => x.id == sessionId).firstOrNull;
+    final s = resolve(sessionId);
     if (s == null) return;
     repo.saveWorkout(s.copyWith(sets: [...s.sets, set]));
+    relinkToWatch();
     state = repo.loadWorkouts();
   }
 
   void removeSet(String sessionId, int index) {
-    final s = state.where((x) => x.id == sessionId).firstOrNull;
+    final s = resolve(sessionId);
     if (s == null || index < 0 || index >= s.sets.length) return;
     final sets = [...s.sets]..removeAt(index);
     repo.saveWorkout(s.copyWith(sets: sets));
@@ -259,4 +272,35 @@ class PinsNotifier extends StateNotifier<List<PinnedCorrelation>> {
     repo.removePin(key);
     state = repo.loadPins();
   }
+}
+
+// AI pins — standing goals/context for the coach (Habits tab pin section).
+// Every coach request carries them; deleted manually when no longer true.
+final aiPinsProvider =
+    StateNotifierProvider<AiPinsNotifier, List<AiPin>>((ref) {
+  return AiPinsNotifier(ref.watch(repositoryProvider));
+});
+
+class AiPinsNotifier extends StateNotifier<List<AiPin>> {
+  final Repository repo;
+  AiPinsNotifier(this.repo) : super(repo.loadAiPins());
+
+  void add(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return;
+    // Same text pinned twice adds nothing for the coach — keep one.
+    if (state.any((p) => p.text.toLowerCase() == t.toLowerCase())) return;
+    repo.saveAiPin(AiPin(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        text: t,
+        createdAt: DateTime.now().toIso8601String()));
+    state = repo.loadAiPins();
+  }
+
+  void remove(String id) {
+    repo.deleteAiPin(id);
+    state = repo.loadAiPins();
+  }
+
+  void reload() => state = repo.loadAiPins();
 }

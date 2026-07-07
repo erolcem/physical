@@ -100,11 +100,14 @@ class WorkoutSession {
   // "unverified" and the AI verifier won't credit exercise habits from them.
   final String? linkedGoogleId;
   final Map<String, double> summary; // Google cardio summary: calories/distanceKm/steps/avgHr
+  // Ids of manual set-holders this watch session absorbed — the paper trail that
+  // lets an open detail screen re-bind to the parent when its holder merges away.
+  final List<String> absorbedIds;
   const WorkoutSession({
     required this.id, required this.type, this.title, required this.start,
     this.durationMins, this.sets = const [], this.cardioLoad, this.zoneMinutes,
     this.source = 'manual', this.googleId, this.linkedGoogleId,
-    this.summary = const {},
+    this.summary = const {}, this.absorbedIds = const [],
   });
 
   String get dateKey => start.length >= 10 ? start.substring(0, 10) : start;
@@ -120,7 +123,7 @@ class WorkoutSession {
 
   WorkoutSession copyWith(
           {List<WorkoutSet>? sets, String? title, int? durationMins,
-          String? linkedGoogleId}) =>
+          String? linkedGoogleId, List<String>? absorbedIds}) =>
       WorkoutSession(
         id: id, type: type, start: start,
         title: title ?? this.title,
@@ -130,6 +133,7 @@ class WorkoutSession {
         source: source, googleId: googleId,
         linkedGoogleId: linkedGoogleId ?? this.linkedGoogleId,
         summary: summary,
+        absorbedIds: absorbedIds ?? this.absorbedIds,
       );
 
   Map<String, dynamic> toJson() => {
@@ -142,6 +146,7 @@ class WorkoutSession {
         if (googleId != null) 'gid': googleId,
         if (linkedGoogleId != null) 'lgid': linkedGoogleId,
         if (summary.isNotEmpty) 'sum': summary,
+        if (absorbedIds.isNotEmpty) 'abs': absorbedIds,
       };
 
   factory WorkoutSession.fromJson(Map<String, dynamic> j) => WorkoutSession(
@@ -161,6 +166,7 @@ class WorkoutSession {
           for (final e in ((j['sum'] as Map?) ?? const {}).entries)
             e.key as String: (e.value as num).toDouble()
         },
+        absorbedIds: [for (final a in (j['abs'] as List? ?? const [])) a as String],
       );
 
   /// Build a session from a parsed Google `exercise` dataPoint (see backend
@@ -255,6 +261,7 @@ List<WorkoutSession> sortedByRecent(List<WorkoutSession> sessions) =>
       title: (s.title != null && s.title!.trim().isNotEmpty)
           ? s.title
           : parent.title,
+      absorbedIds: [...parent.absorbedIds, s.id, ...s.absorbedIds],
     );
     remove.add(s.id);
   }

@@ -124,6 +124,9 @@ class _CoachTabState extends ConsumerState<CoachTab>
     );
   }
 
+  // The user's standing pins — goals/context the coach must always honour.
+  List<String> _pinsCtx() => [for (final p in ref.read(aiPinsProvider)) p.text];
+
   Map<String, dynamic> _trendsCtx() => coachTrends(ref.read(logsProvider));
   List<Map<String, dynamic>> _correlationsCtx() => coachCorrelations(ref.read(logsProvider));
   List<Map<String, dynamic>> _setsCtx() => coachWorkoutSets(ref.read(workoutProvider));
@@ -221,7 +224,8 @@ class _CoachTabState extends ConsumerState<CoachTab>
           diet: _dietCtx(), training: _trainingCtx(), aesthetics: _aestheticsCtx(),
           ranks: _ranksCtx(), trends: _trendsCtx(),
           correlations: _correlationsCtx(), workoutSets: _setsCtx(),
-          metricHistory: _historyCtx(), energy: _energyCtx(), meals: _mealsCtx());
+          metricHistory: _historyCtx(), energy: _energyCtx(), meals: _mealsCtx(),
+          pins: _pinsCtx());
       final reply = (res['reply'] as String?) ?? '';
       final actions =
           ((res['actions'] as List?) ?? const []).cast<Map<String, dynamic>>();
@@ -329,7 +333,8 @@ class _CoachTabState extends ConsumerState<CoachTab>
           habits: _habitsCtx(), profile: _profileCtx(), diet: _dietCtx(),
           training: _trainingCtx(), aesthetics: _aestheticsCtx(), ranks: _ranksCtx(),
           trends: _trendsCtx(), correlations: _correlationsCtx(), workoutSets: _setsCtx(),
-          metricHistory: _historyCtx(), energy: _energyCtx(), meals: _mealsCtx());
+          metricHistory: _historyCtx(), energy: _energyCtx(), meals: _mealsCtx(),
+          pins: _pinsCtx());
     } on ApiException catch (e) {
       error = e.status == 503
           ? 'The AI coach isn\'t configured on the server yet.'
@@ -528,7 +533,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
         future: api.coachContext(
             habits: habits, profile: profile, diet: diet, training: training, aesthetics: aesthetics,
             ranks: ranks, trends: trends, correlations: correlations, workoutSets: sets,
-            metricHistory: history, energy: energy, meals: meals),
+            metricHistory: history, energy: energy, meals: meals, pins: _pinsCtx()),
         builder: (ctx, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const SizedBox(height: 220, child: Center(child: CircularProgressIndicator()));
@@ -576,6 +581,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
           if (c['strongest'] != null) row('Strongest', c['strongest'] as String),
           if (recent.isNotEmpty)
             row('Recent', recent.entries.map((e) => '${e.key}: ${e.value}').join(', ')),
+          if (c['pins'] != null) row('Pins', c['pins'] as String),
           if (c['trends'] != null) row('Trends', c['trends'] as String),
           if (c['correlations'] != null) row('Correlations', c['correlations'] as String),
           if (c['diet'] != null) row('Diet', c['diet'] as String),
@@ -809,6 +815,9 @@ class _CoachTabState extends ConsumerState<CoachTab>
     } else if (type == 'pin_correlation') {
       icon = Icons.push_pin_outlined;
       desc = 'Pin insight: ${_exLabel(a['a'] as String? ?? '')} ↔ ${_exLabel(a['b'] as String? ?? '')}';
+    } else if (type == 'pin_note') {
+      icon = Icons.push_pin;
+      desc = 'Pin for me to remember: ${a['text'] ?? ''}';
     } else {
       icon = Icons.remove_circle_outline;
       desc = 'Remove habit: $title';
@@ -862,6 +871,10 @@ class _CoachTabState extends ConsumerState<CoachTab>
           metrics.any((m) => m.id == am) && metrics.any((m) => m.id == bm)) {
         ref.read(pinsProvider.notifier).add(am, bm);
       }
+    } else if (a['type'] == 'pin_note') {
+      // Standing goal/context → the pin section on the Habits tab; every
+      // future coach request carries it until the user deletes it.
+      ref.read(aiPinsProvider.notifier).add(a['text'] as String? ?? '');
     }
     setState(() => a['_applied'] = true);
   }

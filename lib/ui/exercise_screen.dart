@@ -91,7 +91,16 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final sessions = sortedByRecent(ref.watch(workoutProvider));
+    final all = sortedByRecent(ref.watch(workoutProvider));
+    // Fresh unverified holders wait for their watch exercise in their own strip —
+    // they're pre-logged sets, not workouts of their own. Older unverified ones
+    // stay in RECENT with the ⚠ badge (history is history).
+    final cutoff = DateTime.now().subtract(const Duration(days: 2));
+    final pending = [
+      for (final s in all)
+        if (!s.watchVerified && (DateTime.tryParse(s.start)?.isAfter(cutoff) ?? false)) s
+    ];
+    final sessions = [for (final s in all) if (!pending.contains(s)) s];
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -110,19 +119,21 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: _accent,
-        onPressed: _newSession,
+        onPressed: _logSets,
         icon: const Icon(Icons.add),
-        label: const Text('New workout'),
+        label: const Text('Log sets'),
       ),
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
         _todaysPlan(),
         _templatesRow(),
-        if (sessions.isEmpty)
+        if (pending.isNotEmpty) _pendingSection(pending),
+        if (all.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 48),
-            child: Center(child: Text('No workouts yet — start one, or import from Google (☁).',
+            child: Center(child: Text('No workouts yet — track one with your watch and import (☁), '
+                'or pre-log sets with +.',
                 style: TextStyle(color: _muted))))
-        else ...[
+        else if (sessions.isNotEmpty) ...[
           _lastCard(sessions.first),
           const SizedBox(height: 12),
           const _ExerciseMetricGraph(),
@@ -146,6 +157,36 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
       ]),
     );
   }
+
+  // ── Pre-logged sets waiting for their tracked exercise (holders, not workouts).
+  // They attach automatically the moment the covering watch session syncs in. ──
+  Widget _pendingSection(List<WorkoutSession> pending) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('WAITING FOR THE WATCH EXERCISE',
+              style: TextStyle(fontSize: 11, letterSpacing: 2, color: Color(0xFFF6CF3E))),
+          const SizedBox(height: 6),
+          for (final s in pending)
+            Card(
+              color: _card,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: Color(0x33F6CF3E)),
+              ),
+              child: ListTile(
+                leading: const Icon(Icons.hourglass_top, color: Color(0xFFF6CF3E), size: 22),
+                title: Text(s.label, style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(
+                    '${s.setCount} sets pre-logged · attaches to your tracked '
+                    'exercise on the next sync',
+                    style: const TextStyle(fontSize: 11.5, color: _muted)),
+                trailing: const Icon(Icons.chevron_right, color: _muted),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => SessionDetailScreen(sessionId: s.id))),
+              ),
+            ),
+        ]),
+      );
 
   // ── Today's plan: exercise habits due today that carry a workout plan — the
   // habit is the plan, tapping starts the session pre-filled. ──
@@ -371,18 +412,76 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
         ),
       );
 
-  Future<void> _newSession() async {
+  // ── Log sets: sets are CHILDREN of a tracked exercise. If the watch already
+  // recorded one today, sets go straight into it; otherwise the user pre-logs
+  // into a holder that auto-attaches when the exercise syncs in. ──
+  Future<void> _logSets() async {
+    final today = todayKey();
+    final watch = [
+      for (final s in sortedByRecent(ref.read(workoutProvider)))
+        if (s.fromGoogle && s.dateKey == today) s
+    ];
+    if (watch.isEmpty) {
+      await _preLog();
+      return;
+    }
+    if (watch.length == 1) {
+      // One tracked exercise today — that IS the workout; go straight in.
+      Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => SessionDetailScreen(sessionId: watch.first.id)));
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _bg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: Text('Add sets to which tracked exercise?',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+          ),
+          for (final s in watch)
+            ListTile(
+              leading: Text(typeEmoji(s.type), style: const TextStyle(fontSize: 22)),
+              title: Text(s.label, style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text(
+                  sessionStats(s).map((e) => '${e.$1} ${e.$2}').take(3).join(' · '),
+                  style: const TextStyle(fontSize: 11.5, color: _muted)),
+              trailing: const Text('✓ watch',
+                  style: TextStyle(fontSize: 11, color: _teal, fontWeight: FontWeight.w700)),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => SessionDetailScreen(sessionId: s.id)));
+              },
+            ),
+        ]),
+      ),
+    );
+  }
+
+  // Pre-log sets before the watch exercise has synced: a HOLDER, not a workout —
+  // it attaches to the covering tracked exercise automatically and disappears.
+  Future<void> _preLog() async {
     var type = sessionTypes.first.$1;
     final title = TextEditingController();
-    final dur = TextEditingController();
     final created = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
           backgroundColor: _card,
-          title: const Text('New workout'),
+          title: const Text('Pre-log sets'),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text(
+                'No tracked exercise yet today. Record your workout with the '
+                'watch — these sets attach to it automatically when it syncs. '
+                'Until then they stay ⚠ unverified and don\'t count for habits.',
+                style: TextStyle(fontSize: 12, color: _muted)),
+              const SizedBox(height: 12),
               const Text('Type', style: TextStyle(fontSize: 11, color: _muted)),
               const SizedBox(height: 6),
               Wrap(spacing: 6, runSpacing: 6, children: [
@@ -398,14 +497,11 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
               const SizedBox(height: 12),
               TextField(controller: title, decoration: const InputDecoration(
                   labelText: 'Title (optional)', hintText: 'e.g. Push day', border: OutlineInputBorder())),
-              const SizedBox(height: 10),
-              TextField(controller: dur, keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Duration mins (optional)', border: OutlineInputBorder())),
             ]),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Start')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Pre-log')),
           ],
         ),
       ),
@@ -414,7 +510,6 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
     final s = ref.read(workoutProvider.notifier).createSession(
           type: type,
           title: title.text.trim().isEmpty ? null : title.text.trim(),
-          durationMins: int.tryParse(dur.text),
         );
     if (!mounted) return;
     Navigator.of(context).push(
@@ -428,18 +523,19 @@ class SessionDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final s = ref.watch(workoutProvider).where((x) => x.id == sessionId).firstOrNull;
+    final all = ref.watch(workoutProvider);
+    // Follow the absorption trail: if this holder merged into its watch parent
+    // while the screen was open, re-bind to the parent seamlessly — the sets
+    // are children of the real exercise, and this screen simply becomes it.
+    final s = all.where((x) => x.id == sessionId).firstOrNull ??
+        all.where((x) => x.absorbedIds.contains(sessionId)).firstOrNull;
     if (s == null) {
-      // Deleted — or absorbed into its tracked watch exercise by a sync while
-      // this screen was open (the sets live on in the parent session).
       return const Scaffold(
           backgroundColor: _bg,
           body: Center(
               child: Padding(
             padding: EdgeInsets.all(32),
-            child: Text(
-                'This workout was removed or merged into its tracked watch '
-                'exercise — your sets are in that session on the Exercise page.',
+            child: Text('This workout was removed.',
                 textAlign: TextAlign.center, style: TextStyle(color: _muted)),
           )));
     }
@@ -701,6 +797,32 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
         backgroundColor: _bg,
         title: Text(widget.existing == null ? 'New workout plan' : 'Edit workout plan'),
         actions: [
+          if (widget.existing != null)
+            IconButton(
+              tooltip: 'Delete plan',
+              icon: const Icon(Icons.delete_outline, color: Color(0xFFFA3737)),
+              onPressed: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: _card,
+                    title: Text('Delete plan "${widget.existing!.name}"?'),
+                    content: const Text(
+                        'Habits pointing at this plan keep working — they just '
+                        'lose the pre-filled sets.',
+                        style: TextStyle(fontSize: 13, color: _muted)),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                      FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+                    ],
+                  ),
+                );
+                if (ok == true && mounted) {
+                  ref.read(templatesProvider.notifier).remove(widget.existing!.id);
+                  if (context.mounted) Navigator.of(context).pop();
+                }
+              },
+            ),
           TextButton(onPressed: _save, child: const Text('Save')),
         ],
       ),

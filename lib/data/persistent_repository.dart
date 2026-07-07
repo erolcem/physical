@@ -9,6 +9,7 @@ import '../engine/rank_engine.dart' show Log;
 import 'correlation.dart';
 import 'diet.dart';
 import 'habits.dart';
+import 'pins.dart';
 import 'repository.dart';
 import 'workout.dart';
 
@@ -21,6 +22,8 @@ class PersistentRepository implements Repository {
   static const _workoutKey = 'physical_workouts_v1';
   static const _templateKey = 'physical_templates_v1';
   static const _pinsKey = 'physical_pins_v1';
+  static const _aiPinsKey = 'physical_ai_pins_v1';
+  static const _dobKey = 'physical_dob_v1';
   static const _tombKey = 'physical_tombstones_v1';
   final SharedPreferences _prefs;
   final Map<String, List<Log>> _cache;
@@ -31,10 +34,11 @@ class PersistentRepository implements Repository {
   final List<WorkoutSession> _workouts;
   final List<WorkoutTemplate> _templates;
   final List<PinnedCorrelation> _pins;
+  final List<AiPin> _aiPins;
   final Set<String> _tombstones;
   PersistentRepository._(this._prefs, this._cache, this._habits,
       this._completions, this._aiVerdicts, this._food, this._workouts,
-      this._templates, this._pins, this._tombstones);
+      this._templates, this._pins, this._aiPins, this._tombstones);
 
   /// Load once at startup. First run seeds demo data, then persists it.
   static Future<PersistentRepository> create() async {
@@ -51,6 +55,7 @@ class PersistentRepository implements Repository {
       _decodeWorkouts(prefs.getString(_workoutKey)),
       _decodeTemplates(prefs.getString(_templateKey)),
       _decodePins(prefs.getString(_pinsKey)),
+      _decodeAiPins(prefs.getString(_aiPinsKey)),
       tombRaw == null ? <String>{} : {for (final t in (jsonDecode(tombRaw) as List)) t as String},
     );
     if (raw == null) applyDemoSeed(repo); // first run only
@@ -235,6 +240,34 @@ class PersistentRepository implements Repository {
   }
 
   @override
+  String? loadDob() => _prefs.getString(_dobKey);
+
+  @override
+  void saveDob(String dob) => unawaited(_prefs.setString(_dobKey, dob));
+
+  @override
+  List<AiPin> loadAiPins() => List.of(_aiPins);
+
+  @override
+  void saveAiPin(AiPin pin) {
+    final i = _aiPins.indexWhere((p) => p.id == pin.id);
+    if (i >= 0) {
+      _aiPins[i] = pin;
+    } else {
+      _aiPins.add(pin);
+    }
+    _persistAiPins();
+  }
+
+  @override
+  void deleteAiPin(String id) {
+    _aiPins.removeWhere((p) => p.id == id);
+    _tombstones.add(entityKey('aipin', id));
+    _persistAiPins();
+    _persistTombstones();
+  }
+
+  @override
   void clear() {
     _cache.clear();
     _habits.clear();
@@ -244,7 +277,9 @@ class PersistentRepository implements Repository {
     _workouts.clear();
     _templates.clear();
     _pins.clear();
+    _aiPins.clear();
     _tombstones.clear();
+    unawaited(_prefs.remove(_dobKey));
     _persist();
     _persistHabits();
     _persistDone();
@@ -253,11 +288,27 @@ class PersistentRepository implements Repository {
     _persistWorkouts();
     _persistTemplates();
     _persistPins();
+    _persistAiPins();
     _persistTombstones();
   }
 
   void _persistPins() => unawaited(_prefs.setString(
       _pinsKey, jsonEncode([for (final p in _pins) p.toJson()])));
+
+  void _persistAiPins() => unawaited(_prefs.setString(
+      _aiPinsKey, jsonEncode([for (final p in _aiPins) p.toJson()])));
+
+  static List<AiPin> _decodeAiPins(String? raw) {
+    if (raw == null) return [];
+    try {
+      return [
+        for (final j in (jsonDecode(raw) as List))
+          AiPin.fromJson((j as Map).cast<String, dynamic>())
+      ];
+    } catch (_) {
+      return [];
+    }
+  }
 
   static List<PinnedCorrelation> _decodePins(String? s) => s == null
       ? []

@@ -186,6 +186,31 @@ def _local_hour(interval: dict):
         return None
 
 
+def _deep_latency(c: dict):
+    """Minutes from the sleep period's start to the FIRST DEEP stage — the literal
+    "time to sound sleep". Fitbit reports summary.minutesToFallAsleep as a flat 0
+    through this API, so the stage timeline is the only honest source."""
+    start = (c.get("interval") or {}).get("startTime")
+    if not isinstance(start, str):
+        return None
+    deep_starts = []
+    for s in (c.get("stages") or []):
+        if s.get("type") != "DEEP" or not isinstance(s.get("startTime"), str):
+            continue
+        try:
+            deep_starts.append(datetime.fromisoformat(s["startTime"].replace("Z", "+00:00")))
+        except Exception:
+            pass
+    if not deep_starts:
+        return None
+    try:
+        t0 = datetime.fromisoformat(start.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    mins = (min(deep_starts) - t0).total_seconds() / 60.0
+    return round(mins, 1) if mins >= 0 else None
+
+
 def _count_long_awake(stages: list, min_secs: int) -> int:
     """Number of AWAKE blocks lasting ≥ [min_secs] — a 'full awakening' vs a micro one."""
     n = 0
@@ -271,7 +296,13 @@ def _sleep_samples(datapoints: list[dict], rhr_by_day=None, baseline_rhr=None) -
         if saw_asleep and saw_period and period_total > 0:
             eff = round(asleep_total / period_total * 100, 1)
             out.append(_sample("sleep_efficiency", day, eff, {"records": len(records)}))
-        ttfa = _to_float(main_summary.get("minutesToFallAsleep"))
+        # "Time to sound sleep": bedtime → first DEEP stage (stage timeline).
+        # minutesToFallAsleep is only trusted when nonzero — Fitbit sends a flat
+        # 0 through this API, and logging that 0 forever was worse than nothing.
+        ttfa = _deep_latency(main)
+        if ttfa is None:
+            mtfa = _to_float(main_summary.get("minutesToFallAsleep"))
+            ttfa = mtfa if mtfa else None
         if ttfa is not None:
             out.append(_sample("time_to_sleep", day, ttfa, main_summary))
         if saw_deep:

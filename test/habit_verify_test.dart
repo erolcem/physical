@@ -47,4 +47,26 @@ void main() {
     expect(habitGoalMet(train, day, logs: const {}, food: const [], workouts: [w]), isTrue);
     expect(habitGoalMet(train, day, logs: const {}, food: const [], workouts: const []), isFalse);
   });
+
+  test('rank_log counts the day\'s manually-tested ranked logs only', () {
+    final checkIn = h('misc', 'rank_log', unit: 'tests');
+    // Nothing logged → no evidence, not done.
+    expect(habitMeasured(checkIn, day, logs: const {}, food: const [], workouts: const []), isNull);
+    expect(habitGoalMet(checkIn, day, logs: const {}, food: const [], workouts: const []), isFalse);
+    // An auto-synced ranked metric (sleep score) does NOT count — it logs itself.
+    final auto = {'sleep_score': [Log('sleep_score', 82, ts: '${day}T08:00:00')]};
+    expect(habitGoalMet(checkIn, day, logs: auto, food: const [], workouts: const []), isFalse);
+    // A real re-test (bench + plank) counts each distinct metric once.
+    final tested = {
+      'bench': [Log('bench', 100, bodyweight: 80, ts: '${day}T18:00:00')],
+      'plank': [Log('plank', 150, ts: '${day}T18:30:00'),
+                Log('plank', 160, ts: '${day}T18:40:00')],
+      'sleep_score': [Log('sleep_score', 82, ts: '${day}T08:00:00')],
+    };
+    expect(habitMeasured(checkIn, day, logs: tested, food: const [], workouts: const []), 2.0);
+    expect(habitGoalMet(checkIn, day, logs: tested, food: const [], workouts: const []), isTrue);
+    // With a target ("re-test 3 metrics"), the count must reach it.
+    final three = h('misc', 'rank_log', target: 3, unit: 'tests');
+    expect(habitGoalMet(three, day, logs: tested, food: const [], workouts: const []), isFalse);
+  });
 }

@@ -83,6 +83,7 @@ class CoachChatIn(BaseModel):
     metric_history: dict | None = None  # {metric_id: [downsampled daily values, oldest→newest]}
     energy: dict | None = None      # {in:[daily kcal], out:[daily est kcal], bmr}
     meals: list[dict] = []          # last-7-days food entries [{d, n, kcal, p, fib?}]
+    pins: list[str] = []            # standing goals/context the user pinned for the coach
 
 
 class CoachChatOut(BaseModel):
@@ -103,6 +104,7 @@ class CoachContextIn(BaseModel):
     metric_history: dict | None = None  # {metric_id: [daily values]} — summarised, not echoed
     energy: dict | None = None          # {in:[daily kcal], out:[daily est kcal], bmr}
     meals: list[dict] = []              # recent food entries [{d, n, kcal, p, fib?}]
+    pins: list[str] = []                # standing goals/context pinned for the coach
 
 
 class HabitVerifyIn(BaseModel):

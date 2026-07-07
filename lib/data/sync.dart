@@ -237,8 +237,10 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
               latest: ref.read(latestLogsProvider),
               logs: logs);
       final trendsCtx = coachTrends(logs);
+      final pinsCtx = [for (final p in repo.loadAiPins()) p.text];
       Future<void> sched(String slot, int id, int hour) async {
-        final n = await api.coachNudge(slot: slot, habits: habitsCtx, ranks: ranksCtx, trends: trendsCtx);
+        final n = await api.coachNudge(slot: slot, habits: habitsCtx, ranks: ranksCtx,
+            trends: trendsCtx, pins: pinsCtx);
         if (n != null) await NotificationService.instance.scheduleAiNudge(id, n, hour);
       }
       unawaited(sched('morning', NotificationService.nudgeMorningId, 8));

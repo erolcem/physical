@@ -5,12 +5,14 @@
 import '../engine/rank_engine.dart' show Log;
 import 'diet.dart';
 import 'habits.dart';
+import 'metrics.dart' show rankedMetrics;
 import 'workout.dart';
 
 /// The day's measured value for a habit's goal, or null if there's no data to judge.
 /// - metric  : the day's last log of the linked metric (sleep_score, steps, hrv, plank…)
 /// - diet    : the day's total for goalKey (protein|carbs|fat|fibre|calories|health|<axis>)
 /// - workout : training volume that day, or sets of lifts whose name matches goalKey
+/// - rank_log: distinct manually-tested RANKED metrics logged that day (rank upkeep)
 double? habitMeasured(
   Habit h,
   String day, {
@@ -58,6 +60,16 @@ double? habitMeasured(
       }
       // Otherwise total training volume that day (binary habits ignore the number).
       return day0.fold<double>(0.0, (a, w) => a + w.volume);
+    case 'rank_log':
+      // Rank upkeep: how many manually-tested ranked metrics got a fresh log
+      // this day. Auto-synced ranked metrics (sleep score) are excluded — they
+      // log themselves and would self-complete the reminder.
+      var n = 0;
+      for (final m in rankedMetrics) {
+        if (m.autoSync) continue;
+        if ((logs[m.id] ?? const <Log>[]).any((l) => l.ts.startsWith(day))) n++;
+      }
+      return n == 0 ? null : n.toDouble();
     default:
       return null; // manual
   }

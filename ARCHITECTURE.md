@@ -598,4 +598,41 @@ ride the backup snapshot, so deletions survive merges and propagate across devic
 revision instead of freezing at first sight; rank/readiness history is live
 (backfills replace stale days) and fully resettable.
 
-Tests: **302 Flutter + 121 backend.**
+Tests: **302 Flutter + 121 backend** (round 5).
+
+## 19. Owner review round 6 (July 2026) — children, pins, and honest graphs
+
+**Sets are children, structurally.** A set cannot exist as its own workout: the
+Exercise FAB is "Log sets", which drops the user into today's tracked watch
+exercise (chooser when several). With no tracked exercise yet, sets are *pre-logged*
+into a holder shown under "WAITING FOR THE WATCH EXERCISE" (never as a sibling
+workout) that auto-absorbs into the covering watch session — now on *every*
+mutation, not just import, so a holder created while a watch session already
+exists merges instantly. Parents record `absorbedIds`, so an open detail screen
+re-binds seamlessly when its holder merges away, and `WorkoutNotifier.resolve()`
+follows the trail for late set-adds. Manual duration typing is gone (fabricated
+minutes were the loophole).
+
+**AI pins (`AiPin`).** Free-text standing goals/context ("cutting to 78 kg by
+September") live in the Habits tab's 📌 section next to the coach's pinned
+correlation insights (moved off the front page). They ride every coach request
+(chat/plan/nudge/digest) as a "Pinned by user" context block, appear in the
+transparency sheet, sync via the backup with `aipin:` tombstones, and the coach
+itself can propose one (`pin_note` action, one-tap confirm).
+
+**Honest data fixes.** "Time to Sound Sleep" derives from the stage timeline
+(bedtime → first DEEP block) because Fitbit reports `minutesToFallAsleep` as a
+flat 0 — a 0 is never logged blind. Age derives from a stored date of birth (tap
+AGE on the body strip) and re-logs itself when a birthday passes; DOB rides the
+backup (fill-gap merge, never clobbered). The diet energy graph grew labeled
+axes, tooltips, a banded kcal scale, and an *avg in / avg out / net* headline
+with the expected kg/week vs what the scale actually says; the weight strip
+shares its x-range. Habit streaks count **due days** (`dueStreak`) so weekly
+habits build real streaks; long-press opens a weekday-anchored 8-week heatmap
+with adherence %, edit and delete. New verify rule `rank_log` powers "Rank
+check-in" habits (counts the day's manually-tested ranked-metric logs; AI
+verification skips it — the rule is already exact). Rank engine sanity is now a
+property test: every standard's tier ladder must be ordered, monotone, bounded,
+with plausible human anchors pinned.
+
+Tests: **319 Flutter + 130 backend.**

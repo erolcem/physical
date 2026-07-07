@@ -6,10 +6,9 @@ import '../data/achievements.dart';
 import '../data/rank_history.dart' show rankSeries;
 import '../data/metrics.dart';
 import '../data/body_figure_data.dart';
-import '../data/correlation.dart';
+import '../data/profile.dart' show syncAgeFromDob;
 import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log, RankResult, strengthValue, isolationLifts;
-import '../state/log_providers.dart';
 import '../state/providers.dart';
 import 'badge.dart';
 import 'body_graph.dart';
@@ -56,10 +55,10 @@ class HomeTab extends ConsumerWidget {
             _OverallCard(overall, latest),
             const SizedBox(height: 14),
 
-            // 2. Coach-pinned correlations (PDF Part 5 "strategic correlations")
-            const _PinnedInsights(),
+            // (Coach insight pins moved to the Habits tab's 📌 pin section,
+            // alongside the user's standing goal/context pins.)
 
-            // 3. Body graph section (gradient container)
+            // 2. Body graph section (gradient container)
             _BodyGraphSection(context),
             const SizedBox(height: 16),
 
@@ -98,68 +97,6 @@ class HomeTab extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// PINNED INSIGHTS — correlations the coach pinned to the dashboard (PDF Part 5)
-// ═══════════════════════════════════════════════════════════════════════════
-class _PinnedInsights extends ConsumerWidget {
-  const _PinnedInsights();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final pins = ref.watch(pinsProvider);
-    if (pins.isEmpty) return const SizedBox.shrink();
-    final logs = ref.watch(logsProvider);
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const _SectionTitle('COACH INSIGHTS'),
-      const SizedBox(height: 8),
-      for (final p in pins) _pinCard(ref, p, logs),
-      const SizedBox(height: 16),
-    ]);
-  }
-
-  String _label(String id) {
-    try {
-      return metricById(id).label;
-    } catch (_) {
-      return id;
-    }
-  }
-
-  Widget _pinCard(WidgetRef ref, PinnedCorrelation p, Map<String, List<Log>> logs) {
-    final r = correlationOf(logs[p.a] ?? const [], logs[p.b] ?? const []);
-    final c = r == null
-        ? _muted
-        : (r >= 0 ? const Color(0xFF4CE0C3) : const Color(0xFFFA3737));
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: _bg3,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _border),
-      ),
-      child: Row(children: [
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${_label(p.a)}  ↔  ${_label(p.b)}',
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-            const SizedBox(height: 2),
-            Text(
-                r == null
-                    ? 'Not enough overlapping data yet'
-                    : 'r = ${r.toStringAsFixed(2)} · ${correlationLabel(r)}',
-                style: TextStyle(fontSize: 12, color: c, fontWeight: FontWeight.w600)),
-          ]),
-        ),
-        IconButton(
-          icon: const Icon(Icons.close, size: 16, color: _muted),
-          onPressed: () => ref.read(pinsProvider.notifier).remove(p.key),
-        ),
-      ]),
     );
   }
 }
@@ -608,10 +545,35 @@ class _BodyGraphSection extends StatelessWidget {
 }
 
 // Bio strip at the foot of the body section: Age · Sex · Height · Weight.
-// Age/height/weight auto-port from Google Health; gender isn't exposed by the API,
-// so Sex shows the app's reference population (young male).
+// Height/weight auto-port from Google Health; AGE derives from date of birth
+// (tap it to set — it then auto-corrects on birthdays); gender isn't exposed by
+// the API, so Sex shows the app's reference population (young male).
 class _BodyStatsStrip extends ConsumerWidget {
   const _BodyStatsStrip();
+
+  Future<void> _setDob(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(repositoryProvider);
+    final existing = repo.loadDob();
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.tryParse(existing ?? '') ?? DateTime(now.year - 25),
+      firstDate: DateTime(now.year - 120),
+      lastDate: now,
+      helpText: 'Date of birth — age then updates itself',
+    );
+    if (picked == null) return;
+    repo.saveDob(
+        '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}');
+    final age = syncAgeFromDob(repo);
+    ref.read(logsProvider.notifier).reload();
+    if (context.mounted && age != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Age set to $age — it now updates itself on birthdays.'),
+          duration: const Duration(seconds: 2)));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final logs = ref.watch(logsProvider);
@@ -621,7 +583,7 @@ class _BodyStatsStrip extends ConsumerWidget {
     }
     final age = v('age'), h = v('height'), w = v('bodyweight');
     final items = <(String, String)>[
-      ('AGE', age == null ? '—' : age.toStringAsFixed(0)),
+      ('AGE', age == null ? 'set' : age.toStringAsFixed(0)),
       ('SEX', 'Male'),
       ('HEIGHT', h == null ? '—' : '${h.toStringAsFixed(0)} cm'),
       ('WEIGHT', w == null ? '—' : '${w.toStringAsFixed(1)} kg'),
@@ -638,14 +600,19 @@ class _BodyStatsStrip extends ConsumerWidget {
         for (var i = 0; i < items.length; i++) ...[
           if (i > 0) Container(width: 1, height: 26, color: _border),
           Expanded(
-            child: Column(children: [
-              Text(items[i].$2,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 2),
-              Text(items[i].$1,
-                  style: const TextStyle(fontSize: 9.5, letterSpacing: 1.5,
-                      color: _muted, fontWeight: FontWeight.w700)),
-            ]),
+            child: InkWell(
+              // Only AGE is editable here (it's DOB-derived); the rest sync in.
+              onTap: i == 0 ? () => _setDob(context, ref) : null,
+              borderRadius: BorderRadius.circular(8),
+              child: Column(children: [
+                Text(items[i].$2,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text(i == 0 ? 'AGE 🎂' : items[i].$1,
+                    style: const TextStyle(fontSize: 9.5, letterSpacing: 1.5,
+                        color: _muted, fontWeight: FontWeight.w700)),
+              ]),
+            ),
           ),
         ],
       ]),
