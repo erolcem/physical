@@ -31,4 +31,28 @@ void main() {
     expect(r1.id, r2.id);
     expect(r1.id, greaterThanOrEqualTo(0));
   });
+
+  test('a daily habit yields one daily reminder (no weekday)', () {
+    const h = Habit(id: 'a', title: 'Water', time: '09:00', createdAt: 'x');
+    final r = habitReminders([h]).single;
+    expect(r.weekday, isNull);
+  });
+
+  test('a weekly habit fires ONLY on its due weekdays, not daily', () {
+    // The bug: a Mon(1)/Thu(4) habit used to get a daily-repeating reminder.
+    const h = Habit(id: 'a', title: 'Lift', time: '07:30',
+        cadence: 'weekly', days: [1, 4], createdAt: 'x');
+    final r = habitReminders([h]);
+    expect(r.length, 2);
+    expect(r.map((x) => x.weekday).toSet(), {1, 4});
+    expect(r.every((x) => x.hour == 7 && x.minute == 30), isTrue);
+    // Distinct ids per weekday so neither overwrites the other on schedule.
+    expect(r.map((x) => x.id).toSet().length, 2);
+  });
+
+  test('a weekly habit with no chosen days falls back to a single daily reminder', () {
+    const h = Habit(id: 'a', title: 'X', time: '08:00', cadence: 'weekly', createdAt: 'x');
+    final r = habitReminders([h]).single;
+    expect(r.weekday, isNull);
+  });
 }
