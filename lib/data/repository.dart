@@ -337,6 +337,15 @@ void applyDemoSeed(Repository r) {
 // A complete JSON snapshot of every local entity, for cloud backup + transfer to a
 // new device. Pure (works on any Repository via its public load/save API).
 
+/// AI verdicts within the last [_verdictBackupDays] days — the window that
+/// backs the heatmap + streaks. Older recomputable verdicts don't ride the
+/// cloud blob (which is pushed on every sync), keeping it bounded.
+const int _verdictBackupDays = 180;
+Map<String, bool> _recentVerdicts(Map<String, bool> byDay) {
+  final cutoff = dateKey(DateTime.now().subtract(const Duration(days: _verdictBackupDays)));
+  return {for (final e in byDay.entries) if (e.key.compareTo(cutoff) >= 0) e.key: e.value};
+}
+
 Map<String, dynamic> repoExport(Repository r) => {
       'v': 1,
       'logs': {
@@ -349,9 +358,12 @@ Map<String, dynamic> repoExport(Repository r) => {
       },
       'habits': [for (final h in r.loadHabits()) h.toJson()],
       'completions': {for (final e in r.loadCompletions().entries) e.key: e.value.toList()},
+      // AI verdicts are recomputable, per habit×day, and pushed on every sync —
+      // bound the blob to recent days (well past the 8-week heatmap) so it can't
+      // grow without limit. Older days simply fall back to the rule-based check.
       'aiVerdicts': {
         for (final e in r.loadAiVerdicts().entries)
-          if (e.value.isNotEmpty) e.key: e.value
+          if (_recentVerdicts(e.value).isNotEmpty) e.key: _recentVerdicts(e.value)
       },
       'food': [for (final f in r.loadFood()) f.toJson()],
       'workouts': [for (final w in r.loadWorkouts()) w.toJson()],

@@ -317,13 +317,15 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       for (var i = 0; i < 56; i++)
         if (!at(i ~/ 7, i % 7).isAfter(today0)) at(i ~/ 7, i % 7)
     ];
-    final dueDays = [for (final d in past) if (isDueOn(h, d)) dateKey(d)];
+    // Only count days the habit actually EXISTED (isDueAndActive) — a new habit
+    // otherwise shows weeks of false "missed" red before it was created.
+    final dueDays = [for (final d in past) if (isDueAndActive(h, d)) dateKey(d)];
     final hit = dueDays.where(doneDays.contains).length;
     final adherence =
         dueDays.isEmpty ? null : (hit / dueDays.length * 100).round();
     Color cell(DateTime d) {
       if (d.isAfter(today0)) return Colors.transparent; // this week's future days
-      if (!isDueOn(h, d)) return Colors.white.withValues(alpha: 0.04);
+      if (!isDueAndActive(h, d)) return Colors.white.withValues(alpha: 0.04);
       final key = dateKey(d);
       if (doneDays.contains(key)) return _teal;
       if (key == todayKey()) return Colors.white.withValues(alpha: 0.16); // pending

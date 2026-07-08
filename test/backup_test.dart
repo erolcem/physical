@@ -39,6 +39,23 @@ void main() {
     expect(b.loadWorkouts().single.summary['calories'], 400);
     expect(b.loadPins().single.a, 'sleep_score');
   });
+
+  test('AI verdict backup is bounded to recent days (recomputable, pushed every sync)', () {
+    final a = InMemoryRepository();
+    final today = DateTime.now();
+    String k(int daysAgo) {
+      final d = today.subtract(Duration(days: daysAgo));
+      return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    }
+    a.setAiVerdict('h1', k(3), true);     // recent — kept
+    a.setAiVerdict('h1', k(400), true);   // ancient — dropped from the blob
+    final snap = repoExport(a);
+    final verdicts = (snap['aiVerdicts'] as Map)['h1'] as Map;
+    expect(verdicts.containsKey(k(3)), isTrue);
+    expect(verdicts.containsKey(k(400)), isFalse);
+    // Local storage still has both — only the exported blob is trimmed.
+    expect(a.loadAiVerdicts()['h1']!.length, 2);
+  });
 }
 
 void _mergeTests() {
