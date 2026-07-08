@@ -1081,6 +1081,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 ? '${edit.target!.round()}'
                 : '${edit.target}'));
     final productsCtrl = TextEditingController(text: edit?.products.join(', ') ?? '');
+    final descCtrl = TextEditingController(text: edit?.description ?? '');
     String compare = edit?.compare ?? 'gte';
     String? goalKey = edit?.goalKey;
     String unit = edit?.unit ?? '';
@@ -1153,6 +1154,22 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 TextField(
                   controller: titleCtrl,
                   decoration: const InputDecoration(labelText: 'Habit', border: OutlineInputBorder()),
+                ),
+                // Free-text context for the AI — the SPECIFIC activity that counts,
+                // so verification is precise (e.g. an evening makiwara session, not
+                // "any cardio"). Available for every category.
+                const SizedBox(height: 10),
+                TextField(
+                  controller: descCtrl,
+                  minLines: 2,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Details for the AI (optional)',
+                    hintText: 'e.g. Evening makiwara punching, 20+ min, HR up — a walk does NOT count',
+                    helperText: 'Tell the AI exactly what counts, so nothing else ticks it off.',
+                    helperMaxLines: 2,
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 // Quantitative target — only for auto-measured sections. Direction
                 // (≥ / ≤) comes from the preset (calories/body-fat presets are
@@ -1291,6 +1308,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                           compare: compare,
                           goalKey: goalKey,
                           unit: unit,
+                          description: descCtrl.text.trim(),
                           products: products,
                           templateId: section == 'exercise' ? templateId : null,
                           time: time,
@@ -1312,6 +1330,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                           compare: compare,
                           goalKey: goalKey,
                           unit: unit,
+                          description: descCtrl.text.trim(),
                           products: products,
                           templateId: section == 'exercise' ? templateId : null,
                           time: time,

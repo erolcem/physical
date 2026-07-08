@@ -259,33 +259,46 @@ class _CoachTabState extends ConsumerState<CoachTab>
     showModalBottomSheet(
       context: context,
       backgroundColor: _bg,
+      // Scroll-controlled + capped height so the full list is reachable on small
+      // phones (an unscrollable min-height Column clipped the last options).
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Coach functions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 12),
-            ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: const Text('🗓 Plan my week (AI builds your habits)'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _planWeek();
-              },
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('Coach functions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
             ),
-            for (final f in _coachFunctions)
-              ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(f.$1),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _send(f.$2);
-                },
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                children: [
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('🗓 Plan my week (AI builds your habits)'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _planWeek();
+                    },
+                  ),
+                  for (final f in _coachFunctions)
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(f.$1),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _send(f.$2);
+                      },
+                    ),
+                ],
               ),
+            ),
           ]),
         ),
       ),
@@ -500,6 +513,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
           compare: (h['compare'] as String?) ?? 'gte',
           goalKey: h['goalKey'] as String?,
           unit: (h['unit'] as String?) ?? '',
+          description: (h['description'] as String?) ?? '',
           templateId: templateId,
           time: h['time'] as String?,
           durationMins: (h['durationMins'] as num?)?.toInt() ?? 0,

@@ -24,6 +24,19 @@ def test_prompt_encodes_the_exclusivity_and_strictness_rules():
     assert "EVIDENCE EXCLUSIVITY" in VERIFY_PROMPT
     assert "TARGETS ARE BINDING" in VERIFY_PROMPT
     assert "NOT DONE" in VERIFY_PROMPT
+    # The description is binding and matching is specific (the makiwara-vs-walk fix).
+    assert "HONOUR THE DESCRIPTION" in VERIFY_PROMPT
+    assert "Makiwara" in VERIFY_PROMPT
+    assert "TIME-OF-DAY" in VERIFY_PROMPT
+
+
+def test_build_evidence_carries_the_habit_description():
+    payload = build_evidence(
+        "2026-07-01",
+        habits=[{"id": "h1", "title": "Cardio", "section": "exercise",
+                 "description": "Evening makiwara punching, 20+ min"}],
+        workouts=[], food=[], metrics={})
+    assert "makiwara" in payload
 
 
 def test_parse_verdicts_happy_path():
@@ -62,6 +75,7 @@ def test_verify_endpoint_mocked(client, monkeypatch):
     def fake_generate(system, turns, **kw):
         captured["system"] = system
         captured["payload"] = turns[-1]["text"]
+        captured["model"] = kw.get("model")
         return ('{"verdicts": [{"id": "t1", "done": true, "reason": "weights session"},'
                 ' {"id": "t2", "done": false, "reason": "same session cannot count twice"}]}')
 
@@ -84,6 +98,10 @@ def test_verify_endpoint_mocked(client, monkeypatch):
     # The model saw the strict rules and the evidence.
     assert "EVIDENCE EXCLUSIVITY" in captured["system"]
     assert "Bench" in captured["payload"]
+    # Verification runs on the PRO model (correctness-critical, low-frequency).
+    from app.config import settings
+    assert captured["model"] == settings.gemini_model
+    assert r.json()["model"] == settings.gemini_model
 
 
 def test_verify_endpoint_503_when_unconfigured(client):

@@ -485,6 +485,8 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
                   foregroundColor: _teal, minimumSize: const Size.fromHeight(46)),
             ),
             const SizedBox(height: 8),
+            _briefingTimes(),
+            const SizedBox(height: 8),
             Row(children: [
               Expanded(
                 child: OutlinedButton.icon(
@@ -522,5 +524,52 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
         ]),
       ),
     );
+  }
+
+  // Daily AI briefing times: the morning brief (day ahead) + evening digest
+  // (how today went) are AI-written from your live data and delivered as phone
+  // notifications, re-generated on each sync. Times are user-set here.
+  Widget _briefingTimes() {
+    final repo = ref.read(repositoryProvider);
+    final m = repo.loadMorningNudgeHour();
+    final e = repo.loadEveningNudgeHour();
+    String hh(int h) => '${h.toString().padLeft(2, '0')}:00';
+    Future<void> pick(bool morning) async {
+      final t = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay(hour: morning ? m : e, minute: 0),
+        helpText: morning ? 'Morning brief time' : 'Evening digest time',
+      );
+      if (t == null) return;
+      if (morning) {
+        repo.saveNudgeHours(t.hour, e);
+      } else {
+        repo.saveNudgeHours(m, t.hour);
+      }
+      setState(() => _msg = 'Briefing times saved — they take effect on the next sync.');
+    }
+    Widget chip(String label, String value, VoidCallback onTap) => Expanded(
+          child: OutlinedButton(
+            onPressed: _busy ? null : onTap,
+            style: OutlinedButton.styleFrom(foregroundColor: _accent),
+            child: Column(children: [
+              Text(label, style: const TextStyle(fontSize: 10, letterSpacing: 1)),
+              Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+            ]),
+          ),
+        );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('DAILY AI BRIEFINGS',
+          style: TextStyle(fontSize: 10, letterSpacing: 2, color: _accent)),
+      const SizedBox(height: 2),
+      const Text('AI-written from your live data, delivered as notifications.',
+          style: TextStyle(fontSize: 11, color: Colors.grey)),
+      const SizedBox(height: 6),
+      Row(children: [
+        chip('🌅 MORNING BRIEF', hh(m), () => pick(true)),
+        const SizedBox(width: 8),
+        chip('🌙 EVENING DIGEST', hh(e), () => pick(false)),
+      ]),
+    ]);
   }
 }

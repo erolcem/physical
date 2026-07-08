@@ -24,6 +24,8 @@ class PersistentRepository implements Repository {
   static const _pinsKey = 'physical_pins_v1';
   static const _aiPinsKey = 'physical_ai_pins_v1';
   static const _dobKey = 'physical_dob_v1';
+  static const _morningNudgeKey = 'physical_nudge_morning_v1';
+  static const _eveningNudgeKey = 'physical_nudge_evening_v1';
   static const _tombKey = 'physical_tombstones_v1';
   final SharedPreferences _prefs;
   final Map<String, List<Log>> _cache;
@@ -244,6 +246,18 @@ class PersistentRepository implements Repository {
 
   @override
   void saveDob(String dob) => unawaited(_prefs.setString(_dobKey, dob));
+
+  @override
+  int loadMorningNudgeHour() => _prefs.getInt(_morningNudgeKey) ?? 8;
+
+  @override
+  int loadEveningNudgeHour() => _prefs.getInt(_eveningNudgeKey) ?? 20;
+
+  @override
+  void saveNudgeHours(int morning, int evening) {
+    unawaited(_prefs.setInt(_morningNudgeKey, morning.clamp(0, 23)));
+    unawaited(_prefs.setInt(_eveningNudgeKey, evening.clamp(0, 23)));
+  }
 
   @override
   List<AiPin> loadAiPins() => List.of(_aiPins);

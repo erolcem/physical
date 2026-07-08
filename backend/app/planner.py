@@ -31,6 +31,8 @@ PLAN_PROMPT = (
     "{\"summary\": \"<2-3 sentences: the strategy and why>\", \"habits\": [\n"
     "  {\"title\": str, \"section\": \"sleep|exercise|diet|aesthetics|recovery|misc\", "
     "\"verify\": \"metric|workout|diet|manual\", \"metric\": str|null, "
+    "\"description\": \"<one specific sentence on what exactly counts, so the AI "
+    "verifier can't be fooled by an unrelated activity>\"|null, "
     "\"target\": number|null, \"compare\": \"gte|lte\", \"unit\": str, "
     "\"goalKey\": str|null, \"time\": \"HH:MM\"|null, \"durationMins\": int, "
     "\"cadence\": \"daily|weekly\", \"days\": [1-7 Mon-Sun, weekly only], "
@@ -102,6 +104,8 @@ def _clean_habit(h) -> dict | None:
         out["unit"] = h["unit"].strip()[:12]
     if isinstance(h.get("goalKey"), str) and h["goalKey"].strip():
         out["goalKey"] = h["goalKey"].strip()[:60]
+    if isinstance(h.get("description"), str) and h["description"].strip():
+        out["description"] = h["description"].strip()[:200]
     if isinstance(h.get("time"), str) and _TIME_RE.match(h["time"]):
         out["time"] = h["time"]
     dur = h.get("durationMins")

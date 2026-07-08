@@ -608,7 +608,7 @@ class _BodyStatsStrip extends ConsumerWidget {
                 Text(items[i].$2,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 2),
-                Text(i == 0 ? 'AGE 🎂' : items[i].$1,
+                Text(items[i].$1,
                     style: const TextStyle(fontSize: 9.5, letterSpacing: 1.5,
                         color: _muted, fontWeight: FontWeight.w700)),
               ]),

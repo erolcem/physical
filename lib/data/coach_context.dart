@@ -355,6 +355,7 @@ List<Map<String, dynamic>> coachHabits(
         return {
           'title': h.title,
           'section': h.section,
+          if (h.description.isNotEmpty) 'description': h.description,
           if (h.target != null) 'target': h.target,
           if (h.target != null) 'compare': h.compare,
           if (h.unit.isNotEmpty) 'unit': h.unit,

@@ -107,4 +107,20 @@ void main() {
     n.addSet(holderId, const WorkoutSet(name: 'Fly', mode: SetMode.weightReps, weight: 20, reps: 12));
     expect(n.resolve(holderId)!.sets, hasLength(2));
   });
+
+  test('applyTemplateToSession appends a plan INTO a Google exercise (children, '
+      'not a new entity)', () {
+    final repo = InMemoryRepository();
+    repo.saveWorkout(google('live', DateTime.now().toIso8601String(), dur: 60));
+    final n = WorkoutNotifier(repo);
+    n.applyTemplateToSession('g:live', const WorkoutTemplate(
+        id: 't1', name: 'Push day',
+        sets: [WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 80, reps: 5),
+               WorkoutSet(name: 'Fly', mode: SetMode.weightReps, weight: 20, reps: 12)]));
+    expect(n.state, hasLength(1)); // still ONE workout — the Google exercise
+    final g = n.state.single;
+    expect(g.googleId, 'live');
+    expect(g.sets.map((s) => s.name), ['Bench', 'Fly']);
+    expect(g.watchVerified, isTrue);
+  });
 }

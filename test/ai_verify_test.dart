@@ -32,9 +32,17 @@ void main() {
   final today = DateTime.now();
   final day = dateKey(today);
 
-  Habit h(String id, String title, {String verify = 'workout'}) => Habit(
+  Habit h(String id, String title, {String verify = 'workout', String description = ''}) => Habit(
       id: id, title: title, section: 'exercise', verify: verify,
-      createdAt: today.toIso8601String());
+      description: description, createdAt: today.toIso8601String());
+
+  test('habitPayload carries the free-text description for the verifier', () {
+    final p = habitPayload(h('t1', 'Cardio',
+        description: 'Evening makiwara punching, 20+ min — a walk does not count'));
+    expect(p['description'], contains('makiwara'));
+    // Empty descriptions are omitted, not sent as ''.
+    expect(habitPayload(h('t2', 'Train')).containsKey('description'), isFalse);
+  });
 
   test('aiVerdict overrides the rule-based check in habitDoneOn', () {
     final train = h('t1', 'Train');

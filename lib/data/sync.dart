@@ -243,8 +243,9 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
             trends: trendsCtx, pins: pinsCtx);
         if (n != null) await NotificationService.instance.scheduleAiNudge(id, n, hour);
       }
-      unawaited(sched('morning', NotificationService.nudgeMorningId, 8));
-      unawaited(sched('evening', NotificationService.nudgeEveningId, 20));
+      // Times are user-configurable (Cloud sheet → Daily AI briefings).
+      unawaited(sched('morning', NotificationService.nudgeMorningId, repo.loadMorningNudgeHour()));
+      unawaited(sched('evening', NotificationService.nudgeEveningId, repo.loadEveningNudgeHour()));
     } catch (_) {/* nudges are best-effort */}
   }());
   return CloudSyncResult(added, note,
