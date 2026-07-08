@@ -10,14 +10,14 @@ import 'habits.dart';
 import 'repository.dart';
 import 'workout.dart' show WorkoutTemplate;
 
-/// The habits the AI can judge on [date]: due that day, not manual, and not
-/// 'rank_log' (rank check-ins are a deterministic count of ranked-test logs —
-/// the model can't know which metrics are ranked, so its verdict would only
-/// be able to corrupt a rule that's already exact).
-List<Habit> verifiableHabitsOn(List<Habit> habits, DateTime date) => [
-      for (final h in habits)
-        if (h.verify != 'manual' && h.verify != 'rank_log' && isDueOn(h, date)) h
-    ];
+/// The habits the AI judges on [date]: WORKOUT habits due that day. Only these
+/// need the LLM — the rule can't tell which session counts for which habit,
+/// whether a custom activity ("evening makiwara") matches, or enforce
+/// evidence-exclusivity. Metric/diet/rank_log habits are DETERMINISTIC (an exact
+/// measured value vs target), so the rule verifies them precisely and the LLM
+/// would only add latency, cost and arithmetic risk.
+List<Habit> verifiableHabitsOn(List<Habit> habits, DateTime date) =>
+    [for (final h in habits) if (h.verify == 'workout' && isDueOn(h, date)) h];
 
 /// One habit → the compact dict the verifier reasons over. When the habit
 /// carries a workout [plan], the verifier can judge the actual session against
@@ -96,10 +96,11 @@ Map<String, dynamic> dayEvidence(Repository repo, String day) {
   return {'workouts': workouts, 'food': food, 'metrics': metrics};
 }
 
-/// Run the LLM verification for [day] (defaults to today): sends the due
-/// non-manual habits + the day's evidence, stores each verdict. Returns how
-/// many habits were judged, or null when unavailable (offline / not signed in /
-/// no AI key) — the rule-based check keeps working as the fallback.
+/// Run the LLM verification for [day] (defaults to today): sends the due WORKOUT
+/// habits + the day's evidence, stores each verdict. Returns how many habits were
+/// judged, or null when unavailable (offline / not signed in / no AI key) — the
+/// rule-based check keeps working as the fallback. Metric/diet/rank_log habits
+/// verify deterministically from their exact measured value, not the LLM.
 Future<int?> runAiVerification(ApiClient api, Repository repo, {DateTime? date}) async {
   final d = date ?? DateTime.now();
   final day = dateKey(d);

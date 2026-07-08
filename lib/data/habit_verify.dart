@@ -82,11 +82,14 @@ double? habitMeasured(
 /// what keeps the AI's picture of the day honest. Inherently manual habits
 /// (brush teeth, journaling) are tick-only, as they should be.
 ///
-/// [aiVerdict] is the LLM verifier's judgement for this habit+day (see
-/// data/ai_verify.dart): when present it OVERRIDES the rule-based check — the
-/// model reads the actual evidence (sessions + sets, food, metrics) and applies
-/// evidence-exclusivity (one workout can't tick two habits), which the simple
-/// rules can't.
+/// [aiVerdict] is the LLM verifier's judgement for this habit+day. It is
+/// authoritative ONLY for WORKOUT habits — where the rule is genuinely ambiguous
+/// (which session counts for which habit; does a custom activity like "evening
+/// makiwara" match; evidence-exclusivity so one session can't tick two). For
+/// metric/diet/rank_log habits the measured value is DETERMINISTIC and computed
+/// exactly (a protein total, a diet-health score, a sleep reading vs its target),
+/// so the exact rule wins — an LLM can't recompute those and must not override
+/// them (and can't reach a legacy verdict left on a since-edited habit).
 bool habitDoneOn(
   Habit h,
   String day, {
@@ -97,7 +100,7 @@ bool habitDoneOn(
   bool? aiVerdict,
 }) {
   if (h.verify == 'manual') return ticked?.contains(day) ?? false;
-  if (aiVerdict != null) return aiVerdict;
+  if (h.verify == 'workout' && aiVerdict != null) return aiVerdict;
   return habitGoalMet(h, day, logs: logs, food: food, workouts: workouts);
 }
 

@@ -688,3 +688,23 @@ the attainable path to the top tier; the flagged provisional curves stay until
 validated population data is available to ground them.
 
 Tests: **327 Flutter + 131 backend.**
+
+## 22. Verification-scope correctness (July 2026)
+
+The LLM verdict used to override the rule for EVERY non-manual habit — including
+deterministic ones. But a metric/diet/rank_log habit has an exact measured value
+(a protein total, a diet-health score the LLM can't even recompute, a sleep
+reading vs its target), so letting the model re-guess it could only introduce
+arithmetic error over a correct computation. The LLM now judges **workout habits
+only** — the sole case where the rule is genuinely ambiguous (which session
+counts for which habit, evidence-exclusivity, custom-activity/time matching like
+"evening makiwara"). `habitDoneOn` honours an AI verdict only for `verify ==
+'workout'` (which also neutralises any legacy verdict left on a since-retyped
+habit); everything else verifies from its exact rule. `verifiableHabitsOn` sends
+only workout habits, cutting needless AI latency/cost too. Also: weekly habits
+now schedule reminders on their due weekdays (not daily); the app re-syncs on
+resume when the day changes (fresher briefings without server push); a new
+habit's heatmap/adherence/streak no longer count days before it existed; and the
+AI-verdict backup is bounded to 180 days.
+
+Tests: **332 Flutter + 131 backend.**

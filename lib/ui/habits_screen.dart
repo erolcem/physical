@@ -74,10 +74,12 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     bool done(Habit h, String day) => habitDoneOn(h, day,
         logs: logs, food: food, workouts: workouts, ticked: st.completions[h.id],
         aiVerdict: st.aiVerdictFor(h.id, day));
-    // Verified = evidence-backed (AI verdict when it has run, else rules).
+    // Verified = evidence-backed. Workout habits use the AI verdict (session
+    // exclusivity / custom-activity match) when it has run; every other
+    // data-verifiable habit uses the exact deterministic rule.
     bool verified(Habit h, String day) =>
         h.verify != 'manual' &&
-        (st.aiVerdictFor(h.id, day) ?? met(h, day)) == true;
+        (h.verify == 'workout' ? (st.aiVerdictFor(h.id, day) ?? met(h, day)) : met(h, day)) == true;
 
     // Time-ordered: timed habits first (by clock), then untimed.
     int byTime(Habit a, Habit b) {
@@ -206,7 +208,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                         : ((st.completions[h.id]?.contains(dayKey0) ?? false)
                             ? HabitStatus.manual
                             : HabitStatus.notDone),
-                    aiJudged: st.aiVerdictFor(h.id, dayKey0) != null,
+                    aiJudged: h.verify == 'workout' && st.aiVerdictFor(h.id, dayKey0) != null,
                     measuredToday: measured(h, dayKey0),
                     last7: lastNDays(7),
                     doneDays: _doneDaysOf(h, done)),
@@ -470,8 +472,8 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         content: Text(judged == null
             ? 'AI check unavailable — sign in (☁) and make sure the AI key is set.'
             : judged == 0
-                ? 'No auto-verifiable habits due this day.'
-                : 'AI checked $judged habit${judged == 1 ? '' : 's'} against the day\'s data.')));
+                ? 'No workout habits to AI-check this day — the rest verify automatically from your data.'
+                : 'AI checked $judged workout habit${judged == 1 ? '' : 's'} against the day\'s sessions.')));
   }
 
   // Days counted "done" over the last 60 (auto habits = data-earned, manual = ticked).

@@ -69,6 +69,39 @@ void main() {
         ticked: {day}, aiVerdict: false), isTrue);
   });
 
+  test('AI verdict is authoritative for WORKOUT habits only; the exact rule wins '
+      'for deterministic metric/diet habits', () {
+    // A metric habit whose target IS met by the data.
+    const sleep = Habit(id: 's1', title: 'Sleep 8h', section: 'sleep',
+        verify: 'metric', linkedMetricId: 'sleep_score', target: 80, createdAt: 'x');
+    final logs = {'sleep_score': [Log('sleep_score', 88, ts: '${day}T07:00:00')]};
+    // A wrong/contradicting AI verdict must NOT override the exact computation.
+    expect(habitDoneOn(sleep, day, logs: logs, food: const [], workouts: const [],
+        aiVerdict: false), isTrue);
+    // And a false AI "done" can't fake an unmet target either.
+    final low = {'sleep_score': [Log('sleep_score', 60, ts: '${day}T07:00:00')]};
+    expect(habitDoneOn(sleep, day, logs: low, food: const [], workouts: const [],
+        aiVerdict: true), isFalse);
+    // Workout habits DO honour the verdict (exclusivity / custom-activity match).
+    final train = h('t1', 'Train');
+    final session = WorkoutSession(id: 'w', type: 'Weightlifting', start: '${day}T10:00:00');
+    expect(habitDoneOn(train, day, logs: const {}, food: const [], workouts: [session],
+        aiVerdict: false), isFalse);
+  });
+
+  test('only WORKOUT habits are sent to the AI verifier', () {
+    final habits = [
+      h('t1', 'Train'), // workout → sent
+      const Habit(id: 'm1', title: 'Sleep', section: 'sleep', verify: 'metric',
+          linkedMetricId: 'sleep_score', createdAt: 'x'), // deterministic → not sent
+      const Habit(id: 'd1', title: 'Protein', section: 'diet', verify: 'diet',
+          goalKey: 'protein', createdAt: 'x'), // deterministic → not sent
+      const Habit(id: 'r1', title: 'Rank check-in', section: 'misc',
+          verify: 'rank_log', createdAt: 'x'), // deterministic → not sent
+    ];
+    expect(verifiableHabitsOn(habits, today).map((x) => x.id), ['t1']);
+  });
+
   test('runAiVerification sends the day evidence and stores verdicts', () async {
     final repo = InMemoryRepository();
     repo.saveHabit(h('t1', 'Train'));
