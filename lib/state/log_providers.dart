@@ -173,6 +173,17 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
     state = repo.loadWorkouts();
   }
 
+  /// Append a template's sets as CHILDREN of an existing session — including a
+  /// Google-imported exercise. The sets live inside the real tracked exercise;
+  /// no separate entity is created.
+  void applyTemplateToSession(String sessionId, WorkoutTemplate t) {
+    final s = resolve(sessionId);
+    if (s == null) return;
+    repo.saveWorkout(s.copyWith(sets: [...s.sets, ...t.sets]));
+    relinkToWatch();
+    state = repo.loadWorkouts();
+  }
+
   void removeSet(String sessionId, int index) {
     final s = resolve(sessionId);
     if (s == null || index < 0 || index >= s.sets.length) return;

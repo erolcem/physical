@@ -547,20 +547,31 @@ class SessionDetailScreen extends ConsumerWidget {
         backgroundColor: _bg,
         title: Text(s.label),
         actions: [
+          // Apply a saved plan's sets straight INTO this exercise (works on a
+          // Google-imported session too — the sets become its children).
+          if (ref.watch(templatesProvider).isNotEmpty)
+            IconButton(
+              tooltip: 'Add sets from a plan',
+              icon: const Icon(Icons.playlist_add),
+              onPressed: () => _applyTemplateHere(context, ref, s),
+            ),
           if (s.sets.isNotEmpty)
             IconButton(
               tooltip: 'Save as template',
               icon: const Icon(Icons.bookmark_add_outlined),
               onPressed: () => _saveAsTemplate(context, ref, s),
             ),
-          IconButton(
-            tooltip: 'Delete workout',
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () {
-              ref.read(workoutProvider.notifier).remove(s.id);
-              Navigator.of(context).pop();
-            },
-          ),
+          // A Google-imported exercise is real data — you can add sets into it,
+          // but not delete the tracked session itself.
+          if (!s.fromGoogle)
+            IconButton(
+              tooltip: 'Delete workout',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () {
+                ref.read(workoutProvider.notifier).remove(s.id);
+                Navigator.of(context).pop();
+              },
+            ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -674,6 +685,41 @@ class SessionDetailScreen extends ConsumerWidget {
   Future<void> _addSet(BuildContext context, WidgetRef ref) async {
     final set = await promptWorkoutSet(context);
     if (set != null) ref.read(workoutProvider.notifier).addSet(sessionId, set);
+  }
+
+  // Pick a saved plan and drop its sets into THIS exercise (children, not a new
+  // session) — the fast way to fill in a Google-imported workout.
+  void _applyTemplateHere(BuildContext context, WidgetRef ref, WorkoutSession s) {
+    final templates = ref.read(templatesProvider);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _bg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: Text('Add a plan\'s sets to this workout',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+          ),
+          for (final t in templates)
+            ListTile(
+              leading: Text(typeEmoji(t.type), style: const TextStyle(fontSize: 22)),
+              title: Text(t.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text('${t.exercises.length} exercises · ${t.setCount} sets',
+                  style: const TextStyle(fontSize: 11.5, color: _muted)),
+              onTap: () {
+                Navigator.pop(ctx);
+                ref.read(workoutProvider.notifier).applyTemplateToSession(s.id, t);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text('Added ${t.setCount} sets from "${t.name}".'),
+                    duration: const Duration(seconds: 2)));
+              },
+            ),
+        ]),
+      ),
+    );
   }
 }
 

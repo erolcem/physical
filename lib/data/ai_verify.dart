@@ -27,6 +27,9 @@ Map<String, dynamic> habitPayload(Habit h, {WorkoutTemplate? plan}) => {
       'title': h.title,
       'section': h.section,
       'verify': h.verify,
+      // The user's own words on what SPECIFICALLY counts — the verifier must
+      // honour it (an evening makiwara session isn't ticked by an afternoon walk).
+      if (h.description.isNotEmpty) 'description': h.description,
       if (h.linkedMetricId != null) 'metric': h.linkedMetricId,
       if (h.target != null) 'target': h.target,
       if (h.target != null) 'compare': h.compare,
@@ -51,6 +54,9 @@ Map<String, dynamic> dayEvidence(Repository repo, String day) {
         {
           'type': s.type,
           if (s.title != null) 'title': s.title,
+          // Start time (HH:MM local) so the verifier can honour time-of-day
+          // habits — an afternoon walk can't tick an "evening cardio" habit.
+          if (s.start.length >= 16) 'start_time': s.start.substring(11, 16),
           if (s.durationMins != null) 'duration_mins': s.durationMins,
           // Anchored to a real tracked exercise (IS a watch session, or linked
           // to one covering the same window) vs self-reported typing.

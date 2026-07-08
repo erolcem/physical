@@ -636,3 +636,32 @@ property test: every standard's tier ladder must be ordered, monotone, bounded,
 with plausible human anchors pinned.
 
 Tests: **319 Flutter + 130 backend.**
+
+## 20. Owner review round 7 (July 2026) — precise verification & UX polish
+
+**Verification is now precise, and on the pro model.** Habit verification moved
+from the fast model to `gemini-2.5-pro` — it's correctness-critical (a false tick
+corrupts the whole accountability system) and low-frequency (a sync + a debounced
+re-check per day), so pro-class reasoning is the right cost trade; nudges and
+nutrition stay on flash. Every habit now carries a free-text **`description`** (all
+categories) — the user's own definition of what counts — sent to the verifier and
+the coach. The verify prompt gained: *be specific, not generic* (a "Makiwara
+punching (evening)" habit is NOT satisfied by a Walk), *honour the description as
+binding*, and *respect time-of-day* — and the evidence payload now includes each
+session's `start_time` so the model can enforce it. The planner emits a
+`description` for the habits it proposes.
+
+**Sets/templates live inside the imported exercise.** The session detail screen
+(including a Google-imported one) gained "Add sets from a plan"
+(`applyTemplateToSession` appends a template's sets as children of the exercise —
+never a new entity), and delete is hidden for Google sessions (real data you add
+to, not remove).
+
+**Configurable daily briefings.** The morning brief / evening digest times are
+user-set (Cloud sheet → *Daily AI briefings*, default 08:00 / 20:00) instead of
+hard-coded 8/20; they're a local device preference (`saveNudgeHours`, not in the
+backup) and re-scheduled from live data on each sync. The coach Functions sheet is
+scroll-controlled so every option is reachable on small phones, and the AGE cell
+lost its 🎂.
+
+Tests: **322 Flutter + 131 backend.**

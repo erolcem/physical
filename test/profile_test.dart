@@ -71,4 +71,23 @@ void main() {
       expect(d.loadDob(), '1999-01-01');
     });
   });
+
+  group('daily AI briefing times', () {
+    test('default 8/20, saved, clamped to 0..23, and stay a LOCAL preference', () {
+      final repo = InMemoryRepository();
+      expect(repo.loadMorningNudgeHour(), 8);
+      expect(repo.loadEveningNudgeHour(), 20);
+      repo.saveNudgeHours(6, 22);
+      expect(repo.loadMorningNudgeHour(), 6);
+      expect(repo.loadEveningNudgeHour(), 22);
+      repo.saveNudgeHours(-3, 99);
+      expect(repo.loadMorningNudgeHour(), 0);
+      expect(repo.loadEveningNudgeHour(), 23);
+      // Device notification times don't ride the cloud backup.
+      expect(repoExport(repo).containsKey('morningNudge'), isFalse);
+      final restored = InMemoryRepository();
+      repoImport(restored, repoExport(repo));
+      expect(restored.loadMorningNudgeHour(), 8); // its own default, not synced
+    });
+  });
 }

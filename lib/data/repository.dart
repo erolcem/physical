@@ -88,6 +88,12 @@ abstract class Repository {
   String? loadDob(); // ISO date, YYYY-MM-DD
   void saveDob(String dob);
 
+  // Daily AI briefing times (local device preference — hour 0..23). Morning brief
+  // (day ahead) + evening digest (how today went). Defaults 8 / 20.
+  int loadMorningNudgeHour();
+  int loadEveningNudgeHour();
+  void saveNudgeHours(int morning, int evening);
+
   // AI pins — free-text goals/context the coach must always remember (the
   // Habits tab's pin section; sent with every coach request). Tombstoned like
   // other entities so a delete sticks across devices.
@@ -108,6 +114,7 @@ class InMemoryRepository implements Repository {
   final List<PinnedCorrelation> _pins = [];
   final List<AiPin> _aiPins = [];
   String? _dob;
+  int _morningNudge = 8, _eveningNudge = 20;
 
   @override
   Map<String, List<Log>> loadLogs() =>
@@ -251,6 +258,18 @@ class InMemoryRepository implements Repository {
 
   @override
   void saveDob(String dob) => _dob = dob;
+
+  @override
+  int loadMorningNudgeHour() => _morningNudge;
+
+  @override
+  int loadEveningNudgeHour() => _eveningNudge;
+
+  @override
+  void saveNudgeHours(int morning, int evening) {
+    _morningNudge = morning.clamp(0, 23);
+    _eveningNudge = evening.clamp(0, 23);
+  }
 
   @override
   List<AiPin> loadAiPins() => List.of(_aiPins);

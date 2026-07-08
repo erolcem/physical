@@ -137,6 +137,10 @@ class Habit {
   final String compare; // 'gte' (≥, default) | 'lte' (≤, e.g. calories/body-fat)
   final String? goalKey; // diet field (protein/calories/…), or an exercise-name filter
   final String unit; // display unit for the target (g, kcal, sets, /100, …)
+  // Free-text context for the AI verifier + coach: what SPECIFICALLY counts.
+  // e.g. "Evening makiwara punching session, 20+ min, heart rate up" so a random
+  // afternoon walk can't tick it. Applies to every category.
+  final String description;
   final List<String> products; // aesthetics: products/items used in this routine
   // Exercise habits can CARRY THEIR WORKOUT PLAN: the id of a WorkoutTemplate
   // (exercises + sets). On a due day the habit offers a one-tap "start" that
@@ -160,6 +164,7 @@ class Habit {
     this.compare = 'gte',
     this.goalKey,
     this.unit = '',
+    this.description = '',
     this.products = const [],
     this.templateId,
     this.time,
@@ -190,6 +195,7 @@ class Habit {
         if (compare != 'gte') 'cmp': compare,
         if (goalKey != null) 'goalKey': goalKey,
         if (unit.isNotEmpty) 'unit': unit,
+        if (description.isNotEmpty) 'desc': description,
         if (products.isNotEmpty) 'products': products,
         if (templateId != null) 'tpl': templateId,
         'time': time, 'dur': durationMins,
@@ -209,6 +215,7 @@ class Habit {
       compare: j['cmp'] as String? ?? 'gte',
       goalKey: j['goalKey'] as String?,
       unit: j['unit'] as String? ?? '',
+      description: j['desc'] as String? ?? '',
       products: [for (final p in (j['products'] as List? ?? const [])) p as String],
       templateId: j['tpl'] as String?,
       time: j['time'] as String?,

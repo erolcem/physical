@@ -428,6 +428,8 @@ def _habit_lines(habits) -> str | None:
         bits = [h.get("title", "?")]
         if h.get("section") or h.get("category"):
             bits.append(f"[{h.get('section') or h.get('category')}]")
+        if h.get("description"):
+            bits.append(f"— {str(h['description'])[:160]}")
         if h.get("target") is not None:
             cmp = "≤" if h.get("compare") == "lte" else "≥"
             meas = h.get("measured")
