@@ -665,3 +665,26 @@ scroll-controlled so every option is reachable on small phones, and the AGE cell
 lost its 🎂.
 
 Tests: **322 Flutter + 131 backend.**
+
+## 21. Full review + rank audit (July 2026)
+
+**Habits/AI review — fixes shipped.** (1) `isDueOn` ignored `createdAt`, so a new
+habit's 8-week heatmap and adherence (and the adherence reported to the coach)
+counted due days from before it existed as "missed". Added `isDueAndActive`
+(due AND on/after creation), wired into the heatmap, both adherence paths, and
+`dueStreak` (stops at the creation day). (2) AI verdicts (per habit×day) rode the
+cloud backup unbounded, pushed every sync — export now trims to the last 180 days
+(older days recompute via the rule-based check; local storage untouched).
+
+**Rank engine audit — no changes, confirmed sound.** Property + edge-case sweep:
+every standard's tier ladder is ordered, percentiles monotone and bounded, every
+extreme clamps to rank_value ∈ [0,9] and top_pct ∈ [0,100], bodyweight-scaled
+lifts guard a missing bodyweight, and empty/unknown inputs degrade to Wood. All
+directions are correct (resting_hr / body_fat / blood_pressure / eye / voice /
+sprint are lower-is-better). Headline calibration holds on realistic profiles:
+untrained→Bronze, 2–3yr lifter→Gold, competitive amateur→Champion. Owner
+decisions (kept): health targets (≤12% body fat, ≤105 systolic) award Glory as
+the attainable path to the top tier; the flagged provisional curves stay until
+validated population data is available to ground them.
+
+Tests: **327 Flutter + 131 backend.**
