@@ -347,7 +347,7 @@ List<Map<String, dynamic>> coachHabits(
         bool metOn(String day) => habitDoneOn(h, day,
             logs: logs, food: food, workouts: workouts, ticked: completions[h.id],
             aiVerdict: aiVerdicts[h.id]?[day]);
-        final dueDays = [for (final d in window) if (isDueOn(h, DateTime.parse('${d}T12:00:00'))) d];
+        final dueDays = [for (final d in window) if (isDueAndActive(h, DateTime.parse('${d}T12:00:00'))) d];
         final doneDays = {for (final d in window) if (metOn(d)) d};
         final adherence = dueDays.isEmpty
             ? null

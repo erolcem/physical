@@ -100,6 +100,30 @@ void main() {
     test('horizon caps the walk', () {
       expect(dueStreak(weekly, {'2026-06-22', '2026-06-18'}, today: wed, horizon: 3), 1);
     });
+    test('due days BEFORE the habit was created are not counted as misses', () {
+      // Created Fri 19th; the Mon before (15th) never existed as a due day, so a
+      // gap there must not break a streak that runs back to creation.
+      const w2 = Habit(id: 'w2', title: 'Lift', cadence: 'weekly', days: [1, 4],
+          createdAt: '2026-06-19T09:00:00');
+      // Due days on/after creation: Mon 22 + Thu 18? 18<19 so only Mon 22 counts.
+      expect(dueStreak(w2, {'2026-06-22'}, today: wed), 1);
+      // The pre-creation Mon 15 being undone doesn't matter — walk stops at creation.
+      expect(dueStreak(w2, {'2026-06-22', '2026-06-15'}, today: wed), 1);
+    });
+  });
+
+  group('isDueAndActive', () {
+    const h = Habit(id: 'a', title: 'x', cadence: 'weekly', days: [1, 4],
+        createdAt: '2026-06-19T09:00:00');
+    test('due + on/after creation → active', () {
+      expect(isDueAndActive(h, DateTime(2026, 6, 22)), isTrue); // Mon after creation
+    });
+    test('due but BEFORE creation → not active (no false "missed")', () {
+      expect(isDueAndActive(h, DateTime(2026, 6, 15)), isFalse); // Mon before creation
+    });
+    test('not a due weekday → not active', () {
+      expect(isDueAndActive(h, DateTime(2026, 6, 23)), isFalse); // Tue
+    });
   });
 
   group('weekly history', () {

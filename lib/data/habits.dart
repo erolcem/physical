@@ -252,6 +252,22 @@ bool isDueOn(Habit h, DateTime date) =>
 
 bool isDueToday(Habit h, {DateTime? today}) => isDueOn(h, today ?? DateTime.now());
 
+/// The habit's creation DATE-KEY (YYYY-MM-DD), or null if unparseable.
+String? _createdKey(Habit h) {
+  final d = DateTime.tryParse(h.createdAt);
+  return d == null ? null : dateKey(d);
+}
+
+/// Whether a habit was ACTIVE and due on [date]: scheduled that day AND on or
+/// after the day it was created. Days before creation are not "missed" — the
+/// habit didn't exist yet — so adherence, streaks and the heatmap must not
+/// count them (a brand-new weekly habit otherwise shows weeks of false red).
+bool isDueAndActive(Habit h, DateTime date) {
+  if (!isDueOn(h, date)) return false;
+  final created = _createdKey(h);
+  return created == null || dateKey(date).compareTo(created) >= 0;
+}
+
 /// Two-step verification: a ticked habit is [verified] when its `verify` rule is
 /// corroborated by the day's data, else [manual]; untouched is [notDone].
 HabitStatus statusFor(Habit h,
@@ -306,10 +322,13 @@ int dueStreak(Habit h, Set<String> done, {DateTime? today, int horizon = 366}) {
   final t = today ?? DateTime.now();
   var d = DateTime(t.year, t.month, t.day);
   final todayK = dateKey(d);
+  final created = _createdKey(h);
   var streak = 0;
   for (var i = 0; i < horizon; i++) {
+    final key = dateKey(d);
+    // Stop at the habit's creation day — earlier due days never existed.
+    if (created != null && key.compareTo(created) < 0) break;
     if (isDueOn(h, d)) {
-      final key = dateKey(d);
       if (done.contains(key)) {
         streak++;
       } else if (key != todayK) {

@@ -84,7 +84,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
   // store done=false for "Train"; logging the workout that afternoon would then
   // sit UNDER the stale verdict until the next sync. Whenever local evidence
   // changes (a set logged, food imported), re-run the verification for today —
-  // debounced so a burst of set-logging becomes one cheap (flash-tier) call. ──
+  // debounced so a burst of set-logging becomes a single verification call. ──
   Timer? _verifyDebounce;
   bool _verifyInFlight = false;
 
