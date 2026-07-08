@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import '../data/ai_verify.dart' show runAiVerification;
-import '../data/habits.dart' show Habit;
+import '../data/habits.dart' show Habit, todayKey;
 import '../data/notifications.dart';
 import '../data/profile.dart' show syncAgeFromDob;
 import '../data/sync.dart' show apiClientProvider, cloudSync;
@@ -26,16 +26,22 @@ class MainScreen extends ConsumerStatefulWidget {
 }
 
 class _MainScreenState extends ConsumerState<MainScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
 
-  bool _autoSynced = false;
+  // The day of the last successful sync — so a resume the NEXT day re-syncs
+  // (refreshing Google data, AI verdicts and the morning/evening briefings).
+  // Without this, backgrounding the app overnight left everything stale until a
+  // full restart, since launch-sync only ran once.
+  String? _lastSyncDay;
+  bool _syncing = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    // Auto-sync once on launch (best-effort, silent) so the app opens up to date.
+    WidgetsBinding.instance.addObserver(this);
+    // Auto-sync on launch (best-effort, silent) so the app opens up to date.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Age derives from DOB — refresh on launch so birthdays auto-correct.
       if (syncAgeFromDob(ref.read(repositoryProvider)) != null) {
@@ -45,15 +51,31 @@ class _MainScreenState extends ConsumerState<MainScreen>
     });
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Reopening on a new day → refresh data + briefings (no background push, so
+    // this resume is our chance to keep the day's brief current).
+    if (state == AppLifecycleState.resumed && _lastSyncDay != todayKey()) {
+      if (syncAgeFromDob(ref.read(repositoryProvider)) != null) {
+        ref.read(logsProvider.notifier).reload();
+      }
+      _autoSync();
+    }
+  }
+
   Future<void> _autoSync() async {
-    if (_autoSynced) return;
-    _autoSynced = true;
+    // Once per day, and never two at once.
+    if (_syncing || _lastSyncDay == todayKey()) return;
+    _syncing = true;
     try {
       final api = ref.read(apiClientProvider);
       await api.loadPersistedToken();
       if (!api.isSignedIn || !mounted) return;
       await cloudSync(ref); // pulls Google + merges/pushes the backup, refreshing providers
-    } catch (_) {/* launch sync is best-effort — the ☁ button is always there */}
+      _lastSyncDay = todayKey(); // only mark done on a real sync
+    } catch (_) {/* best-effort — the ☁ button is always there */} finally {
+      _syncing = false;
+    }
   }
 
   // ── Automatic Google Calendar mirror: whenever the habit LIST changes (add /
@@ -110,6 +132,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _verifyDebounce?.cancel();
     _calendarDebounce?.cancel();
     _tabController.dispose();
