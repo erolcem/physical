@@ -12,16 +12,21 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'habits.dart';
 
-/// A daily reminder derived from a timed habit.
+/// A reminder derived from a timed habit. [weekday] null = daily; 1..7 = weekly
+/// on that weekday (Mon..Sun) — so a weekly habit only nags on its due days.
 class HabitReminder {
   final int id;
   final String title;
   final int hour;
   final int minute;
-  const HabitReminder(this.id, this.title, this.hour, this.minute);
+  final int? weekday;
+  const HabitReminder(this.id, this.title, this.hour, this.minute, {this.weekday});
 }
 
-/// Pure: the reminders to schedule for the current habits (timed ones only).
+/// Pure: the reminders to schedule for the current habits (timed ones only). A
+/// weekly habit expands to ONE reminder per due weekday; a daily habit to one.
+/// Bug fixed: previously every timed habit got a daily-repeating reminder, so a
+/// weekly Mon/Thu habit fired every day.
 List<HabitReminder> habitReminders(List<Habit> habits) {
   final out = <HabitReminder>[];
   for (final h in habits) {
@@ -31,7 +36,14 @@ List<HabitReminder> habitReminders(List<Habit> habits) {
     final hh = int.tryParse(p[0]);
     final mm = p.length > 1 ? int.tryParse(p[1]) : 0;
     if (hh == null || mm == null) continue;
-    out.add(HabitReminder(h.id.hashCode & 0x7fffffff, h.title, hh, mm));
+    if (h.cadence == 'weekly' && h.days.isNotEmpty) {
+      for (final d in h.days) {
+        // Object.hash(id, weekday) keeps ids distinct per (habit, day).
+        out.add(HabitReminder(Object.hash(h.id, d) & 0x7fffffff, h.title, hh, mm, weekday: d));
+      }
+    } else {
+      out.add(HabitReminder(Object.hash(h.id, 0) & 0x7fffffff, h.title, hh, mm));
+    }
   }
   return out;
 }
@@ -80,13 +92,23 @@ class NotificationService {
     for (final r in habitReminders(habits)) {
       final now = tz.TZDateTime.now(tz.local);
       var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, r.hour, r.minute);
-      if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
+      if (r.weekday != null) {
+        // Advance to the next occurrence of the due weekday, then repeat weekly.
+        while (when.weekday != r.weekday || !when.isAfter(now)) {
+          when = when.add(const Duration(days: 1));
+        }
+      } else if (!when.isAfter(now)) {
+        when = when.add(const Duration(days: 1));
+      }
       await _plugin.zonedSchedule(
         r.id, 'Physical', 'Time for: ${r.title}', when, details,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time, // repeat daily
+        // Weekly habits repeat on their weekday; daily habits repeat every day.
+        matchDateTimeComponents: r.weekday != null
+            ? DateTimeComponents.dayOfWeekAndTime
+            : DateTimeComponents.time,
       );
     }
     await _scheduleAllNudges(); // re-apply cached AI nudges (cancelAll dropped them)
