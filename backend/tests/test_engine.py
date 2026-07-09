@@ -70,3 +70,51 @@ def test_rank_sanity_ideal_targets_plateau_not_reward_extremes():
         below = E.tier_of(mid, ideal * 0.7)["rank_value"]
         assert at < 9.0 and abs(below - at) < 1e-9, mid
         assert E.tier_of(mid, ideal * 2.0)["rank_value"] < at - 2, mid
+
+
+# ── Accessory-lift immersion (est-1RM change) — lock in the calibration ──────
+# Accessories now rank on capped est-1RM like the compounds. These pin the
+# verified behaviour so the anchors/formula can't silently drift.
+
+_ISO = ["curl", "lateral_raise", "skull_crusher", "forearm_curl"]
+
+
+def test_accessory_est1rm_rewards_strength_over_grinding():
+    for mid in _ISO:
+        assert E.strength_value(mid, 12.5, 8) > E.strength_value(mid, 10, 12), mid
+    # Reps beyond 12 are capped — no runaway inflation from high-rep grinding.
+    assert E.strength_value("curl", 20, 12) == E.strength_value("curl", 20, 30)
+
+
+def test_accessory_realistic_sets_land_in_sane_tiers():
+    bw = 80
+    def rv(mid, w, r):
+        return E.tier_of(mid, E.strength_value(mid, w, r), bw)["rank_value"]
+    # A weak beginner set is low; a solid intermediate set is mid; a strong set is high.
+    assert rv("curl", 8, 12) < 1.5                    # ~11kg 1RM — novice
+    assert 3.0 < rv("curl", 20, 8) < 5.0              # ~25kg 1RM — intermediate Gold/Plat
+    assert rv("curl", 40, 4) > 5.0                    # ~44kg 1RM — advanced Diamond+
+    assert 3.0 < rv("lateral_raise", 10, 12) < 5.0    # a real 10kg lateral raise → Gold/Plat
+    assert rv("skull_crusher", 20, 10) > 3.0
+
+
+def test_accessory_glory_requires_an_elite_load_not_rep_grinding():
+    bw = 80
+    def rv(mid, w, r):
+        return E.tier_of(mid, E.strength_value(mid, w, r), bw)["rank_value"]
+    # Grinding light weight for many reps never approaches Glory (the old bug).
+    assert rv("curl", 12, 12) < 6.0
+    assert rv("lateral_raise", 8, 15) < 6.0
+    # Glory (rv ≥ 8) needs a genuinely elite load — for a curl that's ~1x+ bodyweight.
+    assert rv("curl", 80, 5) >= 8.0
+
+
+def test_accessories_do_not_wildly_distort_the_strength_category():
+    L = lambda mid, w, r: E.Log(mid, E.strength_value(mid, w, r), 80)
+    compounds = [L("bench", 90, 5), L("squat", 125, 5), L("deadlift", 160, 5), L("ohp", 55, 5)]
+    accessories = [L("curl", 20, 10), L("lateral_raise", 10, 12),
+                   L("skull_crusher", 25, 10), L("forearm_curl", 20, 12)]
+    comp = E.overall(compounds)["rank_value"]
+    both = E.overall(compounds + accessories)["rank_value"]
+    # Adding accessories shifts the category by less than a full tier — no distortion.
+    assert abs(both - comp) < 1.0
