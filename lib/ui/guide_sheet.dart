@@ -15,46 +15,48 @@ const _muted = Color(0xFF8A90B0);
 const String guideText = '''
 WELCOME TO PHYSICAL
 Physical is a quest; to get your body to the highest rank possible. 
-Ranks are based on every trainable dimension of your body and compared against
-the general young-male population.
+Ranks are based on all the relevant aspects of your body.
+They are grounded against the general young-male population.
 Will you achieve the highest rank your body can be?
 
 HOME
 Here is where you will see your ranks,
-At the top are the overall rank and the four category ranks (Strength, Performance, Recovery,
-Aesthetics).
-Below are body figures coloured by rank, they house individual ranks. 
-Tap any metric or muscle to open its detail — log a value, see the tier ladder, and read how it's measured.
+At the top is the overall rank.
+Click on it to view the four category ranks (Strength, Performance, Recovery, Aesthetics).
+Below that are body figures coloured by rank to show individual metrics. 
+At the bottom is an individual box layout separated by categories too.
+Tap any metric or muscle to open its detail. 
+You can log, see the tiers, and read how each metric is measured.
+Some metrics are measured automatically.
+However for the rest, it will be up to you to log what you do everyday.
 
 PROGRESS
 To help on your quest, presented here is everything data related.
 Every metric, graphable over time. 
 This includes metrics that aren't ranked.
-You can plot, compare and also see diet, sleep and exercise here too.
+You can plot, compare and also see diet, sleep and exercises here too.
+You will also need to log exercise sets here for context for the next part.
 
 HABITS
 Helping you stay accountable too, are the habits section.
-Build a daily/weekly checklist. 
-Auto-verified habits (sleep, training, diet, steps…) tick
-themselves from your real data — you can't just tap them done. 
-Manual habits (skincare,journaling…) you tick yourself. 
-The timeline shows your day; "Calendar" pushes habits to
-your Google Calendar; reminders + an AI nudge keep you accountable.
+It is here to build a daily/weekly checklist. 
+Auto-verified habits tick themselves from your real data.
+But there are some manual habits you tick yourself. 
+habits are pushed to your Google Calendar
+With also reminders + an AI nudge keep you accountable.
 
 COACH
 To aid you even further, is an AI to iterate on your data and habits.
 It continuously takes initiative to improve your habits for your quest.
-Your AI coach sees your ranks, full history, trends, correlations, workout sets and
-habits — and never your identity. 
-Ask anything, or use a function (sleep review, find
-correlations, weekly review…). It can propose habit changes you apply in one tap.
+Your AI coach sees your ranks, full history, trends, correlations, workout sets and habits. 
+Ask anything, and it can propose habit changes you apply in one tap.
+It will also allow context to be saved and pinned for specialisation.
 
-SYNC (top-right ☁)
+SYNC
 This step 1 connected your account and your smart watch data. 
-Sign in with Google to back up everything and make sure to pull your Google Health / Fitbit data
-(sleep, HRV, steps, weight, nutrition). 
+Sign in with Google to back up everything and make sure to pull your Google Health / Fitbit data.
 Your data stays local-first; sync just keeps your devices in step. Reconnect here if Google asks.
-exercise, diet and sleep data, and a lot of recovery data automatically and exclusively comes from google health.
+Exercise, diet and sleep data, and a lot of recovery data automatically and exclusively comes from google health.
 
 ''';
 
