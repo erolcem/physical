@@ -223,7 +223,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
                 const SizedBox(height: 4),
                 Text(
                     isolationLifts.contains(m.id)
-                        ? '⚠ Ranked by working-set volume (weight × reps), not a 1RM — a provisional standard for isolation lifts.'
+                        ? '⚠ Ranked by estimated 1RM from your working set (reps capped at 12) — a provisional standard for isolation lifts.'
                         : '⚠ Provisional standard — this rank is an estimate.',
                     style: TextStyle(color: Colors.amber.withValues(alpha: 0.8), fontSize: 11, fontWeight: FontWeight.w500)),
               ],

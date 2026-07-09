@@ -127,9 +127,12 @@ void main() {
       expect(eng.est1rm(0, 5), 0);
       expect(eng.est1rm(100, 0), 0);
     });
-    test('isolation lifts use rep-volume (weight×reps), compounds use est1rm', () {
-      expect(eng.strengthValue('curl', 15, 12), 180); // rep-volume, not 1RM
-      expect(eng.strengthValue('lateral_raise', 10, 15), 150);
+    test('EVERY lift ranks on est-1RM now (accessories included) — rewards strength', () {
+      // Est-1RM, not rep-volume: a heavier set for fewer reps out-ranks lighter/more.
+      expect(eng.strengthValue('curl', 15, 12), eng.est1rm(15, 12));
+      expect(eng.strengthValue('curl', 12.5, 8),
+          greaterThan(eng.strengthValue('curl', 10, 12))); // strength beats grinding
+      expect(eng.strengthValue('lateral_raise', 10, 15), eng.est1rm(10, 15));
       expect(eng.strengthValue('bench', 100, 5), eng.est1rm(100, 5)); // compound unchanged
     });
   });

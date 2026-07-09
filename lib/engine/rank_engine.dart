@@ -170,9 +170,8 @@ Standard _strengthMix(String mid, double unR, double trR, String note) {
 }
 
 // !! PROVISIONAL — see STANDARDS_METHODOLOGY.md. Tuning is a data edit. !!
-// Isolation rep-volume anchors = prior 1RM ratios × _workingSet (a ~12-rep @
-// ~70% 1RM working set, vload = 1RM × ~8.4). Keep in sync with the Python engine.
-const double _workingSet = 8.4;
+// Isolation lifts rank on estimated-1RM (reps capped at 12) like the compounds —
+// anchors are 1RM ratios × bodyweight. Keep in sync with the Python engine.
 final Map<String, Standard> standards = {
   'bench': _strengthMix('bench', 0.50, 1.15, 'mix untrained0.50/trained1.15'),
   'squat': _strengthMix('squat', 0.75, 1.60, 'mix untrained0.75/trained1.60'),
@@ -195,10 +194,10 @@ final Map<String, Standard> standards = {
       '5k speed vs general pop (selection-bias corrected), FLAG'),
   'hrv': Standard('hrv', 1, false, Dist('lognormal', math.log(50), 0.5),
       'HRV ms — method-dependent, FLAG'),
-  'lateral_raise': _strengthMix('lateral_raise', 0.1 * _workingSet, 0.3 * _workingSet, 'rep-volume isolation, provisional'),
-  'curl': _strengthMix('curl', 0.2 * _workingSet, 0.5 * _workingSet, 'rep-volume isolation, provisional'),
-  'skull_crusher': _strengthMix('skull_crusher', 0.2 * _workingSet, 0.5 * _workingSet, 'rep-volume isolation, provisional'),
-  'forearm_curl': _strengthMix('forearm_curl', 0.2 * _workingSet, 0.4 * _workingSet, 'rep-volume isolation, provisional'),
+  'lateral_raise': _strengthMix('lateral_raise', 0.1, 0.3, 'est-1RM isolation, provisional'),
+  'curl': _strengthMix('curl', 0.2, 0.5, 'est-1RM isolation, provisional'),
+  'skull_crusher': _strengthMix('skull_crusher', 0.2, 0.5, 'est-1RM isolation, provisional'),
+  'forearm_curl': _strengthMix('forearm_curl', 0.2, 0.4, 'est-1RM isolation, provisional'),
   'pullup': _strengthMix('pullup', 0.8, 1.5, 'provisional'),
   'hip_thrust': _strengthMix('hip_thrust', 1.0, 2.5, 'provisional'),
   'rdl': _strengthMix('rdl', 0.8, 1.8, 'provisional'),
@@ -435,17 +434,13 @@ double est1rm(double weight, int reps) {
   return (v * 100).round() / 100;
 }
 
-// Isolation lifts rank on rep-volume-at-load (weight × reps), not an unreliable
-// estimated 1RM (STANDARDS_METHODOLOGY §2). Keep in sync with physical_rank_engine.py.
+// Isolation lifts — kept only to flag "est. from a working set" in the UI (you
+// rarely true-1RM a curl). They rank on est-1RM like everything else now.
 const Set<String> isolationLifts = {
   'lateral_raise', 'curl', 'skull_crusher', 'forearm_curl'
 };
 
-/// Canonical strength quantity for ranking: rep-volume for isolation lifts,
-/// estimated 1RM otherwise.
-double strengthValue(String metricId, double weight, int reps) {
-  if (isolationLifts.contains(metricId)) {
-    return weight > 0 && reps > 0 ? (weight * reps * 100).round() / 100 : 0;
-  }
-  return est1rm(weight, reps);
-}
+/// Canonical strength quantity for ranking: estimated 1RM for EVERY lift
+/// (accessories included, reps capped at 12). Rewards strength over rep-grinding.
+double strengthValue(String metricId, double weight, int reps) =>
+    est1rm(weight, reps);

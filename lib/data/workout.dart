@@ -52,6 +52,13 @@ class WorkoutSet {
   double get volume =>
       (mode == SetMode.weightReps && weight != null && reps != null) ? weight! * reps! : 0.0;
 
+  /// An unfilled slot — a planned set with no values yet (from a template). You
+  /// tap it in the session to log what you actually did.
+  bool get isBlank => weight == null && reps == null && seconds == null && distance == null;
+
+  /// A value-stripped copy — the structure only (name + mode), for templates.
+  WorkoutSet blankCopy() => WorkoutSet(name: name, mode: mode);
+
   String get detail => switch (mode) {
         SetMode.weightReps =>
           '${_n(weight)} kg × ${reps ?? '?'}',
@@ -209,6 +216,12 @@ class WorkoutTemplate {
   int get setCount => sets.length;
   Set<String> get exercises => {for (final s in sets) s.name};
 
+  /// The template's structure as EMPTY set slots (name + mode, no values) — what
+  /// gets dropped into a session so you fill in the real weight/reps as you lift.
+  /// Value-stripped defensively so a legacy/AI template with numbers still yields
+  /// blanks (you can't predict a future workout's loads).
+  List<WorkoutSet> get blankSets => [for (final s in sets) s.blankCopy()];
+
   Map<String, dynamic> toJson() => {
         'id': id, 'name': name, 'type': type,
         'sets': [for (final s in sets) s.toJson()],
@@ -224,13 +237,15 @@ class WorkoutTemplate {
         ],
       );
 
-  /// Snapshot a finished session's sets as a reusable template.
+  /// Snapshot a finished session's STRUCTURE as a reusable template — the
+  /// exercises and how many sets of each, but NOT the weights/reps (those are
+  /// what you fill in fresh each time; a template is a plan, not a prediction).
   factory WorkoutTemplate.fromSession(WorkoutSession s, {required String name}) =>
       WorkoutTemplate(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         name: name,
         type: s.type,
-        sets: List.of(s.sets),
+        sets: [for (final st in s.sets) st.blankCopy()],
       );
 }
 

@@ -12,7 +12,7 @@ import 'diet_screen.dart';
 import 'sleep_screen.dart';
 import 'exercise_screen.dart' show openExerciseScreen;
 import '../data/diet.dart' show todayDiet;
-import '../data/workout.dart' show sortedByRecent, sessionsOverDays;
+import '../data/workout.dart' show sortedByRecent, sessionsOverDays, volumePerDay;
 import '../data/readiness.dart' show readinessLabel, readinessColorValue;
 import '../state/log_providers.dart' show workoutProvider, dailyReadinessProvider, dietProvider;
 import 'package:fl_chart/fl_chart.dart';
@@ -201,9 +201,15 @@ class _ExerciseCard extends ConsumerWidget {
     final sessions = ref.watch(workoutProvider);
     final recent = sortedByRecent(sessions);
     final last = recent.isEmpty ? null : recent.first;
+    // A 7-day training-volume sparkbar — the section's own header bar, like Sleep
+    // (hours) / Readiness (score) / Health (rank) each carry.
+    final vol = volumePerDay(sessions, days: 7); // oldest→newest
+    final maxVol = vol.fold(0.0, (a, b) => b > a ? b : a);
+    final weekVol = vol.fold(0.0, (a, b) => a + b);
     final subtitle = last == null
         ? 'No workouts yet · tap to start'
-        : 'Last: ${last.label} · ${sessionsOverDays(sessions, days: 7)} this week';
+        : 'Last: ${last.label} · ${sessionsOverDays(sessions, days: 7)} this week'
+            '${weekVol > 0 ? ' · ${(weekVol / 1000).toStringAsFixed(1)}k kg vol' : ''}';
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
@@ -233,6 +239,26 @@ class _ExerciseCard extends ConsumerWidget {
                   const Text('Exercise', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                   const SizedBox(height: 2),
                   Text(subtitle, style: const TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
+                  if (maxVol > 0) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 20,
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        for (final v in vol) ...[
+                          Expanded(
+                            child: Container(
+                              height: (2 + 18 * (v / maxVol)).clamp(2.0, 20.0),
+                              decoration: BoxDecoration(
+                                color: v > 0 ? c : c.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 3),
+                        ],
+                      ]),
+                    ),
+                  ],
                 ]),
               ),
               const Icon(Icons.chevron_right, color: _muted),

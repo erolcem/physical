@@ -9,6 +9,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../data/diet.dart';
 import '../data/habits.dart' show todayKey, lastNDays;
 import '../data/metrics.dart' show MetricDef, MetricTier;
+import '../data/api_client.dart' show InferredNutrition;
 import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart' show activeCaloriesOn;
 import '../engine/rank_engine.dart' show Log;
@@ -39,7 +40,14 @@ class DietScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(backgroundColor: _bg, title: const Text('Diet')),
-      // No manual "Log food" — food is auto-imported from Google Health (nutrition-log).
+      // Food auto-imports from Google Health; this adds anything the watch missed
+      // by describing it — the AI fills in calories, macros and the health radar.
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: _accent,
+        onPressed: () => _addFoodAi(context, ref),
+        icon: const Icon(Icons.auto_awesome, size: 20),
+        label: const Text('Add food'),
+      ),
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
         const _DietHealthEnricher(),
         _totals(t),
@@ -71,6 +79,97 @@ class DietScreen extends ConsumerWidget {
         const _DietMetricGraph(),
       ]),
     );
+  }
+
+  // AI food entry: describe a meal → Gemini infers kcal/macros + the health radar
+  // → confirm → save as a FoodEntry. The manual path the watch can't cover.
+  Future<void> _addFoodAi(BuildContext context, WidgetRef ref) async {
+    final ctrl = TextEditingController();
+    final desc = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _card,
+        title: const Text('Add food'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Describe what you ate — the AI fills in calories, macros and '
+              'the diet-health radar.', style: TextStyle(fontSize: 12.5, color: _muted)),
+          const SizedBox(height: 12),
+          TextField(controller: ctrl, autofocus: true, minLines: 1, maxLines: 3,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+                hintText: 'e.g. two eggs on sourdough with avocado',
+                border: OutlineInputBorder())),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Analyse')),
+        ],
+      ),
+    );
+    if (desc == null || desc.isEmpty || !context.mounted) return;
+    final api = ref.read(apiClientProvider);
+    showDialog(context: context, barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()));
+    InferredNutrition? n;
+    String? err;
+    try {
+      await api.loadPersistedToken();
+      if (!api.isSignedIn) {
+        err = 'Sign in (☁) to use AI food entry.';
+      } else {
+        n = await api.inferNutrition(desc);
+      }
+    } catch (_) {
+      err = 'Couldn\'t analyse that — check your connection and try again.';
+    }
+    if (context.mounted) Navigator.of(context).pop(); // dismiss the spinner
+    if (!context.mounted) return;
+    if (n == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(err ?? 'AI food entry unavailable.')));
+      return;
+    }
+    await _confirmFood(context, ref, desc, n);
+  }
+
+  Future<void> _confirmFood(
+      BuildContext context, WidgetRef ref, String desc, InferredNutrition n) async {
+    final nameCtrl = TextEditingController(text: desc);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _card,
+        title: const Text('Confirm food'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          TextField(controller: nameCtrl,
+              decoration: const InputDecoration(labelText: 'Name', border: OutlineInputBorder())),
+          const SizedBox(height: 14),
+          Text('${n.calories.round()} kcal',
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: _gold)),
+          const SizedBox(height: 4),
+          Text('Protein ${n.protein.round()}g · Carbs ${n.carbs.round()}g · '
+              'Fat ${n.fat.round()}g · Fibre ${n.fibre.round()}g',
+              style: const TextStyle(fontSize: 12.5, color: _muted)),
+          const SizedBox(height: 8),
+          const Text('AI estimate — tweak the name if needed.',
+              style: TextStyle(fontSize: 11, color: _muted)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    ref.read(dietProvider.notifier).add(
+          name: nameCtrl.text.trim().isEmpty ? desc : nameCtrl.text.trim(),
+          calories: n.calories, protein: n.protein, carbs: n.carbs,
+          fat: n.fat, fibre: n.fibre, micros: n.micros, health: n.health,
+        );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Food added.'), duration: Duration(seconds: 2)));
+    }
   }
 
   Widget _totals(DietTotals t) {

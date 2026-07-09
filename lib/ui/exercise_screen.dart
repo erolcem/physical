@@ -594,7 +594,7 @@ class SessionDetailScreen extends ConsumerWidget {
           const Padding(padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(child: Text('No sets yet — add one below.', style: TextStyle(color: _muted))))
         else
-          for (final e in grouped.entries) _exerciseBlock(ref, s, e.key, e.value),
+          for (final e in grouped.entries) _exerciseBlock(context, ref, s, e.key, e.value),
       ]),
     );
   }
@@ -632,23 +632,41 @@ class SessionDetailScreen extends ConsumerWidget {
         Text(l, style: const TextStyle(fontSize: 10, color: _muted)),
       ]);
 
-  Widget _exerciseBlock(WidgetRef ref, WorkoutSession s, String name, List<WorkoutSet> sets) => Card(
+  Widget _exerciseBlock(BuildContext context, WidgetRef ref, WorkoutSession s, String name, List<WorkoutSet> sets) => Card(
         color: _card,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
             const SizedBox(height: 4),
+            // Tap any set to edit it in place (Hevy-style); a blank slot (from a
+            // template) reads "Tap to log" until you fill in what you lifted.
             for (final set in sets)
-              Row(children: [
-                const Text('•  ', style: TextStyle(color: _muted)),
-                Expanded(child: Text(set.detail, style: const TextStyle(fontSize: 13))),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 16, color: _muted),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => ref.read(workoutProvider.notifier).removeSet(s.id, s.sets.indexOf(set)),
-                ),
-              ]),
+              InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: () async {
+                  final idx = s.sets.indexOf(set);
+                  final edited = await promptWorkoutSet(context, initial: set);
+                  if (edited != null) ref.read(workoutProvider.notifier).updateSet(s.id, idx, edited);
+                },
+                child: Row(children: [
+                  Icon(set.isBlank ? Icons.radio_button_unchecked : Icons.circle,
+                      size: 8, color: set.isBlank ? _muted : _teal),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(set.isBlank ? 'Tap to log weight × reps' : set.detail,
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontStyle: set.isBlank ? FontStyle.italic : FontStyle.normal,
+                            color: set.isBlank ? _muted : Colors.white)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 16, color: _muted),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => ref.read(workoutProvider.notifier).removeSet(s.id, s.sets.indexOf(set)),
+                  ),
+                ]),
+              ),
           ]),
         ),
       );
@@ -723,16 +741,21 @@ class SessionDetailScreen extends ConsumerWidget {
   }
 }
 
-/// Shared "describe one set" dialog (exercise name + mode + values) — used when
-/// logging into a session and when editing a workout plan (template).
-Future<WorkoutSet?> promptWorkoutSet(BuildContext context, {String? initialName}) async {
-  final name = TextEditingController(text: initialName ?? '');
-  var mode = SetMode.weightReps;
-  final weight = TextEditingController();
-  final reps = TextEditingController();
-  final mins = TextEditingController();
-  final secs = TextEditingController();
-  final dist = TextEditingController();
+/// Shared "describe one set" dialog (exercise name + mode + values). Used to log
+/// a new set and to EDIT an existing one ([initial] pre-fills every field, e.g.
+/// tapping a blank template slot to fill in the weight/reps you actually lifted).
+Future<WorkoutSet?> promptWorkoutSet(BuildContext context,
+    {String? initialName, WorkoutSet? initial}) async {
+  final name = TextEditingController(text: initial?.name ?? initialName ?? '');
+  var mode = initial?.mode ?? SetMode.weightReps;
+  String n(num? v) => v == null ? '' : (v == v.roundToDouble() ? v.toInt().toString() : v.toString());
+  final weight = TextEditingController(text: n(initial?.weight));
+  final reps = TextEditingController(text: n(initial?.reps));
+  final mins = TextEditingController(
+      text: initial?.seconds != null ? '${(initial!.seconds! ~/ 60)}' : '');
+  final secs = TextEditingController(
+      text: initial?.seconds != null ? n(initial!.seconds! % 60) : '');
+  final dist = TextEditingController(text: n(initial?.distance));
 
   final ok = await showDialog<bool>(
     context: context,
@@ -750,10 +773,11 @@ Future<WorkoutSet?> promptWorkoutSet(BuildContext context, {String? initialName}
             );
         return AlertDialog(
           backgroundColor: _card,
-          title: const Text('Add set'),
+          title: Text(initial != null ? 'Edit set' : 'Add set'),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              TextField(controller: name, autofocus: initialName == null, decoration: const InputDecoration(
+              TextField(controller: name, autofocus: initialName == null && initial == null,
+                  decoration: const InputDecoration(
                   labelText: 'Exercise', hintText: 'e.g. Chest Press', border: OutlineInputBorder())),
               const SizedBox(height: 12),
               const Text('Mode', style: TextStyle(fontSize: 11, color: _muted)),
@@ -781,7 +805,8 @@ Future<WorkoutSet?> promptWorkoutSet(BuildContext context, {String? initialName}
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Add')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true),
+                child: Text(initial != null ? 'Save' : 'Add')),
           ],
         );
       },
@@ -834,6 +859,59 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
     Navigator.of(context).pop(t.id);
   }
 
+  // Add an exercise to the plan: its name + how many sets + the set mode. This
+  // produces EMPTY slots (no weight/reps) — a template is a plan, not a
+  // prediction of the loads you'll hit.
+  Future<List<WorkoutSet>?> _promptExercise(BuildContext context) async {
+    final name = TextEditingController();
+    var count = 3;
+    var mode = SetMode.weightReps;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          backgroundColor: _card,
+          title: const Text('Add exercise'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              TextField(controller: name, autofocus: true, decoration: const InputDecoration(
+                  labelText: 'Exercise', hintText: 'e.g. Bench Press', border: OutlineInputBorder())),
+              const SizedBox(height: 14),
+              Row(children: [
+                const Text('Sets', style: TextStyle(fontSize: 13, color: _muted)),
+                const Spacer(),
+                IconButton(icon: const Icon(Icons.remove_circle_outline, color: _muted),
+                    onPressed: () => setLocal(() => count = count > 1 ? count - 1 : 1)),
+                Text('$count', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                IconButton(icon: const Icon(Icons.add_circle_outline, color: _teal),
+                    onPressed: () => setLocal(() => count = count < 12 ? count + 1 : 12)),
+              ]),
+              const SizedBox(height: 4),
+              const Text('Mode', style: TextStyle(fontSize: 11, color: _muted)),
+              const SizedBox(height: 6),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final m in SetMode.values)
+                  ChoiceChip(
+                    label: Text(m.label, style: const TextStyle(fontSize: 12)),
+                    selected: mode == m,
+                    onSelected: (_) => setLocal(() => mode = m),
+                    selectedColor: _accent.withValues(alpha: 0.25),
+                    backgroundColor: _bg,
+                  ),
+              ]),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Add')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || name.text.trim().isEmpty) return null;
+    return [for (var i = 0; i < count; i++) WorkoutSet(name: name.text.trim(), mode: mode)];
+  }
+
   @override
   Widget build(BuildContext context) {
     final grouped = groupByExercise(_sets);
@@ -876,11 +954,11 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
         backgroundColor: _teal,
         foregroundColor: Colors.black,
         onPressed: () async {
-          final s = await promptWorkoutSet(context);
-          if (s != null) setState(() => _sets.add(s));
+          final added = await _promptExercise(context);
+          if (added != null) setState(() => _sets.addAll(added));
         },
         icon: const Icon(Icons.add),
-        label: const Text('Add set'),
+        label: const Text('Add exercise'),
       ),
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 96), children: [
         TextField(
@@ -905,8 +983,9 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
         if (_sets.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: Text('No sets yet — add the planned sets below.',
-                style: TextStyle(color: _muted))))
+            child: Center(child: Text('Add the exercises and how many sets of each — '
+                'the loads are filled in when you actually train.',
+                textAlign: TextAlign.center, style: TextStyle(color: _muted))))
         else
           for (final e in grouped.entries)
             Card(
@@ -915,29 +994,29 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
                 padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(children: [
-                    Expanded(child: Text(e.key,
+                    Expanded(child: Text('${e.key}  ·  ${e.value.length} set${e.value.length == 1 ? '' : 's'}',
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15))),
                     IconButton(
-                      tooltip: 'Add a set of ${e.key}',
+                      tooltip: 'One more set of ${e.key}',
                       icon: const Icon(Icons.add, size: 18, color: _teal),
                       visualDensity: VisualDensity.compact,
-                      onPressed: () async {
-                        final s = await promptWorkoutSet(context, initialName: e.key);
-                        if (s != null) setState(() => _sets.add(s));
-                      },
+                      onPressed: () => setState(() => _sets.add(WorkoutSet(name: e.key, mode: e.value.first.mode))),
+                    ),
+                    IconButton(
+                      tooltip: 'One fewer set',
+                      icon: const Icon(Icons.remove, size: 18, color: _muted),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => setState(() => _sets.remove(e.value.last)),
+                    ),
+                    IconButton(
+                      tooltip: 'Remove ${e.key}',
+                      icon: const Icon(Icons.close, size: 16, color: _muted),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => setState(() => _sets.removeWhere((x) => x.name == e.key)),
                     ),
                   ]),
-                  const SizedBox(height: 4),
-                  for (final set in e.value)
-                    Row(children: [
-                      const Text('•  ', style: TextStyle(color: _muted)),
-                      Expanded(child: Text(set.detail, style: const TextStyle(fontSize: 13))),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 16, color: _muted),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => setState(() => _sets.remove(set)),
-                      ),
-                    ]),
+                  Text('Empty slots — you fill in the weight × reps when you train.',
+                      style: TextStyle(fontSize: 11, color: _muted.withValues(alpha: 0.8))),
                 ]),
               ),
             ),

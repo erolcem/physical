@@ -816,7 +816,7 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
           if (isolationLifts.contains(_metric.id))
             const Padding(
               padding: EdgeInsets.only(top: 6),
-              child: Text('Scored by working-set volume: weight × reps',
+              child: Text('Log a working set — ranked by estimated 1RM (reps capped at 12)',
                   style: TextStyle(fontSize: 11, color: Colors.grey)),
             ),
           const SizedBox(height: 8),

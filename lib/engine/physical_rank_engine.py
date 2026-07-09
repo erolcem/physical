@@ -116,13 +116,12 @@ _GRIP_CV = 0.18
 _P_TRAIN = 0.22
 _TR_CV = 0.30
 
-# Isolation lifts are ranked on REP-VOLUME-AT-LOAD (weight × reps), not an
-# estimated 1RM (unreliable for the high-rep work they get — STANDARDS_METHODOLOGY
-# §2). Their standard anchors are the prior 1RM ratios × _WORKING_SET, a
-# representative ~12-rep @ ~70% 1RM set (vload = 1RM × ~8.4), so a standard working
-# set lands at the same percentile while real rep/load variation scores honestly.
+# Isolation lifts are ranked on ESTIMATED 1RM like every other lift (reps capped
+# at 12, where Epley stays reliable) — so ranking rewards STRENGTH, not
+# rep-grinding (12.5kg×8 out-ranks 10kg×12). Their standard anchors are 1RM ratios
+# x bodyweight, the same form as the compounds. `_ISOLATION` is kept only to flag
+# these as "estimate from a working set" in the UI (you rarely true-1RM a curl).
 _ISOLATION = {"lateral_raise", "curl", "skull_crusher", "forearm_curl"}
-_WORKING_SET = 8.4
 
 def _S(mid, un_r, tr_r, note):
     return Standard(mid, +1, True,
@@ -139,12 +138,11 @@ STANDARDS = {
     "rdl":      _S("rdl",      0.80, 1.80, "provisional"),
     "calf_raise": _S("calf_raise", 0.80, 1.80, "provisional"),
     "crunch":   _S("crunch",   0.50, 1.00, "provisional"),
-    # Isolation lifts — REP-VOLUME-AT-LOAD (weight × reps). Anchors = prior 1RM
-    # ratios × _WORKING_SET (see above); still provisional.
-    "lateral_raise": _S("lateral_raise", 0.10 * _WORKING_SET, 0.30 * _WORKING_SET, "rep-volume — isolation, provisional"),
-    "curl":          _S("curl",          0.20 * _WORKING_SET, 0.50 * _WORKING_SET, "rep-volume — isolation, provisional"),
-    "skull_crusher": _S("skull_crusher", 0.20 * _WORKING_SET, 0.50 * _WORKING_SET, "rep-volume — isolation, provisional"),
-    "forearm_curl":  _S("forearm_curl",  0.20 * _WORKING_SET, 0.40 * _WORKING_SET, "rep-volume — isolation, provisional"),
+    # Isolation lifts — estimated-1RM ratios x bodyweight (same form as compounds).
+    "lateral_raise": _S("lateral_raise", 0.10, 0.30, "est-1RM isolation, provisional"),
+    "curl":          _S("curl",          0.20, 0.50, "est-1RM isolation, provisional"),
+    "skull_crusher": _S("skull_crusher", 0.20, 0.50, "est-1RM isolation, provisional"),
+    "forearm_curl":  _S("forearm_curl",  0.20, 0.40, "est-1RM isolation, provisional"),
 
     # ── Performance ──
     "vo2max":     Standard("vo2max", +1, False, Dist("normal", 48.0, 9.0),
@@ -359,10 +357,9 @@ def est_1rm(weight, reps):
 
 
 def strength_value(metric_id, weight, reps):
-    """Canonical strength quantity for ranking: rep-volume (weight × reps) for
-    isolation lifts, estimated 1RM for everything else."""
-    if metric_id in _ISOLATION:
-        return round(weight * reps, 2) if weight > 0 and reps > 0 else 0.0
+    """Canonical strength quantity for ranking: estimated 1RM for EVERY lift,
+    accessories included (Epley averaged, reps capped at 12). Ranking on est-1RM
+    rewards strength over rep-grinding — 12.5kg×8 out-ranks 10kg×12."""
     return est_1rm(weight, reps)
 
 

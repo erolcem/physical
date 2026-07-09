@@ -47,8 +47,8 @@ class SleepScreen extends ConsumerWidget {
         _barCard('LAST 7 NIGHTS · SLEEP SCORE',
             valuesLastNDays(logs['sleep_score'] ?? const []), 100, _indigo,
             (v) => v.round().toString()),
-        const SizedBox(height: 12),
-        _durationTrend(valuesLastNDays(logs['sleep_duration'] ?? const [])),
+        // (Hours-asleep 7-night bar removed — sleep_duration is already plotted
+        // in the full graph area below, so it was a duplicate.)
         const SizedBox(height: 12),
         _stats(_latest(logs, 'sleep_efficiency'), _latest(logs, 'time_to_sleep'),
             _latest(logs, 'full_awakenings')),
@@ -130,12 +130,6 @@ class SleepScreen extends ConsumerWidget {
         const SizedBox(height: 2),
         Text(label, style: const TextStyle(fontSize: 10, color: _muted)),
       ]);
-
-  Widget _durationTrend(List<double?> vals) {
-    final maxH = vals.whereType<double>().fold<double>(8, (m, v) => v > m ? v : m);
-    return _barCard('LAST 7 NIGHTS · HOURS ASLEEP', vals, maxH, _lightC,
-        (v) => v.toStringAsFixed(1));
-  }
 
   Widget _barCard(String title, List<double?> vals, double maxV, Color color,
       String Function(double) fmt) {

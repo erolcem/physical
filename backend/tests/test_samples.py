@@ -35,15 +35,18 @@ def test_est_1rm_from_raw_weight_reps(client):
     assert stored["value"] > 100  # 1RM estimate from 100×5 exceeds 100
 
 
-def test_isolation_uses_rep_volume_not_1rm(client):
-    # Isolation lift logged raw → value is weight×reps (rep-volume), not an estimated 1RM.
+def test_isolation_uses_est_1rm_like_every_lift(client):
+    # Accessory lifts now rank on estimated 1RM (reps capped at 12) too, so ranking
+    # rewards strength over rep-grinding — not raw weight×reps.
+    from app import engine as E
     r = client.post("/me/samples", json=[
         {"metric_id": "curl", "ts": "2026-06-01T08:00:00", "bodyweight_at_ts": 80,
          "raw": {"weight": 15, "reps": 12}},
     ])
     assert r.status_code == 200
     stored = client.get("/me/samples", params={"metric_id": "curl"}).json()[0]
-    assert stored["value"] == 180.0  # 15 × 12, not an inflated 1RM estimate
+    assert stored["value"] == E.strength_value("curl", 15, 12)
+    assert stored["value"] != 180.0  # not raw rep-volume any more
 
 
 def test_value_required_when_no_raw(client):

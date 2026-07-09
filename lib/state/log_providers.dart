@@ -146,7 +146,7 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       type: t.type, title: t.name,
       start: DateTime.now().toIso8601String(),
-      sets: List.of(t.sets),
+      sets: t.blankSets, // empty slots — fill in the real loads as you lift
     );
     repo.saveWorkout(s);
     relinkToWatch();
@@ -179,7 +179,17 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
   void applyTemplateToSession(String sessionId, WorkoutTemplate t) {
     final s = resolve(sessionId);
     if (s == null) return;
-    repo.saveWorkout(s.copyWith(sets: [...s.sets, ...t.sets]));
+    repo.saveWorkout(s.copyWith(sets: [...s.sets, ...t.blankSets]));
+    relinkToWatch();
+    state = repo.loadWorkouts();
+  }
+
+  /// Edit an existing set in place (Hevy-style: tap a set, change weight/reps).
+  void updateSet(String sessionId, int index, WorkoutSet set) {
+    final s = resolve(sessionId);
+    if (s == null || index < 0 || index >= s.sets.length) return;
+    final sets = [...s.sets]..[index] = set;
+    repo.saveWorkout(s.copyWith(sets: sets));
     relinkToWatch();
     state = repo.loadWorkouts();
   }
