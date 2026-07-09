@@ -485,13 +485,13 @@ class _CoachTabState extends ConsumerState<CoachTab>
     String? templateId;
     final p = h['plan'] as Map<String, dynamic>?;
     if (p != null) {
+      // A template is STRUCTURE only — the AI's suggested loads aren't stored
+      // (you fill in what you actually lift); we keep the exercise + a slot per set.
       final sets = [
         for (final s in ((p['sets'] as List?) ?? const []).cast<Map<String, dynamic>>())
           WorkoutSet(
             name: (s['name'] as String?) ?? 'Exercise',
             mode: s['w'] != null ? SetMode.weightReps : SetMode.reps,
-            weight: (s['w'] as num?)?.toDouble(),
-            reps: (s['r'] as num?)?.toInt(),
           )
       ];
       final t = WorkoutTemplate(

@@ -708,3 +708,30 @@ habit's heatmap/adherence/streak no longer count days before it existed; and the
 AI-verdict backup is bounded to 180 days.
 
 Tests: **332 Flutter + 131 backend.**
+
+## 23. Accessory lifts, Hevy-style sets, structure-only templates (July 2026)
+
+**Accessory lifts now rank on estimated 1RM, not rep-volume.** Weight×reps rewarded
+grinding reps at a light load (10kg×12 beat 12.5kg×8); every lift — isolation
+included — now uses the capped Epley est-1RM (reps clamped at 12 where the formula
+holds), so ranking reflects STRENGTH. Isolation standards rebased from
+`ratio×working-set` to plain 1RM ratios × bodyweight (Python + Dart + golden
+vectors, with fresh isolation golden cases). `isolationLifts` is kept only to flag
+"estimated from a working set" in the UI.
+
+**Sets are Hevy-style and templates are structure-only.** Tapping an existing set
+in the exercise detail edits it in place (`updateSet`), including a Google-imported
+session — nothing lives in a separate area. A `WorkoutTemplate` now stores STRUCTURE
+only: exercises + how many sets of each, no weights/reps (you can't predict a future
+workout's loads). The plan editor adds exercises by name + set count + mode;
+`fromSession`, the AI planner, and every apply path strip values via `blankSets`, so
+applying a template drops EMPTY slots (`WorkoutSet.isBlank`) into the exercise that
+read "Tap to log" until you fill in what you actually lifted.
+
+**Smaller wins.** The Progress page's Exercise header gained its own 7-day
+training-volume sparkbar (matching Sleep/Readiness/Health headers); the duplicate
+"LAST 7 NIGHTS · HOURS ASLEEP" bar was removed from the Sleep screen (it's already
+in the graph area below); and the Diet screen gained AI food entry — describe a
+meal, Gemini fills kcal/macros/health, confirm, save.
+
+Tests: **345 Flutter + 131 backend.**

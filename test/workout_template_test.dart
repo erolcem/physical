@@ -20,11 +20,18 @@ void main() {
     expect(t.type, 'Weightlifting');
     expect(t.setCount, 3);
     expect(t.exercises, {'Bench', 'OHP'});
+    // A template captures STRUCTURE only — exercises + set counts, no loads (you
+    // can't predict a future workout's weights). The values are stripped.
+    expect(t.sets.every((x) => x.isBlank), isTrue);
     final back = WorkoutTemplate.fromJson(t.toJson());
     expect(back.name, 'Push day');
     expect(back.sets.length, 3);
-    expect(back.sets.first.weight, 80);
+    expect(back.sets.first.weight, isNull);
     expect(back.sets.last.name, 'OHP');
+    // blankSets always yields empty slots even from a legacy template with values.
+    const legacy = WorkoutTemplate(id: 'x', name: 'L', sets: sets);
+    expect(legacy.blankSets.every((x) => x.isBlank), isTrue);
+    expect(legacy.blankSets.map((x) => x.name).toList(), ['Bench', 'Bench', 'OHP']);
   });
 
   test('repository stores templates (upsert by id) and deletes them', () {

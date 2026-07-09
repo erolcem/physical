@@ -108,6 +108,24 @@ void main() {
     expect(n.resolve(holderId)!.sets, hasLength(2));
   });
 
+  test('a template drops EMPTY slots you fill in with updateSet', () {
+    final repo = InMemoryRepository();
+    repo.saveWorkout(google('live', DateTime.now().toIso8601String(), dur: 60));
+    final n = WorkoutNotifier(repo);
+    // Even a template that carries values yields blank slots (can't predict loads).
+    n.applyTemplateToSession('g:live', const WorkoutTemplate(
+        id: 't1', name: 'Push', sets: [
+      WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 999, reps: 9),
+    ]));
+    final g = n.state.single;
+    expect(g.sets.single.isBlank, isTrue); // no phantom loads
+    expect(g.sets.single.name, 'Bench');
+    // Fill the slot in with what you actually lifted.
+    n.updateSet(g.id, 0, const WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 100, reps: 5));
+    expect(n.state.single.sets.single.weight, 100);
+    expect(n.state.single.sets.single.isBlank, isFalse);
+  });
+
   test('applyTemplateToSession appends a plan INTO a Google exercise (children, '
       'not a new entity)', () {
     final repo = InMemoryRepository();
