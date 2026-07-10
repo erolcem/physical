@@ -1,11 +1,14 @@
 // ui/diet_screen.dart — a holistic diet page (PDF Part 1/Part 2 per-domain layout):
 // today's energy + a macro breakdown bar (protein/carbs/fat by kcal) + fibre, a
 // 7-day calorie trend, and the day's food entries. Feeds the coach.
+import 'dart:convert' show base64Encode;
+import 'dart:io' show File;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:image_picker/image_picker.dart';
 import '../data/diet.dart';
 import '../data/habits.dart' show todayKey, lastNDays;
 import '../data/metrics.dart' show MetricDef, MetricTier;
@@ -15,6 +18,7 @@ import '../data/workout.dart' show activeCaloriesOn;
 import '../engine/rank_engine.dart' show Log;
 import '../state/log_providers.dart';
 import '../state/providers.dart' show latestLogsProvider, logsProvider;
+import 'profile_screen.dart' show promptQuickLog;
 import 'progress_screen.dart' show GraphArea;
 
 const _bg = Color(0xFF08091A);
@@ -52,7 +56,7 @@ class DietScreen extends ConsumerWidget {
         const _DietHealthEnricher(),
         _totals(t),
         const SizedBox(height: 12),
-        _energyBalance(ref, t),
+        _energyBalance(context, ref, t),
         const SizedBox(height: 12),
         _healthRadar(t),
         const SizedBox(height: 12),
@@ -81,32 +85,88 @@ class DietScreen extends ConsumerWidget {
     );
   }
 
-  // AI food entry: describe a meal → Gemini infers kcal/macros + the health radar
-  // → confirm → save as a FoodEntry. The manual path the watch can't cover.
+  // AI food entry: describe a meal — optionally with a PHOTO of it — → Gemini
+  // infers kcal/macros + the health radar → confirm → save as a FoodEntry.
+  // The description is always required: the photo supplements it (portion size,
+  // composition), never replaces it — text+photo is robust, photo-alone isn't.
   Future<void> _addFoodAi(BuildContext context, WidgetRef ref) async {
     final ctrl = TextEditingController();
-    final desc = await showDialog<String>(
+    XFile? photo;
+    final result = await showDialog<(String, XFile?)>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _card,
-        title: const Text('Add food'),
-        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Describe what you ate — the AI fills in calories, macros and '
-              'the diet-health radar.', style: TextStyle(fontSize: 12.5, color: _muted)),
-          const SizedBox(height: 12),
-          TextField(controller: ctrl, autofocus: true, minLines: 1, maxLines: 3,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
-                hintText: 'e.g. two eggs on sourdough with avocado',
-                border: OutlineInputBorder())),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Analyse')),
-        ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          Future<void> pick(ImageSource source) async {
+            try {
+              final x = await ImagePicker().pickImage(
+                  source: source, maxWidth: 1280, imageQuality: 82);
+              if (x != null) setLocal(() => photo = x);
+            } catch (_) {/* camera unavailable (e.g. desktop) — text still works */}
+          }
+          return AlertDialog(
+            backgroundColor: _card,
+            title: const Text('Add food'),
+            content: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Describe what you ate — the AI fills in calories, macros and '
+                    'the diet-health radar. Add a photo of the plate to sharpen the '
+                    'portion estimate.', style: TextStyle(fontSize: 12.5, color: _muted)),
+                const SizedBox(height: 12),
+                TextField(controller: ctrl, autofocus: true, minLines: 1, maxLines: 3,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                      hintText: 'e.g. two eggs on sourdough with avocado',
+                      border: OutlineInputBorder())),
+                const SizedBox(height: 10),
+                if (photo == null)
+                  Row(children: [
+                    _photoChip(Icons.photo_camera_outlined, 'Photo',
+                        () => pick(ImageSource.camera)),
+                    const SizedBox(width: 8),
+                    _photoChip(Icons.photo_library_outlined, 'Library',
+                        () => pick(ImageSource.gallery)),
+                    const SizedBox(width: 8),
+                    const Expanded(child: Text('optional',
+                        style: TextStyle(fontSize: 11, color: _muted))),
+                  ])
+                else
+                  Row(children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(File(photo!.path),
+                          width: 56, height: 56, fit: BoxFit.cover),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(child: Text('Photo attached — used with your '
+                        'description, never alone.',
+                        style: TextStyle(fontSize: 11.5, color: _muted))),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18, color: _muted),
+                      onPressed: () => setLocal(() => photo = null),
+                    ),
+                  ]),
+              ]),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx, (ctrl.text.trim(), photo)),
+                  child: const Text('Analyse')),
+            ],
+          );
+        },
       ),
     );
-    if (desc == null || desc.isEmpty || !context.mounted) return;
+    if (result == null || !context.mounted) return;
+    final (desc, pickedPhoto) = result;
+    if (desc.isEmpty) {
+      if (pickedPhoto != null) {
+        // Photo without text — explain why we won't guess from pixels alone.
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Describe the meal too — the photo only supplements the text.')));
+      }
+      return;
+    }
     final api = ref.read(apiClientProvider);
     showDialog(context: context, barrierDismissible: false,
         builder: (_) => const Center(child: CircularProgressIndicator()));
@@ -117,7 +177,14 @@ class DietScreen extends ConsumerWidget {
       if (!api.isSignedIn) {
         err = 'Sign in (☁) to use AI food entry.';
       } else {
-        n = await api.inferNutrition(desc);
+        String? b64;
+        String? mime;
+        if (pickedPhoto != null) {
+          b64 = base64Encode(await pickedPhoto.readAsBytes());
+          final path = pickedPhoto.path.toLowerCase();
+          mime = path.endsWith('.png') ? 'image/png' : 'image/jpeg';
+        }
+        n = await api.inferNutrition(desc, imageB64: b64, imageMime: mime);
       }
     } catch (_) {
       err = 'Couldn\'t analyse that — check your connection and try again.';
@@ -129,11 +196,33 @@ class DietScreen extends ConsumerWidget {
           SnackBar(content: Text(err ?? 'AI food entry unavailable.')));
       return;
     }
-    await _confirmFood(context, ref, desc, n);
+    await _confirmFood(context, ref, desc, n, withPhoto: pickedPhoto != null);
   }
 
+  Widget _photoChip(IconData icon, String label, VoidCallback onTap) => Material(
+        color: _bg,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _accent.withValues(alpha: 0.4)),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(icon, size: 16, color: _accent),
+              const SizedBox(width: 6),
+              Text(label, style: const TextStyle(fontSize: 12, color: _accent, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+        ),
+      );
+
   Future<void> _confirmFood(
-      BuildContext context, WidgetRef ref, String desc, InferredNutrition n) async {
+      BuildContext context, WidgetRef ref, String desc, InferredNutrition n,
+      {bool withPhoto = false}) async {
     final nameCtrl = TextEditingController(text: desc);
     final ok = await showDialog<bool>(
       context: context,
@@ -151,8 +240,10 @@ class DietScreen extends ConsumerWidget {
               'Fat ${n.fat.round()}g · Fibre ${n.fibre.round()}g',
               style: const TextStyle(fontSize: 12.5, color: _muted)),
           const SizedBox(height: 8),
-          const Text('AI estimate — tweak the name if needed.',
-              style: TextStyle(fontSize: 11, color: _muted)),
+          Text(withPhoto
+                  ? 'AI estimate from your description + photo — tweak the name if needed.'
+                  : 'AI estimate — tweak the name if needed.',
+              style: const TextStyle(fontSize: 11, color: _muted)),
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -237,7 +328,7 @@ class DietScreen extends ConsumerWidget {
 
   // Energy balance: calories in (food) vs out — the day's synced TOTAL energy
   // burned when Google provides it, else estimated BMR + active session calories.
-  Widget _energyBalance(WidgetRef ref, DietTotals t) {
+  Widget _energyBalance(BuildContext context, WidgetRef ref, DietTotals t) {
     final latest = ref.watch(latestLogsProvider);
     final sessions = ref.watch(workoutProvider);
     final logs = ref.watch(logsProvider);
@@ -249,10 +340,11 @@ class DietScreen extends ConsumerWidget {
     for (final l in (logs['energy_burned'] ?? const <Log>[])) {
       if (l.ts.startsWith(todayKey())) burnedToday = l.value;
     }
+    final active = activeCaloriesOn(sessions, todayKey());
     final out = (burnedToday != null && burnedToday > 0)
         ? burnedToday
         : hasBody
-            ? bmrMifflin(w, h, age.round()) + activeCaloriesOn(sessions, todayKey())
+            ? estimatedDailyBurn(w, h, age.round(), activeKcal: active)
             : null;
     final net = out == null ? null : t.calories - out;
     final fromGoogle = burnedToday != null && burnedToday > 0;
@@ -261,29 +353,39 @@ class DietScreen extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('ENERGY BALANCE', style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+          const Text('ENERGY BALANCE · IN − OUT = NET',
+              style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
           const SizedBox(height: 12),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            _energyStat('In', '${t.calories.round()}', 'kcal', _gold),
-            _energyStat(fromGoogle ? 'Out' : 'Out (est)',
-                out == null ? '—' : '${out.round()}', 'kcal', _teal),
-            _energyStat(net == null ? 'Net' : (net >= 0 ? 'Surplus' : 'Deficit'),
+          Row(children: [
+            Expanded(child: _energyStat('In', '${t.calories.round()}', 'kcal', _gold)),
+            Expanded(child: _energyStat(fromGoogle ? 'Out' : 'Out est',
+                out == null ? '—' : '${out.round()}', 'kcal', _teal)),
+            Expanded(child: _energyStat(net == null ? 'Net' : (net >= 0 ? 'Surplus' : 'Deficit'),
                 net == null ? '—' : '${net.abs().round()}', 'kcal',
-                net == null ? _muted : (net >= 0 ? _pink : _teal)),
-            _energyStat('Weight', w == null ? '—' : w.toStringAsFixed(1), 'kg', _accent),
+                net == null ? _muted : (net >= 0 ? _pink : _teal))),
+            // Weight anchors the balance — tap to log today's scale reading.
+            Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => promptQuickLog(context, ref, 'bodyweight'),
+                child: _energyStat('Weight ✎', w == null ? 'set' : w.toStringAsFixed(1),
+                    'kg', _accent),
+              ),
+            ),
           ]),
           if (fromGoogle) ...[
             const SizedBox(height: 10),
-            const Text('Out = today\'s total energy burned (Google Health) · updates through the day',
+            const Text('Out = today\'s total burn from your watch · updates through the day',
                 style: TextStyle(fontSize: 10.5, color: _muted)),
           ] else if (!hasBody) ...[
             const SizedBox(height: 10),
-            const Text('Sync weight/height/age (☁) for the burn estimate.',
+            const Text('Set weight, height and age (Profile) — or sync ☁ — to estimate your daily burn.',
                 style: TextStyle(fontSize: 11, color: _muted)),
           ] else ...[
             const SizedBox(height: 10),
-            Text('Out = BMR ${bmrMifflin(w, h, age.round()).round()} + active '
-                '${activeCaloriesOn(sessions, todayKey()).round()} kcal · estimated',
+            Text('Out (est) = ${bmrMifflin(w, h, age.round()).round()} at rest '
+                '× 1.2 everyday activity${active > 0 ? ' + ${active.round()} workouts' : ''}'
+                ' · your watch replaces this when synced',
                 style: const TextStyle(fontSize: 10.5, color: _muted)),
           ],
         ]),
@@ -423,8 +525,9 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
     }
     final w = latest['bodyweight']?.value;
 
-    // Out (est): the day's synced TOTAL energy burned when Google provides it;
-    // else that day's BMR (day-accurate weight) + session calories.
+    // Out: the day's synced TOTAL energy burned when Google provides it; else
+    // the honest estimate — BMR (day-accurate weight) × 1.2 everyday activity
+    // + that day's tracked workout calories.
     final burnedByDay = <String, double>{};
     for (final l in (logs['energy_burned'] ?? const <Log>[])) {
       if (l.ts.length >= 10) burnedByDay[l.ts.substring(0, 10)] = l.value;
@@ -439,7 +542,8 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
       }
       final dayW = weightSeries[i] ?? w;
       outSeries.add((dayW != null && h != null && age != null)
-          ? bmrMifflin(dayW, h, age.round()) + activeCaloriesOn(sessions, d)
+          ? estimatedDailyBurn(dayW, h, age.round(),
+              activeKcal: activeCaloriesOn(sessions, d))
           : null);
     }
     final wPts = [for (var i = 0; i < days.length; i++)
@@ -512,6 +616,8 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
           ]),
           const SizedBox(height: 10),
           // The headline: what the window's energy balance actually says.
+          // Averages count only days you logged food — an untracked day is a
+          // gap in the chart, not a fake 0-kcal fast.
           Row(children: [
             _avgStat('AVG IN', avgIn == null ? '—' : '${avgIn.round()}', _gold),
             _avgStat('AVG OUT', avgOut == null ? '—' : '${avgOut.round()}', _teal),
@@ -523,13 +629,23 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
           if (kgPerWeek != null) ...[
             const SizedBox(height: 6),
             Text(
-                'At this net: ${kgPerWeek >= 0 ? '+' : ''}${kgPerWeek.toStringAsFixed(2)} kg/week expected'
-                '${dW != null ? ' · scale says ${dW >= 0 ? '+' : ''}${dW.toStringAsFixed(1)} kg this window' : ''}',
+                'Eating like this ${kgPerWeek >= 0 ? 'gains' : 'loses'} '
+                '~${kgPerWeek.abs().toStringAsFixed(2)} kg/week'
+                '${dW != null ? ' · the scale actually moved ${dW >= 0 ? '+' : ''}${dW.toStringAsFixed(1)} kg this window' : ''}',
                 style: const TextStyle(fontSize: 11, color: _muted)),
           ],
           const SizedBox(height: 10),
           Row(children: [
-            _legend('In', _gold), const SizedBox(width: 14), _legend('Out (est)', _teal),
+            _legend('In', _gold),
+            const SizedBox(width: 14),
+            _legend('Out', _teal),
+            const Spacer(),
+            // Averages/net count only days with food logged (gaps aren't 0-kcal fasts).
+            Flexible(
+              child: Text('over ${nets.length} logged day${nets.length == 1 ? '' : 's'}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 10, color: _muted)),
+            ),
           ]),
           const SizedBox(height: 8),
           if (!hasKcal)

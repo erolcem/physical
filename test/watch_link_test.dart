@@ -24,13 +24,23 @@ void main() {
     expect(linked.single.watchVerified, isTrue);
   });
 
-  test('a session hours away or on another day stays unverified', () {
-    expect(
-        linkSessionsToWatch([
-          manual('m1', '2026-07-01T08:00:00', dur: 45),
-          google('gid1', '2026-07-01T19:00:00', dur: 60), // 11h later
-        ]),
-        isEmpty);
+  test('no overlap but SAME DAY still links (nearest tracked exercise) — the '
+      'holder timestamp is when you TYPED the sets, hours after training', () {
+    final linked = linkSessionsToWatch([
+      manual('m1', '2026-07-01T21:30:00', dur: 45), // typed 2.5h after the workout
+      google('gid1', '2026-07-01T18:00:00', dur: 60),
+    ]);
+    expect(linked.single.linkedGoogleId, 'gid1');
+    // Several same-day exercises → the NEAREST in time wins.
+    final nearest = linkSessionsToWatch([
+      manual('m1', '2026-07-01T21:00:00', dur: 45),
+      google('gmorning', '2026-07-01T07:00:00', dur: 40),
+      google('gevening', '2026-07-01T18:00:00', dur: 60),
+    ]);
+    expect(nearest.single.linkedGoogleId, 'gevening');
+  });
+
+  test('another day never links', () {
     expect(
         linkSessionsToWatch([
           manual('m1', '2026-07-02T18:00:00'),
@@ -124,6 +134,90 @@ void main() {
     n.updateSet(g.id, 0, const WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 100, reps: 5));
     expect(n.state.single.sets.single.weight, 100);
     expect(n.state.single.sets.single.isBlank, isFalse);
+  });
+
+  test('pre-logged sets typed HOURS after the watch exercise absorb into it '
+      'when it syncs in (the whole point of pre-logging)', () {
+    final repo = InMemoryRepository();
+    final n = WorkoutNotifier(repo);
+    final today = DateTime.now();
+    // 1) User types sets before the watch session has synced — a holder.
+    final holder = n.createSession(type: 'Weightlifting', title: 'Push day');
+    n.addSet(holder.id, const WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 80, reps: 5));
+    expect(n.state.single.watchVerified, isFalse);
+    // 2) The watch exercise from EARLIER TODAY (no window overlap) syncs in.
+    final morning = DateTime(today.year, today.month, today.day, 0, 5);
+    n.importGoogle([
+      {'google_id': 'gwatch', 'type': 'Weightlifting',
+       'start': morning.toIso8601String(), 'duration_mins': 60},
+    ]);
+    // The holder absorbed: one workout, the watch exercise, holding the sets.
+    expect(n.state, hasLength(1));
+    final parent = n.state.single;
+    expect(parent.googleId, 'gwatch');
+    expect(parent.sets.single.name, 'Bench');
+    expect(parent.watchVerified, isTrue);
+    expect(parent.label, 'Push day');
+  });
+
+  test('updateSetRef/removeSetRef survive absorption mid-edit (never corrupt '
+      'a different set)', () {
+    final repo = InMemoryRepository();
+    final n = WorkoutNotifier(repo);
+    // Watch parent already has a set of its own.
+    final now = DateTime.now();
+    repo.saveWorkout(WorkoutSession(
+        id: 'g:live', type: 'Weightlifting',
+        start: now.subtract(const Duration(minutes: 30)).toIso8601String(),
+        durationMins: 120, source: 'google', googleId: 'live',
+        sets: const [WorkoutSet(name: 'Squat', mode: SetMode.weightReps, weight: 100, reps: 5)]));
+    final holder = n.createSession(type: 'Weightlifting');
+    // The holder absorbed instantly (covering watch exercise exists) — but the
+    // UI may still hold the pre-absorption set instance. Simulate: grab the
+    // set AFTER absorption, then edit through the STALE holder id.
+    n.addSet(holder.id, const WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 60, reps: 8));
+    final live = n.resolve(holder.id)!;
+    expect(live.googleId, 'live');
+    final benchSet = live.sets.firstWhere((s) => s.name == 'Bench');
+    n.updateSetRef(holder.id, benchSet,
+        const WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 65, reps: 8));
+    final after = n.resolve(holder.id)!;
+    // The BENCH set changed; the parent's own Squat set is untouched.
+    expect(after.sets.firstWhere((s) => s.name == 'Bench').weight, 65);
+    expect(after.sets.firstWhere((s) => s.name == 'Squat').weight, 100);
+    // A value-identical stale copy still resolves (identity fallback → values).
+    n.removeSetRef(holder.id,
+        const WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 65, reps: 8));
+    expect(n.resolve(holder.id)!.sets.map((s) => s.name), ['Squat']);
+    // A set that no longer exists is a NO-OP, not a positional guess.
+    n.removeSetRef(holder.id,
+        const WorkoutSet(name: 'Ghost', mode: SetMode.weightReps, weight: 1, reps: 1));
+    expect(n.resolve(holder.id)!.sets, hasLength(1));
+  });
+
+  test('repoMerge adopts the RICHER set record for the same workout id '
+      '(sets typed on another device propagate)', () {
+    final repo = InMemoryRepository();
+    repo.saveWorkout(google('gid1', '2026-07-01T18:00:00', dur: 60));
+    // The other device's snapshot has the SAME Google exercise + typed sets.
+    final other = google('gid1', '2026-07-01T18:00:00', dur: 60).copyWith(
+      sets: const [
+        WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 80, reps: 5),
+        WorkoutSet(name: 'Fly', mode: SetMode.weightReps, weight: 20, reps: 12),
+      ],
+      title: 'Push day',
+    );
+    repoMerge(repo, {
+      'workouts': [other.toJson()],
+    });
+    final merged = repo.loadWorkouts().single;
+    expect(merged.sets, hasLength(2));
+    expect(merged.label, 'Push day');
+    // Local already richer → merge never downgrades.
+    repoMerge(repo, {
+      'workouts': [google('gid1', '2026-07-01T18:00:00', dur: 60).toJson()],
+    });
+    expect(repo.loadWorkouts().single.sets, hasLength(2));
   });
 
   test('applyTemplateToSession appends a plan INTO a Google exercise (children, '

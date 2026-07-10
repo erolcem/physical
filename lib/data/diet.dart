@@ -172,6 +172,19 @@ class DietTotals {
 double bmrMifflin(double weightKg, double heightCm, int age) =>
     10 * weightKg + 6.25 * heightCm - 5 * age + 5;
 
+/// Sedentary TDEE multiplier: basal + everyday non-exercise activity (walking
+/// around, digestion, fidgeting). The standard 1.2 factor; tracked workouts are
+/// added separately on top.
+const double sedentaryFactor = 1.2;
+
+/// Estimated TOTAL daily energy burn (kcal/day): BMR × 1.2 + tracked workout
+/// calories. Raw BMR under-reads a real day by ~20% (it excludes all movement),
+/// which made the energy balance show a phantom surplus on every unsynced day —
+/// the estimate must be honest or the surplus/deficit readout misleads.
+double estimatedDailyBurn(double weightKg, double heightCm, int age,
+        {double activeKcal = 0}) =>
+    bmrMifflin(weightKg, heightCm, age) * sedentaryFactor + activeKcal;
+
 DietTotals dietTotals(List<FoodEntry> entries, String day) {
   var c = 0.0, p = 0.0, cb = 0.0, f = 0.0, fib = 0.0, n = 0;
   final mic = <String, double>{};

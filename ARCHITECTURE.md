@@ -735,3 +735,62 @@ in the graph area below); and the Diet screen gained AI food entry — describe 
 meal, Gemini fills kcal/macros/health, confirm, save.
 
 Tests: **345 Flutter + 131 backend.**
+
+## 24. Owner review round 8 (July 2026) — release-readiness pass
+
+**Sets reliably land inside the watch exercise.** Three real defects fixed:
+(1) *Linking was window-only.* A holder's timestamp is when you TYPED the sets —
+routinely hours after training — so the ±45-min overlap never matched and holders
+sat in "WAITING FOR THE WATCH EXERCISE" forever. `linkSessionsToWatch` now
+prefers a window overlap but falls back to the NEAREST same-day tracked
+exercise (never cross-day). (2) *Index-based set edits could corrupt a
+neighbour.* If the holder absorbed into its watch parent while an edit dialog
+was open, the captured index pointed at a different set. The UI now edits by
+SET REFERENCE (`updateSetRef`/`removeSetRef`: instance identity → equal-values
+fallback → no-op), resolved at apply time. (3) *Sets didn't propagate across
+devices.* `repoMerge` skipped any workout id it already had, so sets typed on
+the other device stayed there forever; the merge now adopts the RICHER set
+record for the same id (more sets wins — a strict superset never discards),
+carries a missing title/link, unions the absorption trail, and `cloudSync`
+re-runs the relink/absorb pass after the merge.
+
+**AI food entry is multimodal — text + photo, never photo alone.** The Add-food
+dialog attaches an optional meal photo (camera/library, downscaled to ≤1280px);
+`POST /me/nutrition` forwards it to Gemini as an inline image with explicit
+guidance: the DESCRIPTION is authoritative for what the food is, the PHOTO
+refines portion size/preparation/sides. An empty description is rejected even
+with a photo (422) — visual-only food ID is too error-prone to trust — and
+oversized images 413.
+
+**Weight & body-fat are first-class manual entries.** The home body strip's
+HEIGHT and WEIGHT cells are now tappable (quick numeric log, same as AGE→DOB);
+the Diet energy card's Weight stat logs the day's scale reading; body-fat was
+already loggable from its Recovery card. Google Health sync still fills all of
+these automatically — manual is the always-available path, not a fallback mode.
+
+**Profile = numeric entries, not graphs.** The Progress tab's Profile category
+no longer opens a graph page: a dedicated Profile screen shows Age (DOB-derived),
+Sex (reference population), Height, Weight and Body fat as plain numbers with
+one-tap entry. (Weight still charts on the Diet page where it belongs.)
+
+**The energy balance is honest and readable.** "Out (est)" was raw Mifflin BMR +
+workout kcal, under-reading a real day by ~20% and showing a phantom surplus on
+every unsynced day. The estimate is now `BMR × 1.2 (sedentary baseline) +
+tracked workout kcal` (`estimatedDailyBurn`), used by both the today card and
+the trend; the card reads "IN − OUT = NET" with the formula spelled out, and the
+trend states its averages count only logged days (gaps are gaps, not 0-kcal
+fasts). Synced watch totals still override the estimate.
+
+**Rank audit (all 27 standards swept, 2 recalibrated, 1 UX trap closed).**
+Full-profile calibration verified: sedentary → Bronze I (top ~78%), average
+active → Gold I (~37%), dedicated 2–3-yr lifter → Platinum III (~13%),
+exceptional → Champion III (~1.6%); every median landmark lands Silver II / top
+50% by construction. Fixes: **hamstring_mobility** N(15,5)→N(2,9) with the scale
+defined as *cm past the toes* (the old curve ranked a toe-toucher bottom 0.1%);
+**pushups** N(35,13)→N(25,12) (median young man ~25/min, not 35); the **pullup**
+forms now say *Total weight = bodyweight + added load* (the standard reads total
+system weight — typing only the added plate ranked a real pullup Wood). Golden
+vectors regenerate via the committed `backend/scripts/gen_golden.py` (inputs
+preserved, expecteds recomputed); backend anchor tests pin the new curves.
+
+Tests: **352 Flutter + 138 backend, 0 analyzer issues.**

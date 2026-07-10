@@ -76,7 +76,7 @@ const List<HabitPreset> habitPresets = [
   HabitPreset('exercise', 'Plank hold', 'metric', linkedMetricId: 'plank', target: 120, unit: 's'),
   HabitPreset('exercise', '5k pace', 'metric', linkedMetricId: 'run5k_kmh', target: 10, unit: 'km/h'),
   HabitPreset('exercise', 'Vertical jump', 'metric', linkedMetricId: 'vert', target: 50, unit: 'cm'),
-  HabitPreset('exercise', 'Hamstring mobility', 'metric', linkedMetricId: 'hamstring_mobility', target: 20, unit: 'cm'),
+  HabitPreset('exercise', 'Hamstring mobility', 'metric', linkedMetricId: 'hamstring_mobility', target: 10, unit: 'cm'),
   HabitPreset('exercise', 'Cardio session', 'workout'),
   HabitPreset('exercise', 'Mobility / stretch', 'manual'),
   // ── diet — from the day's food log (macros + diet-health) + body composition ──

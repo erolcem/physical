@@ -628,12 +628,19 @@ class ApiClient {
   }
 
   /// Gemini-inferred nutrition for a food description (macros + micros); throws on error.
-  Future<InferredNutrition> inferNutrition(String description) async {
+  /// [imageB64] optionally attaches a meal photo to SUPPLEMENT the text (refines
+  /// portion/composition) — the description is always required, never photo-alone.
+  Future<InferredNutrition> inferNutrition(String description,
+      {String? imageB64, String? imageMime}) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/nutrition'),
             headers: _headers({'Content-Type': 'application/json'}),
-            body: jsonEncode({'description': description}))
-        .timeout(const Duration(seconds: 60));
+            body: jsonEncode({
+              'description': description,
+              if (imageB64 != null) 'image_b64': imageB64,
+              if (imageB64 != null) 'image_mime': imageMime ?? 'image/jpeg',
+            }))
+        .timeout(const Duration(seconds: 90));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);
     final j = jsonDecode(r.body) as Map<String, dynamic>;
     return InferredNutrition(

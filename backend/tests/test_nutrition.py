@@ -94,3 +94,59 @@ def test_endpoint_infers_via_model(client, monkeypatch):
     body = r.json()
     assert body["calories"] == 155 and body["protein"] == 13
     assert body["micros"]["sodium_mg"] == 124
+
+
+def test_endpoint_photo_supplements_text(client, monkeypatch):
+    # Text + photo: the image rides the turn and the prompt gains the photo
+    # guidance ("text is authoritative, photo refines portion").
+    from app.integrations.gemini import client as gem
+    captured = {}
+
+    def fake_generate(system, turns, **k):
+        captured["system"] = system
+        captured["turns"] = turns
+        return '{"calories": 640, "protein": 32, "carbs": 70, "fat": 24, "fibre": 5}'
+
+    monkeypatch.setattr(gem, "configured", lambda: True)
+    monkeypatch.setattr(gem, "generate", fake_generate)
+    r = client.post("/me/nutrition", json={
+        "description": "chicken burrito bowl",
+        "image_b64": "aGVsbG8=",  # any base64 — passthrough, not decoded here
+        "image_mime": "image/png",
+    })
+    assert r.status_code == 200
+    assert r.json()["calories"] == 640
+    turn = captured["turns"][0]
+    assert turn["text"] == "chicken burrito bowl"
+    assert turn["image_b64"] == "aGVsbG8=" and turn["image_mime"] == "image/png"
+    assert "PORTION" in captured["system"]  # photo guidance appended
+    # Without a photo the guidance is absent and no image keys ride the turn.
+    r2 = client.post("/me/nutrition", json={"description": "chicken burrito bowl"})
+    assert r2.status_code == 200
+    assert "image_b64" not in captured["turns"][0]
+    assert "PORTION" not in captured["system"]
+
+
+def test_endpoint_never_accepts_photo_alone(client, monkeypatch):
+    # Photo without a description is rejected — visual-only food ID is too
+    # error-prone; the text is always the source of truth.
+    from app.integrations.gemini import client as gem
+    monkeypatch.setattr(gem, "configured", lambda: True)
+    r = client.post("/me/nutrition", json={"description": "  ", "image_b64": "aGVsbG8="})
+    assert r.status_code == 422
+
+
+def test_endpoint_rejects_oversized_photo_and_strips_data_url(client, monkeypatch):
+    from app.integrations.gemini import client as gem
+    captured = {}
+    monkeypatch.setattr(gem, "configured", lambda: True)
+    monkeypatch.setattr(gem, "generate", lambda s, t, **k: (
+        captured.update(turns=t),
+        '{"calories": 100, "protein": 5, "carbs": 10, "fat": 4, "fibre": 1}')[-1])
+    r = client.post("/me/nutrition", json={
+        "description": "an apple", "image_b64": "x" * 6_000_001})
+    assert r.status_code == 413
+    r2 = client.post("/me/nutrition", json={
+        "description": "an apple", "image_b64": "data:image/jpeg;base64,QUJD"})
+    assert r2.status_code == 200
+    assert captured["turns"][0]["image_b64"] == "QUJD"  # data-URL prefix stripped

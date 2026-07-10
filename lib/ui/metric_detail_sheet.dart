@@ -285,10 +285,19 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
             const SizedBox(height: 8),
             if (m.isStrength) ...[
               Row(children: [
-                Expanded(child: _field(_weight, 'Weight (kg)')),
+                Expanded(child: _field(_weight,
+                    m.id == 'pullup' ? 'Total weight (kg)' : 'Weight (kg)')),
                 const SizedBox(width: 8),
                 Expanded(child: _field(_reps, 'Reps')),
               ]),
+              // The pullup standard expects TOTAL system weight — typing only
+              // the added plate would rank a real pullup as Wood.
+              if (m.id == 'pullup')
+                const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: Text('Total = bodyweight + added load (bodyweight-only pullup → enter your bodyweight)',
+                      style: TextStyle(fontSize: 11, color: Colors.grey)),
+                ),
               const SizedBox(height: 8),
               _field(_bw, 'Bodyweight now (kg) — snapshotted'),
             ] else ...[

@@ -546,28 +546,16 @@
    "value": 15,
    "bodyweight": null,
    "expected": {
-    "tier": "Wood",
+    "tier": "Bronze",
     "sub": "I",
-    "percentile": 6.19679,
-    "top_pct": 93.80321,
-    "rank_value": 0.30984
+    "percentile": 20.232838,
+    "top_pct": 79.767162,
+    "rank_value": 1.011642
    }
   },
   {
    "metric": "pushups",
    "value": 25,
-   "bodyweight": null,
-   "expected": {
-    "tier": "Bronze",
-    "sub": "I",
-    "percentile": 22.087816,
-    "top_pct": 77.912184,
-    "rank_value": 1.104391
-   }
-  },
-  {
-   "metric": "pushups",
-   "value": 35,
    "bodyweight": null,
    "expected": {
     "tier": "Silver",
@@ -579,14 +567,26 @@
   },
   {
    "metric": "pushups",
+   "value": 35,
+   "bodyweight": null,
+   "expected": {
+    "tier": "Gold",
+    "sub": "III",
+    "percentile": 79.767162,
+    "top_pct": 20.232838,
+    "rank_value": 3.988358
+   }
+  },
+  {
+   "metric": "pushups",
    "value": 48,
    "bodyweight": null,
    "expected": {
-    "tier": "Platinum",
-    "sub": "II",
-    "percentile": 84.134475,
-    "top_pct": 15.865525,
-    "rank_value": 4.413447
+    "tier": "Champion",
+    "sub": "I",
+    "percentile": 97.235985,
+    "top_pct": 2.764015,
+    "rank_value": 6.117993
    }
   },
   {
@@ -594,11 +594,11 @@
    "value": 60,
    "bodyweight": null,
    "expected": {
-    "tier": "Champion",
-    "sub": "I",
-    "percentile": 97.27648,
-    "top_pct": 2.72352,
-    "rank_value": 6.13824
+    "tier": "Titan",
+    "sub": "III",
+    "percentile": 99.823103,
+    "top_pct": 0.176897,
+    "rank_value": 7.914559
    }
   },
   {
@@ -1451,15 +1451,15 @@
    "metric": "pushups",
    "tier": "Diamond",
    "bodyweight": null,
-   "expected_kg": 51.66017,
-   "expected": 51.66017
+   "expected_kg": 40.378619,
+   "expected": 40.378619
   },
   {
    "metric": "pushups",
    "tier": "Gold",
    "bodyweight": null,
-   "expected_kg": 38.293512,
-   "expected": 38.293512
+   "expected_kg": 28.040165,
+   "expected": 28.040165
   },
   {
    "metric": "sprint_100m",

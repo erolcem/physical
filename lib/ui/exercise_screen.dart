@@ -641,13 +641,16 @@ class SessionDetailScreen extends ConsumerWidget {
             const SizedBox(height: 4),
             // Tap any set to edit it in place (Hevy-style); a blank slot (from a
             // template) reads "Tap to log" until you fill in what you lifted.
+            // Edits/removes reference the SET, not its index — a holder can
+            // absorb into its watch parent mid-dialog and shift every index.
             for (final set in sets)
               InkWell(
                 borderRadius: BorderRadius.circular(6),
                 onTap: () async {
-                  final idx = s.sets.indexOf(set);
                   final edited = await promptWorkoutSet(context, initial: set);
-                  if (edited != null) ref.read(workoutProvider.notifier).updateSet(s.id, idx, edited);
+                  if (edited != null) {
+                    ref.read(workoutProvider.notifier).updateSetRef(s.id, set, edited);
+                  }
                 },
                 child: Row(children: [
                   Icon(set.isBlank ? Icons.radio_button_unchecked : Icons.circle,
@@ -663,7 +666,7 @@ class SessionDetailScreen extends ConsumerWidget {
                   IconButton(
                     icon: const Icon(Icons.close, size: 16, color: _muted),
                     visualDensity: VisualDensity.compact,
-                    onPressed: () => ref.read(workoutProvider.notifier).removeSet(s.id, s.sets.indexOf(set)),
+                    onPressed: () => ref.read(workoutProvider.notifier).removeSetRef(s.id, set),
                   ),
                 ]),
               ),

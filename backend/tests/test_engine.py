@@ -58,6 +58,17 @@ def test_rank_sanity_plausible_values_land_in_plausible_tiers():
     assert E.tier_of("resting_hr", 45)["rank_value"] > 6.5         # athlete RHR
     assert E.tier_of("resting_hr", 75)["rank_value"] < 3.0
     assert E.tier_of("plank", 240)["rank_value"] > E.tier_of("plank", 60)["rank_value"] + 3
+    # Sit-and-reach is CM PAST THE TOES: touching them is ~median young man
+    # (Silver-ish), not bottom 0.1% — the pre-audit N(15,5) failure mode.
+    assert 1.5 < E.tier_of("hamstring_mobility", 0)["rank_value"] < 3.5
+    assert E.tier_of("hamstring_mobility", -10)["rank_value"] < 1.0   # 10cm short: stiff
+    assert E.tier_of("hamstring_mobility", 15)["rank_value"] > 4.5    # +15cm: genuinely flexible
+    # ~25 push-ups/min is a median young man, ~40 is strong, not mid-table.
+    assert 2.0 < E.tier_of("pushups", 25)["rank_value"] < 3.5
+    assert E.tier_of("pushups", 40)["rank_value"] > 4.0
+    # Pullup standard reads TOTAL system weight: one strict bodyweight pullup
+    # already beats the median (many young men can't do one).
+    assert E.tier_of("pullup", E.strength_value("pullup", 75, 1), 75)["rank_value"] > 2.5
 
 
 def test_rank_sanity_ideal_targets_plateau_not_reward_extremes():

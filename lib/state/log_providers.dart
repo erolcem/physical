@@ -202,6 +202,34 @@ class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
     state = repo.loadWorkouts();
   }
 
+  /// Locate [original] in the LIVE resolved session and find its index — by
+  /// instance first, then by equal values. An index captured in the UI goes
+  /// stale the moment the holder absorbs into its watch parent (the parent's
+  /// existing sets shift every position), which used to corrupt a different
+  /// set; resolving at apply time can never write to the wrong one.
+  int _liveIndex(WorkoutSession s, WorkoutSet original) {
+    final byRef = s.sets.indexWhere((x) => identical(x, original));
+    if (byRef >= 0) return byRef;
+    return s.sets.indexWhere((x) => x.sameValues(original));
+  }
+
+  /// Edit [original] wherever it lives NOW (safe across absorption). No-op if
+  /// the set no longer exists — never falls back to a positional guess.
+  void updateSetRef(String sessionId, WorkoutSet original, WorkoutSet edited) {
+    final s = resolve(sessionId);
+    if (s == null) return;
+    final idx = _liveIndex(s, original);
+    if (idx >= 0) updateSet(s.id, idx, edited);
+  }
+
+  /// Remove [original] wherever it lives NOW (safe across absorption).
+  void removeSetRef(String sessionId, WorkoutSet original) {
+    final s = resolve(sessionId);
+    if (s == null) return;
+    final idx = _liveIndex(s, original);
+    if (idx >= 0) removeSet(s.id, idx);
+  }
+
   void remove(String id) {
     repo.deleteWorkout(id);
     state = repo.loadWorkouts();

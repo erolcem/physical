@@ -49,4 +49,12 @@ void main() {
     // 10*80 + 6.25*180 - 5*28 + 5 = 800 + 1125 - 140 + 5 = 1790
     expect(bmrMifflin(80, 180, 28), closeTo(1790, 0.01));
   });
+
+  test('estimated daily burn = BMR × 1.2 sedentary + workouts (never raw BMR)', () {
+    // Raw BMR under-reads a real day ~20% → phantom surplus; the estimate is
+    // BMR × 1.2, with tracked workout calories added on top.
+    expect(estimatedDailyBurn(80, 180, 28), closeTo(1790 * 1.2, 0.01));
+    expect(estimatedDailyBurn(80, 180, 28, activeKcal: 350), closeTo(1790 * 1.2 + 350, 0.01));
+    expect(estimatedDailyBurn(80, 180, 28), greaterThan(bmrMifflin(80, 180, 28)));
+  });
 }
