@@ -20,6 +20,19 @@ def configured() -> bool:
     return bool(settings.gemini_api_key)
 
 
+def _turn_parts(t: dict) -> list[dict]:
+    """A turn's content parts: its text, plus an optional inline image
+    (`image_b64` + `image_mime`) for multimodal turns (e.g. a meal photo
+    alongside the food description)."""
+    parts: list[dict] = [{"text": t["text"]}]
+    if t.get("image_b64"):
+        parts.append({"inline_data": {
+            "mime_type": t.get("image_mime") or "image/jpeg",
+            "data": t["image_b64"],
+        }})
+    return parts
+
+
 def _build(system: str, turns: list[dict], temperature: float,
            tools: list[dict] | None, minimal: bool, model: str) -> dict:
     # Pro-class models think by default (and reject a zero budget), so they get a
@@ -33,7 +46,7 @@ def _build(system: str, turns: list[dict], temperature: float,
         gen["thinkingConfig"] = {"thinkingBudget": 0}
     body: dict = {
         "system_instruction": {"parts": [{"text": system}]},
-        "contents": [{"role": t["role"], "parts": [{"text": t["text"]}]} for t in turns],
+        "contents": [{"role": t["role"], "parts": _turn_parts(t)} for t in turns],
         "generationConfig": gen,
     }
     if tools and not minimal:

@@ -6,13 +6,13 @@ import '../data/achievements.dart';
 import '../data/rank_history.dart' show rankSeries;
 import '../data/metrics.dart';
 import '../data/body_figure_data.dart';
-import '../data/profile.dart' show syncAgeFromDob;
 import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log, RankResult, strengthValue, isolationLifts;
 import '../state/providers.dart';
 import 'badge.dart';
 import 'body_graph.dart';
 import 'metric_detail_sheet.dart';
+import 'profile_screen.dart' show promptDob, promptQuickLog;
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const _bg2 = Color(0xFF0F1128);
@@ -545,34 +545,12 @@ class _BodyGraphSection extends StatelessWidget {
 }
 
 // Bio strip at the foot of the body section: Age · Sex · Height · Weight.
-// Height/weight auto-port from Google Health; AGE derives from date of birth
-// (tap it to set — it then auto-corrects on birthdays); gender isn't exposed by
-// the API, so Sex shows the app's reference population (young male).
+// Every stat is a NUMERIC ENTRY: tap AGE to set the date of birth (age then
+// auto-corrects on birthdays), tap HEIGHT/WEIGHT to log a value by hand —
+// Google Health sync fills the same metrics in automatically when connected.
+// Sex shows the app's reference population (young male).
 class _BodyStatsStrip extends ConsumerWidget {
   const _BodyStatsStrip();
-
-  Future<void> _setDob(BuildContext context, WidgetRef ref) async {
-    final repo = ref.read(repositoryProvider);
-    final existing = repo.loadDob();
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.tryParse(existing ?? '') ?? DateTime(now.year - 25),
-      firstDate: DateTime(now.year - 120),
-      lastDate: now,
-      helpText: 'Date of birth — age then updates itself',
-    );
-    if (picked == null) return;
-    repo.saveDob(
-        '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}');
-    final age = syncAgeFromDob(repo);
-    ref.read(logsProvider.notifier).reload();
-    if (context.mounted && age != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Age set to $age — it now updates itself on birthdays.'),
-          duration: const Duration(seconds: 2)));
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -582,11 +560,16 @@ class _BodyStatsStrip extends ConsumerWidget {
       return (l == null || l.isEmpty) ? null : l.last.value;
     }
     final age = v('age'), h = v('height'), w = v('bodyweight');
-    final items = <(String, String)>[
-      ('AGE', age == null ? 'set' : age.toStringAsFixed(0)),
-      ('SEX', 'Male'),
-      ('HEIGHT', h == null ? '—' : '${h.toStringAsFixed(0)} cm'),
-      ('WEIGHT', w == null ? '—' : '${w.toStringAsFixed(1)} kg'),
+    final items = <(String, String, VoidCallback?)>[
+      ('AGE', age == null ? 'set' : age.toStringAsFixed(0),
+          () => promptDob(context, ref)),
+      ('SEX', 'Male', null),
+      ('HEIGHT', h == null ? 'set' : '${h.toStringAsFixed(0)} cm',
+          () => promptQuickLog(context, ref, 'height')),
+      ('WEIGHT', w == null ? 'set' : '${w.toStringAsFixed(1)} kg',
+          () => promptQuickLog(context, ref, 'bodyweight',
+              helper: 'New lifts are ranked against the weight you are when you '
+                  'lift — keeping this current keeps strength ranks honest.')),
     ];
     return Container(
       margin: const EdgeInsets.fromLTRB(6, 14, 6, 2),
@@ -601,8 +584,7 @@ class _BodyStatsStrip extends ConsumerWidget {
           if (i > 0) Container(width: 1, height: 26, color: _border),
           Expanded(
             child: InkWell(
-              // Only AGE is editable here (it's DOB-derived); the rest sync in.
-              onTap: i == 0 ? () => _setDob(context, ref) : null,
+              onTap: items[i].$3,
               borderRadius: BorderRadius.circular(8),
               child: Column(children: [
                 Text(items[i].$2,
@@ -809,10 +791,20 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
         const SizedBox(height: 8),
         if (_metric.isStrength) ...[
           Row(children: [
-            Expanded(child: _field(_weight, 'Weight (kg)')),
+            Expanded(child: _field(_weight,
+                _metric.id == 'pullup' ? 'Total weight (kg)' : 'Weight (kg)')),
             const SizedBox(width: 8),
             Expanded(child: _field(_reps, 'Reps')),
           ]),
+          // Pullups move your whole body: the standard expects TOTAL weight
+          // (bodyweight + added). Typing just the added plate ranks a real
+          // pullup as Wood — make the convention impossible to miss.
+          if (_metric.id == 'pullup')
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text('Total = bodyweight + added load (bodyweight-only pullup → enter your bodyweight)',
+                  style: TextStyle(fontSize: 11, color: Colors.grey)),
+            ),
           if (isolationLifts.contains(_metric.id))
             const Padding(
               padding: EdgeInsets.only(top: 6),

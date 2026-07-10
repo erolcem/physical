@@ -59,6 +59,14 @@ class WorkoutSet {
   /// A value-stripped copy — the structure only (name + mode), for templates.
   WorkoutSet blankCopy() => WorkoutSet(name: name, mode: mode);
 
+  /// Same logged values (name/mode/numbers) — the fallback identity when the
+  /// exact instance is gone (e.g. the holder absorbed into its watch parent
+  /// while an edit dialog was open). Identical duplicate sets are
+  /// indistinguishable anyway, so matching the first equal one is safe.
+  bool sameValues(WorkoutSet o) =>
+      name == o.name && mode == o.mode && weight == o.weight &&
+      reps == o.reps && seconds == o.seconds && distance == o.distance;
+
   String get detail => switch (mode) {
         SetMode.weightReps =>
           '${_n(weight)} kg × ${reps ?? '?'}',
@@ -284,10 +292,13 @@ List<WorkoutSession> sortedByRecent(List<WorkoutSession> sessions) =>
 }
 
 /// Link manual set-logging sessions to the watch-tracked Google exercise that
-/// covers them (two-step verification): same day AND overlapping time windows,
-/// with [slackMins] of tolerance on both ends (you open the app a little before
-/// the watch starts / log sets after it stops). Returns the sessions that
-/// gained a link (updated copies). Pure + unit-tested.
+/// covers them (two-step verification). A time-window overlap (with [slackMins]
+/// of tolerance on both ends) is preferred; when nothing overlaps, the NEAREST
+/// same-day tracked exercise is used — a holder's timestamp is when you typed
+/// the sets, which is routinely hours after the workout the sets describe, and
+/// the same-day watch exercise is still the real anchor. Never links across
+/// days. Returns the sessions that gained a link (updated copies).
+/// Pure + unit-tested.
 List<WorkoutSession> linkSessionsToWatch(List<WorkoutSession> sessions,
     {int slackMins = 45}) {
   final google = [for (final s in sessions) if (s.fromGoogle) s];
@@ -299,6 +310,9 @@ List<WorkoutSession> linkSessionsToWatch(List<WorkoutSession> sessions,
     final start = DateTime.tryParse(s.start);
     if (start == null) continue;
     final end = start.add(Duration(minutes: s.durationMins ?? 60));
+    String? overlapId;
+    String? nearestId;
+    Duration? nearestGap;
     for (final g in google) {
       if (g.dateKey != s.dateKey || g.googleId == null) continue;
       final gStart = DateTime.tryParse(g.start);
@@ -307,10 +321,17 @@ List<WorkoutSession> linkSessionsToWatch(List<WorkoutSession> sessions,
       final overlaps = start.isBefore(gEnd.add(slack)) &&
           gStart.isBefore(end.add(slack));
       if (overlaps) {
-        changed.add(s.copyWith(linkedGoogleId: g.googleId));
+        overlapId = g.googleId;
         break;
       }
+      final gap = gStart.difference(start).abs();
+      if (nearestGap == null || gap < nearestGap) {
+        nearestGap = gap;
+        nearestId = g.googleId;
+      }
     }
+    final target = overlapId ?? nearestId;
+    if (target != null) changed.add(s.copyWith(linkedGoogleId: target));
   }
   return changed;
 }

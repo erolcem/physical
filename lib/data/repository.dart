@@ -510,11 +510,32 @@ void repoMerge(Repository r, Map<String, dynamic> m) {
     if (tombs.contains(entityKey('food', j['id'] as String))) continue;
     if (!haveFood.contains(j['id'])) r.saveFood(FoodEntry.fromJson(j));
   }
-  final haveWorkouts = {for (final w in r.loadWorkouts()) w.id};
+  final localWorkouts = {for (final w in r.loadWorkouts()) w.id: w};
   for (final w in ((m['workouts'] as List?) ?? const [])) {
     final j = (w as Map).cast<String, dynamic>();
     if (tombs.contains(entityKey('workout', j['id'] as String))) continue;
-    if (!haveWorkouts.contains(j['id'])) r.saveWorkout(WorkoutSession.fromJson(j));
+    final incoming = WorkoutSession.fromJson(j);
+    final local = localWorkouts[incoming.id];
+    if (local == null) {
+      r.saveWorkout(incoming);
+      continue;
+    }
+    // Same workout on both sides (e.g. the shared Google exercise). Adopt the
+    // RICHER set record — sets typed on the other device used to stay trapped
+    // there forever because id-existence skipped the whole entity. "More sets
+    // wins" never discards data typed here (a strict subset means the other
+    // side has everything this side has, plus more).
+    final adoptSets = incoming.setCount > local.setCount;
+    final adoptLink = local.linkedGoogleId == null && incoming.linkedGoogleId != null;
+    final mergedTrail = {...local.absorbedIds, ...incoming.absorbedIds};
+    if (adoptSets || adoptLink || mergedTrail.length != local.absorbedIds.length) {
+      r.saveWorkout(local.copyWith(
+        sets: adoptSets ? incoming.sets : null,
+        title: (local.title == null || local.title!.trim().isEmpty) ? incoming.title : null,
+        linkedGoogleId: adoptLink ? incoming.linkedGoogleId : null,
+        absorbedIds: mergedTrail.toList(),
+      ));
+    }
   }
   final haveTemplates = {for (final t in r.loadTemplates()) t.id};
   for (final t in ((m['templates'] as List?) ?? const [])) {

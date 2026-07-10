@@ -51,6 +51,18 @@ NUTRITION_PROMPT = (
     "All values plain numbers; use 0 for negligible amounts. Approximate honestly."
 )
 
+# Appended when the request carries a meal photo. The photo is a SUPPLEMENT: the
+# typed description stays the source of truth for WHAT was eaten (never
+# photo-alone — visual food ID is too error-prone), while the image sharpens the
+# parts a description underdetermines (portion size, preparation, sides).
+PHOTO_HINT = (
+    " A photo of the meal is attached. The text description is authoritative for "
+    "WHAT the food is; use the photo to refine PORTION SIZE, preparation and "
+    "composition (e.g. how much rice is actually on the plate, fried vs grilled, "
+    "sauces or sides the text omitted). If the photo contradicts the text about "
+    "what the food is, trust the text."
+)
+
 
 def _num(v):
     """A finite, non-negative float, or None if [v] isn't a usable number."""

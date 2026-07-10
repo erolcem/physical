@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'diet_screen.dart';
 import 'sleep_screen.dart';
 import 'exercise_screen.dart' show openExerciseScreen;
+import 'profile_screen.dart' show openProfileScreen;
 import '../data/diet.dart' show todayDiet;
 import '../data/workout.dart' show sortedByRecent, sessionsOverDays, volumePerDay;
 import '../data/readiness.dart' show readinessLabel, readinessColorValue;
@@ -83,6 +84,8 @@ class ProgressTab extends ConsumerWidget {
                   _SleepCard(title: title, icon: icon, logsMap: logsMap)
                 else if (id == 'diet')
                   _DietCard(title: title, icon: icon)
+                else if (id == 'general')
+                  const _ProfileCard()
                 else
                   _CategoryCard(
                     id: id, title: title, icon: icon, ranked: ranked,
@@ -479,6 +482,63 @@ class _DietCard extends ConsumerWidget {
                   child: Text('${score.round()}',
                       style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: c)),
                 ),
+              const Icon(Icons.chevron_right, color: _muted),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Profile card — identity stats are NUMERIC ENTRIES (age/height/weight/body
+// fat), not graphs. Opens the Profile screen for one-tap manual entry.
+class _ProfileCard extends ConsumerWidget {
+  const _ProfileCard();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    const c = _accent;
+    final latest = ref.watch(latestLogsProvider);
+    final parts = <String>[
+      if (latest['age'] != null) '${latest['age']!.value.toStringAsFixed(0)} yr',
+      if (latest['height'] != null) '${latest['height']!.value.toStringAsFixed(0)} cm',
+      if (latest['bodyweight'] != null) '${latest['bodyweight']!.value.toStringAsFixed(1)} kg',
+      if (latest['body_fat_pct'] != null) '${latest['body_fat_pct']!.value.toStringAsFixed(1)}% bf',
+    ];
+    final subtitle = parts.isEmpty
+        ? 'Age · height · weight · body fat — tap to enter'
+        : parts.join(' · ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => openProfileScreen(context),
+          child: Ink(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _bg3,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: parts.isNotEmpty ? c.withValues(alpha: 0.3) : _border),
+            ),
+            child: Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: c.withValues(alpha: 0.12), shape: BoxShape.circle,
+                  border: Border.all(color: c.withValues(alpha: 0.35)),
+                ),
+                child: const Icon(Icons.straighten, color: c, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Profile', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: const TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
+                ]),
+              ),
               const Icon(Icons.chevron_right, color: _muted),
             ]),
           ),

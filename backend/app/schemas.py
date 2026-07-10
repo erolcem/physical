@@ -123,6 +123,11 @@ class HabitVerifyOut(BaseModel):
 
 class NutritionIn(BaseModel):
     description: str  # a food/meal, e.g. "2 eggs and a slice of toast"
+    # Optional meal photo (base64) to SUPPLEMENT the description — refines
+    # portion/composition. The description is always required: text+photo is
+    # robust, photo-alone is not (visual food ID is too error-prone to trust).
+    image_b64: str | None = None
+    image_mime: str | None = None  # e.g. "image/jpeg"
 
 
 class NutritionOut(BaseModel):

@@ -155,8 +155,13 @@ STANDARDS = {
                            "5k speed vs GENERAL pop (selection-bias corrected) — FLAG"),
     "deadhang":   Standard("deadhang", +1, False, Dist("lognormal", math.log(60), 0.5),
                            "deadhang hold sec — provisional"),
-    "hamstring_mobility": Standard("hamstring_mobility", +1, False, Dist("normal", 15.0, 5.0),
-                           "sit-and-reach cm — provisional, mobility unmodelled"),
+    # Sit-and-reach measured as CM PAST THE TOES (0 = fingertips touch toes;
+    # negative = short). ACSM/YMCA-style norms put young men's median right
+    # around the toes with a wide spread — the old N(15,5) said the median man
+    # reaches 15 cm PAST his toes, so merely touching them ranked bottom 0.1%.
+    "hamstring_mobility": Standard("hamstring_mobility", +1, False, Dist("normal", 2.0, 9.0),
+                           "sit-and-reach, cm past toes (0 = touch); young-male median ~toes, "
+                           "sd ~9 (ACSM/YMCA-style norms) — provisional"),
     "voice":      Standard("voice", -1, False, Dist("normal", 2.3, 0.8),
                            "Acoustic Voice Quality Index (lower better); healthy mean 2.3+-0.8 (Maryn), "
                            "vowel-only approximation - provisional"),
@@ -176,8 +181,11 @@ STANDARDS = {
     "eye":        Standard("eye", -1, False, Dist("normal", 0.05, 0.15),
                            "visual acuity logMAR (lower better); general young-male presenting acuity "
                            "(median just below 20/20 from uncorrected error); best-corrected ~-0.14, provisional"),
-    "pushups":    Standard("pushups", +1, False, Dist("normal", 35.0, 13.0),
-                           "push-ups in 60s, young-male norms, provisional"),
+    # Fitness-test norms (ACSM/Canadian PHE push-up tables) put young men's
+    # median nearer ~25; the old mean of 35 sat at the "good/excellent" cut,
+    # ranking an average performer Wood.
+    "pushups":    Standard("pushups", +1, False, Dist("normal", 25.0, 12.0),
+                           "push-ups in 60s; young-male median ~25 (ACSM/PHE-style norms), provisional"),
     "sprint_100m": Standard("sprint_100m", -1, False, Dist("normal", 15.5, 2.0),
                            "100m sprint seconds (lower better), young-male norms, provisional"),
     "body_fat_pct": Standard("body_fat_pct", -1, False, Dist("normal", 20.0, 6.0),

@@ -190,6 +190,9 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
       ref.invalidate(workoutProvider);
       ref.invalidate(habitsProvider);
       ref.invalidate(pinsProvider);
+      // A holder that arrived in the merge (pre-logged sets from another
+      // device) absorbs into its covering watch exercise right away.
+      ref.read(workoutProvider.notifier).relinkToWatch();
     }
     await api.pushBackup(repoExport(repo));
   } catch (_) {/* backup is best-effort */}

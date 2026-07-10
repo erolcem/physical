@@ -209,7 +209,11 @@ final Map<String, Standard> standards = {
   'sleep_score': const Standard('sleep_score', 1, false, Dist('normal', 77.0, 8.0),
       'Fitbit/Google Health sleep score — most users 72–83 (IQR), provisional'),
   'deadhang': Standard('deadhang', 1, false, Dist('lognormal', math.log(60), 0.5), 'provisional'),
-  'hamstring_mobility': const Standard('hamstring_mobility', 1, false, Dist('normal', 15.0, 5.0), 'provisional'),
+  // Sit-and-reach as CM PAST THE TOES (0 = touch; negative = short). Young-male
+  // median sits right around the toes with a wide spread (ACSM/YMCA-style
+  // norms) — the old N(15,5) ranked a toe-toucher bottom 0.1%.
+  'hamstring_mobility': const Standard('hamstring_mobility', 1, false, Dist('normal', 2.0, 9.0),
+      'sit-and-reach, cm past toes (0 = touch); young-male median ~toes — provisional'),
   'voice': const Standard('voice', -1, false, Dist('normal', 2.3, 0.8),
       'Acoustic Voice Quality Index (lower better); healthy mean 2.3±0.8 (Maryn), '
       'vowel-only approximation — provisional'),
@@ -230,8 +234,10 @@ final Map<String, Standard> standards = {
   'eye': const Standard('eye', -1, false, Dist('normal', 0.05, 0.15),
       'visual acuity logMAR (lower better); general young-male presenting acuity '
       '(median just below 20/20 from uncorrected error); best-corrected ≈ -0.14, provisional'),
-  'pushups': const Standard('pushups', 1, false, Dist('normal', 35.0, 13.0),
-      'push-ups in 60s, young-male norms, provisional'),
+  // Fitness-test norms put young men's median nearer ~25 in 60s; a mean of 35
+  // sat at the "good/excellent" cut and ranked an average performer Wood.
+  'pushups': const Standard('pushups', 1, false, Dist('normal', 25.0, 12.0),
+      'push-ups in 60s; young-male median ~25 (ACSM/PHE-style norms), provisional'),
   'sprint_100m': const Standard('sprint_100m', -1, false, Dist('normal', 15.5, 2.0),
       '100m sprint seconds (lower better), young-male norms, provisional'),
   'body_fat_pct': const Standard('body_fat_pct', -1, false, Dist('normal', 20.0, 6.0),
