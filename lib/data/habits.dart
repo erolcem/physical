@@ -124,6 +124,54 @@ const List<HabitPreset> habitPresets = [
 List<HabitPreset> presetsFor(String section) =>
     [for (final p in habitPresets) if (p.section == section) p];
 
+// Words too generic to signal WHICH preset a typed title means (incl. time
+// qualifiers — "morning X" must not wire X to the Morning-sunlight preset, and
+// "push day sets" must not count as CHEST sets just because both say "sets").
+const Set<String> _inferStop = {
+  'the', 'and', 'all', 'for', 'with', 'per', 'day', 'daily', 'min', 'mins',
+  'session', 'sessions', 'check', 'test', 'score', 'target', 'goal', 'my',
+  'morning', 'evening', 'night', 'weekly', 'sets',
+};
+
+/// Infer the verification wiring for a FREE-TYPED habit title. The preset list
+/// is no longer a picker (the "choose one" grid overflowed and boxed users in)
+/// — it lives on as a knowledge base: if the typed title clearly names a known
+/// quantity ("sleep score 80+", "morning HRV", "protein"), the habit silently
+/// adopts that preset's data verification (linked metric / diet goal key /
+/// sets filter) so it still auto-verifies from real data. No match → null, and
+/// the habit falls back to its section's semantics (workout/diet habits are
+/// AI-judged; the rest are tick-only).
+HabitPreset? inferPreset(String section, String title) {
+  final t = title.toLowerCase();
+  if (t.trim().isEmpty) return null;
+  HabitPreset? best;
+  var bestScore = 0;
+  for (final p in habitPresets) {
+    if (p.section != section) continue;
+    var score = 0;
+    // Signal 1: significant words of the preset's own title present in the text.
+    for (final w in p.title.toLowerCase().split(RegExp(r'[^a-z0-9]+'))) {
+      if (w.length < 2 || _inferStop.contains(w)) continue;
+      if (t.contains(w)) score += w.length >= 4 ? 2 : 1;
+    }
+    // Signal 2: the linked metric's id words ("hrv", "sleep_score" → "sleep
+    // score") — weighted heavier: naming the measured quantity is the
+    // strongest sign the user means THAT data source.
+    final mid = p.linkedMetricId;
+    if (mid != null) {
+      for (final w in mid.split('_')) {
+        if (w.length >= 3 && t.contains(w)) score += 2;
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = p;
+    }
+  }
+  // Demand a real signal (≥2): a single incidental short word isn't a match.
+  return bestScore >= 2 ? best : null;
+}
+
 // ── The habit ──────────────────────────────────────────────────────────────
 class Habit {
   final String id;
@@ -418,6 +466,19 @@ HabitBudget monthlyBudget(List<Habit> habits) {
     cost += h.cost * h.occurrencesPerMonth;
   }
   return HabitBudget(mins.round(), cost);
+}
+
+/// Scheduled habit time per WEEK (minutes): each habit's duration × how many
+/// days a week it's due. The summary shows this and its /7 daily average —
+/// "what does my roster cost me each day/week" reads better than a month blob.
+double weeklyScheduledMins(List<Habit> habits) {
+  var mins = 0.0;
+  for (final h in habits) {
+    final perWeek =
+        h.cadence == 'weekly' ? h.days.length.toDouble().clamp(0.0, 7.0) : 7.0;
+    mins += h.durationMins * perWeek;
+  }
+  return mins;
 }
 
 /// Habits-per-hour across a 24h day (index 0..23) — the planner's density bar.

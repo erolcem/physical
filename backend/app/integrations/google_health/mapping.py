@@ -391,6 +391,9 @@ def parse_nutrition_log(datapoints: list[dict]) -> list[dict]:
             "google_id": gid or f"{day}:{c.get('foodDisplayName', 'food')}",
             "name": c.get("foodDisplayName") or "Food",
             "day": day,
+            # Eaten-at time (HH:MM local) — meal-identity habits ("Dinner")
+            # verify against it; a day alone can't tell breakfast from dinner.
+            "time": start[11:16] if start and len(start) >= 16 else None,
             "calories": _to_float((c.get("energy") or {}).get("kcal")) or 0.0,
             "protein": round(protein, 1),
             "carbs": _to_float((c.get("totalCarbohydrate") or {}).get("grams")) or 0.0,

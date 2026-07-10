@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
-import '../data/ai_verify.dart' show runAiVerification;
+import '../data/ai_verify.dart' show aiJudged, runAiVerification;
 import '../data/api_client.dart' show ApiException;
 import '../data/correlation.dart' show correlationLabel, correlationOf;
 import '../data/habits.dart';
@@ -181,8 +181,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           else ...[
             _summaryCard(doneCount, dueToday.length,
                 label: _dayLabel(_selected).toUpperCase(),
-                verified: dueToday.where((h) => verified(h, dayKey0)).length,
-                missed: [for (final h in dueToday) if (!done(h, dayKey0)) h]),
+                verified: dueToday.where((h) => verified(h, dayKey0)).length),
             const SizedBox(height: 12),
             _budgetCard(habits),
             const SizedBox(height: 12),
@@ -208,7 +207,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                         : ((st.completions[h.id]?.contains(dayKey0) ?? false)
                             ? HabitStatus.manual
                             : HabitStatus.notDone),
-                    aiJudged: h.verify == 'workout' && st.aiVerdictFor(h.id, dayKey0) != null,
+                    aiJudged: aiJudged(h) && st.aiVerdictFor(h.id, dayKey0) != null,
                     measuredToday: measured(h, dayKey0),
                     last7: lastNDays(7),
                     doneDays: _doneDaysOf(h, done)),
@@ -472,17 +471,18 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         content: Text(judged == null
             ? 'AI check unavailable — sign in (☁) and make sure the AI key is set.'
             : judged == 0
-                ? 'No workout habits to AI-check this day — the rest verify automatically from your data.'
-                : 'AI checked $judged workout habit${judged == 1 ? '' : 's'} against the day\'s sessions.')));
+                ? 'Nothing to AI-check this day — the rest verify automatically from your data.'
+                : 'AI checked $judged habit${judged == 1 ? '' : 's'} against the day\'s sessions and meals.')));
   }
 
   // Days counted "done" over the last 60 (auto habits = data-earned, manual = ticked).
   Set<String> _doneDaysOf(Habit h, bool Function(Habit, String) done) =>
       {for (final day in lastNDays(60)) if (done(h, day)) day};
 
-  // ── The day's accountability recap: done / total · verified, + what's still missed ──
+  // ── The day's accountability recap: done / total · verified. (No "still to
+  // do" list — the roster right below IS that list.) ──
   Widget _summaryCard(int done, int total,
-      {required String label, required int verified, required List<Habit> missed}) {
+      {required String label, required int verified}) {
     final frac = total == 0 ? 0.0 : done / total;
     final allDone = done == total && total > 0;
     return Card(
@@ -507,31 +507,23 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 color: allDone ? _teal : _accent,
                 backgroundColor: Colors.white.withValues(alpha: 0.08)),
           ),
-          if (missed.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text('Still to do', style: TextStyle(fontSize: 10, letterSpacing: 1.5, color: _muted.withValues(alpha: 0.8))),
-            const SizedBox(height: 6),
-            Wrap(spacing: 6, runSpacing: 6, children: [
-              for (final h in missed)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Color(sectionOf(h.section).color).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text('${sectionOf(h.section).emoji} ${h.title}',
-                      style: const TextStyle(fontSize: 11, color: Colors.white70)),
-                ),
-            ]),
-          ],
         ]),
       ),
     );
   }
 
-  // ── Planner/budgeter rollup: scheduled time + money per month + habit count ──
+  // ── Planner/budgeter rollup: what the roster costs in TIME, at the two
+  // scales you actually plan at — per day (average) and per week. ──
   Widget _budgetCard(List<Habit> habits) {
-    final b = monthlyBudget(habits);
+    final weekMins = weeklyScheduledMins(habits);
+    final dayMins = weekMins / 7.0;
+    final cost = monthlyBudget(habits).costPerMonth;
+    String fmt(double mins) {
+      if (mins <= 0) return '0m';
+      final h = mins ~/ 60, m = (mins % 60).round();
+      if (h == 0) return '${m}m';
+      return m == 0 ? '${h}h' : '${h}h ${m}m';
+    }
     Widget stat(String v, String l, Color c) => Expanded(
           child: Column(children: [
             Text(v, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: c)),
@@ -544,12 +536,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(children: [
-          stat('${b.hoursPerMonth.toStringAsFixed(b.hoursPerMonth < 10 ? 1 : 0)} h', 'TIME / MONTH', _accent),
+          stat(fmt(dayMins), 'TIME / DAY', _accent),
+          stat(fmt(weekMins), 'TIME / WEEK', _teal),
           // Cost only shows when a habit actually carries one (the field is no
           // longer part of habit creation — legacy habits may still have it).
-          if (b.costPerMonth > 0)
-            stat('£${b.costPerMonth.toStringAsFixed(0)}', 'COST / MONTH', _teal),
-          stat('${habits.length}', 'HABITS', Colors.white),
+          if (cost > 0) stat('£${cost.toStringAsFixed(0)}', 'COST / MONTH', Colors.white),
         ]),
       ),
     );
@@ -566,14 +557,25 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       return p.length > 1 ? (int.tryParse(p[1]) ?? 0) : 0;
     }
     int startMin(Habit h) => hourOf(h) * 60 + minOf(h);
-    int endMin(Habit h) =>
-        startMin(h) + (h.durationMins > 0 ? h.durationMins : 30);
+    const hourH = 44.0;
+    const gutter = 42.0;
+    // A block's VISUAL span: its duration, floored so short habits stay
+    // readable (a 10-min habit still gets one text line). All geometry —
+    // including column assignment below — uses this visual span, so an
+    // inflated short block can never be drawn OVER the next habit (the old
+    // pixel-min was applied after clustering, which stacked 15-min-apart
+    // habits on top of each other).
+    const minVisMins = 32; // ≈ a 20px line at 44px/hour
+    int visMins(Habit h) =>
+        math.max(h.durationMins > 0 ? h.durationMins : 30, minVisMins);
+    int endVis(Habit h) => startMin(h) + visMins(h);
     final timed = [for (final h in due) if (h.time != null) h]..sort((a, b) => a.time!.compareTo(b.time!));
     final untimed = [for (final h in due) if (h.time == null) h];
     final now = DateTime.now();
 
-    // Column assignment: group overlapping blocks into clusters, then greedily
-    // place each block in the first column whose last block has ended.
+    // Column assignment: group visually-overlapping blocks into clusters, then
+    // greedily place each block in the first column whose last block has ended
+    // (interval partitioning, like Google Calendar).
     final colOf = <String, int>{}; // habit id → column
     final colsOf = <String, int>{}; // habit id → columns in its cluster
     var cluster = <Habit>[];
@@ -592,22 +594,19 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       for (var c = 0; c < colEnds.length; c++) {
         if (startMin(h) >= colEnds[c]) {
           colOf[h.id] = c;
-          colEnds[c] = endMin(h);
+          colEnds[c] = endVis(h);
           placed = true;
           break;
         }
       }
       if (!placed) {
         colOf[h.id] = colEnds.length;
-        colEnds.add(endMin(h));
+        colEnds.add(endVis(h));
       }
       cluster.add(h);
-      clusterEnd = math.max(clusterEnd, endMin(h));
+      clusterEnd = math.max(clusterEnd, endVis(h));
     }
     closeCluster();
-
-    const hourH = 44.0;
-    const gutter = 42.0;
     // Window the grid to the habits (clamped to a sensible 6am–10pm default span).
     var startH = 6, endH = 22;
     if (timed.isNotEmpty) {
@@ -622,7 +621,10 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       final isDone = done(h, dayKey0);
       final c = Color(sectionOf(h.section).color);
       final top = (hourOf(h) - startH + minOf(h) / 60.0) * hourH;
-      final height = math.max(26.0, (h.durationMins > 0 ? h.durationMins : 30) / 60.0 * hourH - 3);
+      final height = visMins(h) / 60.0 * hourH - 3;
+      // Short habits (≤ ~20 min real duration) render COMPACT: one tight line,
+      // no emoji, time inline — graceful instead of a squashed full block.
+      final compact = (h.durationMins > 0 ? h.durationMins : 30) <= 20;
       final cols = colsOf[h.id] ?? 1;
       final col = colOf[h.id] ?? 0;
       final colW = (areaW - gutter - 12) / cols;
@@ -645,7 +647,8 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                     duration: const Duration(seconds: 2),
                     content: Text('"${h.title}" counts only from real data (watch/sets/food).'))),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: compact ? 0 : 3),
+              alignment: Alignment.centerLeft,
               decoration: BoxDecoration(
                 color: c.withValues(alpha: isDone ? 0.28 : 0.14),
                 borderRadius: BorderRadius.circular(8),
@@ -654,15 +657,20 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               child: Row(children: [
                 Expanded(
                   child: Text(
-                      narrow ? h.title : '${sectionOf(h.section).emoji} ${h.title}',
+                      compact
+                          ? '${_fmtShort(h.time!)} · ${h.title}'
+                          : narrow
+                              ? h.title
+                              : '${sectionOf(h.section).emoji} ${h.title}',
                       maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                          fontSize: narrow ? 11 : 12, fontWeight: FontWeight.w700,
+                          fontSize: compact ? 10.5 : (narrow ? 11 : 12),
+                          fontWeight: FontWeight.w700,
                           color: isDone ? _muted : Colors.white,
                           decoration: isDone ? TextDecoration.lineThrough : null)),
                 ),
                 if (isDone && !narrow)
-                  const Icon(Icons.check_circle, color: _teal, size: 15),
+                  Icon(Icons.check_circle, color: _teal, size: compact ? 12 : 15),
               ]),
             ),
           ),
@@ -1064,11 +1072,14 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // ── Add OR edit a habit: section → preset (or custom) → cadence/time/duration.
+  // ── Add OR edit a habit: section → free-typed title → cadence/time/duration.
+  // No preset picker: you type what you want; the app INFERS the data wiring
+  // from the title (a known metric/goal auto-verifies exactly), and everything
+  // else is judged by the AI verifier against the day's real evidence.
   // Pass [edit] to modify an existing habit in place (same id, same history). ──
   Future<void> _showAddDialog(BuildContext context, WidgetRef ref, {Habit? edit}) async {
     String section = edit?.section ?? 'sleep';
-    HabitPreset? preset;
+    HabitPreset? inferred = edit == null ? null : inferPreset(section, edit.title);
     final titleCtrl = TextEditingController(text: edit?.title ?? '');
     final durCtrl = TextEditingController(
         text: (edit?.durationMins ?? 0) > 0 ? '${edit!.durationMins}' : '');
@@ -1094,11 +1105,49 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     String cadence = edit?.cadence ?? 'daily';
     final days = <int>{...?edit?.days};
 
+    // Re-infer the data wiring whenever the title/section changes: a title
+    // naming a known quantity ("sleep score", "protein", "steps") adopts its
+    // exact data verification; anything else is AI-judged (workout/diet) or
+    // tick-only. The old "choose one" preset grid is gone — type anything.
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) {
-          final presets = presetsFor(section);
+          void reInfer() {
+            final w = inferPreset(section, titleCtrl.text);
+            if (w?.title == inferred?.title && w?.section == inferred?.section) return;
+            setLocal(() {
+              inferred = w;
+              goalKey = w?.goalKey;
+              unit = w?.unit ?? '';
+              compare = w?.compare ?? 'gte';
+              // Suggest the sensible default target ONLY into an empty field —
+              // visible and editable, never forced.
+              if (w?.target != null && targetCtrl.text.trim().isEmpty) {
+                targetCtrl.text = w!.target == w.target!.roundToDouble()
+                    ? w.target!.round().toString()
+                    : w.target.toString();
+              }
+            });
+          }
+          final metricLabel = inferred?.linkedMetricId == null
+              ? null
+              : () {
+                  try {
+                    return metricById(inferred!.linkedMetricId!).label;
+                  } catch (_) {
+                    return inferred!.linkedMetricId;
+                  }
+                }();
+          final verifyHint = metricLabel != null
+              ? '✓ auto-verifies from $metricLabel data'
+              : inferred?.goalKey != null
+                  ? '✓ measured exactly from your ${section == 'diet' ? 'food log' : 'workout sets'}'
+                  : switch (section) {
+                      'exercise' => '✨ AI-verified against your tracked workouts',
+                      'diet' => '✨ AI-verified against your food log (meal + eaten-at time)',
+                      _ => '☑️ tick-off habit — no data source to auto-verify',
+                    };
           return AlertDialog(
             backgroundColor: _card,
             title: Text(edit == null ? 'New habit' : 'Edit habit'),
@@ -1112,53 +1161,33 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                       label: Text('${s.emoji} ${s.label}'),
                       selected: section == s.id,
                       selectedColor: Color(s.color).withValues(alpha: 0.25),
-                      onSelected: (_) => setLocal(() {
-                        section = s.id;
-                        preset = null;
-                        titleCtrl.clear();
-                        targetCtrl.clear();
-                        goalKey = null; unit = ''; compare = 'gte';
-                      }),
+                      onSelected: (_) {
+                        setLocal(() {
+                          section = s.id;
+                          inferred = null;
+                          goalKey = null; unit = ''; compare = 'gte';
+                        });
+                        reInfer();
+                      },
                     ),
                 ]),
                 const SizedBox(height: 12),
-                const Text('Choose one', style: TextStyle(fontSize: 11, color: _muted)),
-                const SizedBox(height: 4),
-                Wrap(spacing: 6, runSpacing: 4, children: [
-                  for (final p in presets)
-                    ChoiceChip(
-                      label: Text(p.title),
-                      selected: preset?.title == p.title,
-                      selectedColor: _accent.withValues(alpha: 0.25),
-                      onSelected: (_) => setLocal(() {
-                        preset = p;
-                        titleCtrl.text = p.title;
-                        targetCtrl.text = p.target == null
-                            ? ''
-                            : (p.target == p.target!.roundToDouble()
-                                ? p.target!.round().toString()
-                                : p.target.toString());
-                        compare = p.compare;
-                        goalKey = p.goalKey;
-                        unit = p.unit;
-                      }),
-                    ),
-                  ChoiceChip(
-                    label: const Text('✏️ Custom'),
-                    selected: preset == null && titleCtrl.text.isNotEmpty,
-                    onSelected: (_) => setLocal(() {
-                      preset = null;
-                      titleCtrl.clear();
-                      targetCtrl.clear();
-                      goalKey = null; unit = ''; compare = 'gte';
-                    }),
-                  ),
-                ]),
-                const SizedBox(height: 10),
                 TextField(
                   controller: titleCtrl,
-                  decoration: const InputDecoration(labelText: 'Habit', border: OutlineInputBorder()),
+                  autofocus: edit == null,
+                  onChanged: (_) => reInfer(),
+                  decoration: const InputDecoration(
+                      labelText: 'Habit',
+                      hintText: 'type anything — e.g. Dinner by 8pm, Sleep score 80+',
+                      border: OutlineInputBorder()),
                 ),
+                const SizedBox(height: 6),
+                Text(verifyHint,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: metricLabel != null || inferred?.goalKey != null
+                            ? _teal
+                            : _muted)),
                 // Free-text context for the AI — the SPECIFIC activity that counts,
                 // so verification is precise (e.g. an evening makiwara session, not
                 // "any cardio"). Available for every category.
@@ -1299,19 +1328,27 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                   final products = section == 'aesthetics'
                       ? [for (final p in productsCtrl.text.split(',')) if (p.trim().isNotEmpty) p.trim()]
                       : const <String>[];
+                  // The inferred wiring (from the typed title) decides how the
+                  // habit verifies; unmatched titles fall back to the section's
+                  // semantics — workout/diet are AI-judged, the rest tick-only.
+                  final fallbackVerify = section == 'exercise'
+                      ? 'workout'
+                      : section == 'diet'
+                          ? 'diet'
+                          : 'manual';
                   if (edit != null && titleCtrl.text.trim().isNotEmpty) {
                     // Edit in place: same id + createdAt, so streaks/history stay.
-                    // Picking a preset can re-link the verification rule.
+                    // A retyped title can re-link the verification rule.
                     ref.read(habitsProvider.notifier).updateHabit(Habit(
                           id: edit.id,
                           title: titleCtrl.text.trim(),
                           section: section,
-                          verify: preset?.verify ?? edit.verify,
-                          linkedMetricId: preset?.linkedMetricId ?? edit.linkedMetricId,
+                          verify: inferred?.verify ?? edit.verify,
+                          linkedMetricId: inferred?.linkedMetricId ?? edit.linkedMetricId,
                           target: double.tryParse(targetCtrl.text.trim()),
                           compare: compare,
-                          goalKey: goalKey,
-                          unit: unit,
+                          goalKey: goalKey ?? edit.goalKey,
+                          unit: unit.isNotEmpty ? unit : edit.unit,
                           description: descCtrl.text.trim(),
                           products: products,
                           templateId: section == 'exercise' ? templateId : null,
@@ -1323,13 +1360,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                           createdAt: edit.createdAt,
                         ));
                   } else {
-                    final verify = preset?.verify ??
-                        (section == 'exercise' ? 'workout' : section == 'diet' ? 'diet' : 'manual');
                     ref.read(habitsProvider.notifier).addHabit(
                           titleCtrl.text,
                           section: section,
-                          verify: verify,
-                          linkedMetricId: preset?.linkedMetricId,
+                          verify: inferred?.verify ?? fallbackVerify,
+                          linkedMetricId: inferred?.linkedMetricId,
                           target: double.tryParse(targetCtrl.text.trim()),
                           compare: compare,
                           goalKey: goalKey,
@@ -1353,6 +1388,14 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         },
       ),
     );
+  }
+
+  // 24h HH:MM, for compact timeline blocks where AM/PM would waste width.
+  static String _fmtShort(String hhmm) {
+    final p = hhmm.split(':');
+    final h = int.tryParse(p[0]) ?? 0;
+    final m = p.length > 1 ? (int.tryParse(p[1]) ?? 0) : 0;
+    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
   }
 
   String _fmt12(String hhmm) {

@@ -38,8 +38,9 @@ class DietNotifier extends StateNotifier<List<FoodEntry>> {
     Map<String, double> health = const {},
   }) {
     if (name.trim().isEmpty) return;
+    final now = DateTime.now();
     repo.saveFood(FoodEntry(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: now.microsecondsSinceEpoch.toString(),
       dateKey: todayKey(),
       name: name.trim(),
       calories: calories,
@@ -49,6 +50,9 @@ class DietNotifier extends StateNotifier<List<FoodEntry>> {
       fibre: fibre,
       micros: micros,
       health: health,
+      // Eaten-at time (assumed "now" — you log as you eat). Meal-identity
+      // habits (Breakfast/Dinner) verify against this.
+      time: '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}',
     ));
     state = repo.loadFood();
   }

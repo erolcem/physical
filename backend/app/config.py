@@ -38,13 +38,19 @@ class Settings:
 
     # AI coach (PDF Part 5) — Gemini, to stay in the user's Google ecosystem.
     # Get a key from Google AI Studio (aistudio.google.com).
-    # Two tiers: GEMINI_MODEL powers the coach chat + evening digest (deep reasoning
-    # over the full context — Pro-class by default); GEMINI_FAST_MODEL powers the
-    # high-frequency, low-stakes calls (nutrition estimates, nudge lines, habit
-    # verification) where Flash is plenty and ~10× cheaper.
+    # Two tiers: GEMINI_MODEL powers the correctness-critical, low-frequency calls
+    # (coach chat, weekly planner, evening digest, habit verification — deep
+    # reasoning over the full context; Pro-class); GEMINI_FAST_MODEL powers the
+    # high-frequency, low-stakes calls (nutrition estimates, nudge lines,
+    # food-health enrichment) where Flash is plenty and ~4-20× cheaper.
+    # Defaults = the best GA model per tier as of July 2026: gemini-3.1-pro
+    # ($2/$12 per 1M) and gemini-3-flash ($0.50/$3 — cheaper AND stronger than
+    # the old 2.5-flash). The client degrades 404s to the fast model, so an id
+    # that's unavailable for a key/region never breaks the app; override with
+    # the env vars as new models ship.
     gemini_api_key: str = os.environ.get("GEMINI_API_KEY", "")
-    gemini_model: str = os.environ.get("GEMINI_MODEL", "gemini-2.5-pro")
-    gemini_fast_model: str = os.environ.get("GEMINI_FAST_MODEL", "gemini-2.5-flash")
+    gemini_model: str = os.environ.get("GEMINI_MODEL", "gemini-3.1-pro")
+    gemini_fast_model: str = os.environ.get("GEMINI_FAST_MODEL", "gemini-3-flash")
 
 
 settings = Settings()

@@ -467,7 +467,9 @@ class DietScreen extends ConsumerWidget {
         color: _card,
         child: ListTile(
           title: Text(e.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+          // Eaten-at time leads the line — it's what meal habits verify against.
           subtitle: Text(
+              '${e.time != null ? '${e.time} · ' : ''}'
               '${e.calories.round()} kcal · ${e.protein.round()}P / ${e.carbs.round()}C / ${e.fat.round()}F'
               '${e.fibre > 0 ? ' / ${e.fibre.round()}fib' : ''}',
               style: const TextStyle(fontSize: 12, color: _muted)),

@@ -37,13 +37,19 @@ def _build(system: str, turns: list[dict], temperature: float,
            tools: list[dict] | None, minimal: bool, model: str) -> dict:
     # Pro-class models think by default (and reject a zero budget), so they get a
     # large output window that leaves room for thinking + a full reply. Flash gets
-    # thinking disabled so thinking tokens don't eat the output budget (which used
-    # to return finishReason=MAX_TOKENS with NO text) — the prompt reasons explicitly.
+    # thinking dialled down so thinking tokens don't eat the output budget (which
+    # used to return finishReason=MAX_TOKENS with NO text) — the prompt reasons
+    # explicitly. Gemini 2.x flash takes a numeric thinkingBudget; Gemini 3+
+    # replaced it with thinkingLevel (a zero budget is rejected there). A wrong
+    # field only costs the rich tier — the minimal retry below drops it.
     is_flash = "flash" in model or "lite" in model
     gen: dict = {"temperature": temperature,
                  "maxOutputTokens": 1536 if minimal else (4096 if is_flash else 8192)}
     if not minimal and is_flash:
-        gen["thinkingConfig"] = {"thinkingBudget": 0}
+        if model.startswith("gemini-2"):
+            gen["thinkingConfig"] = {"thinkingBudget": 0}
+        else:
+            gen["thinkingConfig"] = {"thinkingLevel": "low"}
     body: dict = {
         "system_instruction": {"parts": [{"text": system}]},
         "contents": [{"role": t["role"], "parts": _turn_parts(t)} for t in turns],

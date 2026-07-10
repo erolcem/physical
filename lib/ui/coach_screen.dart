@@ -7,7 +7,7 @@ import '../data/api_client.dart';
 import '../data/coach_context.dart';
 import '../data/diet.dart' show todayDiet;
 import '../data/habits.dart' show habitSections, sectionOf;
-import '../data/metrics.dart' show metricById, metrics, MetricTier;
+import '../data/metrics.dart' show metricById, metrics;
 import '../data/readiness.dart' show dailyReadiness;
 import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart'
@@ -194,7 +194,9 @@ class _CoachTabState extends ConsumerState<CoachTab>
     final latest = ref.read(latestLogsProvider);
     final out = <String, dynamic>{};
     for (final m in metrics) {
-      if (m.category != 'aesthetics' || m.tier != MetricTier.tracked) continue;
+      // Every aesthetic, whatever its tier — they moved tracked→ranked and the
+      // old tier filter silently emptied this section for the coach.
+      if (m.category != 'aesthetics') continue;
       final l = latest[m.id];
       if (l != null) out[m.label] = l.value;
     }

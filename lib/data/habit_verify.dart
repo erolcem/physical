@@ -83,13 +83,18 @@ double? habitMeasured(
 /// (brush teeth, journaling) are tick-only, as they should be.
 ///
 /// [aiVerdict] is the LLM verifier's judgement for this habit+day. It is
-/// authoritative ONLY for WORKOUT habits — where the rule is genuinely ambiguous
-/// (which session counts for which habit; does a custom activity like "evening
-/// makiwara" match; evidence-exclusivity so one session can't tick two). For
-/// metric/diet/rank_log habits the measured value is DETERMINISTIC and computed
-/// exactly (a protein total, a diet-health score, a sleep reading vs its target),
-/// so the exact rule wins — an LLM can't recompute those and must not override
-/// them (and can't reach a legacy verdict left on a since-edited habit).
+/// authoritative for the habits where the rule is genuinely ambiguous:
+/// - WORKOUT habits (which session counts for which habit; does a custom
+///   activity like "evening makiwara" match; evidence-exclusivity so one
+///   session can't tick two);
+/// - NO-TARGET DIET habits (meal identity: "Dinner" needs an evening meal —
+///   the rule's only signal was "some food was logged today", which let a
+///   breakfast entry tick a Dinner habit).
+/// For metric/rank_log/target-diet habits the measured value is DETERMINISTIC
+/// and computed exactly (a protein total, a diet-health score, a sleep reading
+/// vs its target), so the exact rule wins — an LLM can't recompute those and
+/// must not override them (and can't reach a legacy verdict left on a
+/// since-edited habit).
 bool habitDoneOn(
   Habit h,
   String day, {
@@ -100,12 +105,53 @@ bool habitDoneOn(
   bool? aiVerdict,
 }) {
   if (h.verify == 'manual') return ticked?.contains(day) ?? false;
-  if (h.verify == 'workout' && aiVerdict != null) return aiVerdict;
+  final aiAuthoritative =
+      h.verify == 'workout' || (h.verify == 'diet' && h.target == null);
+  if (aiAuthoritative && aiVerdict != null) return aiVerdict;
   return habitGoalMet(h, day, logs: logs, food: food, workouts: workouts);
 }
 
+/// Minutes since midnight for 'HH:MM', or null.
+int? _mins(String? hhmm) {
+  if (hhmm == null || hhmm.length < 4 || !hhmm.contains(':')) return null;
+  final parts = hhmm.split(':');
+  final h = int.tryParse(parts[0]), m = int.tryParse(parts[1]);
+  if (h == null || m == null) return null;
+  return h * 60 + m;
+}
+
+/// The meal window (minutes since midnight) a meal-identity habit demands, or
+/// null when the habit is generic ("Log all meals"). Named meals win; else the
+/// habit's ideal time defines a ±3h window.
+(int, int)? mealWindowFor(Habit h) {
+  final text = '${h.title} ${h.description}'.toLowerCase();
+  if (text.contains('breakfast')) return (4 * 60, 11 * 60);
+  if (text.contains('lunch')) return (11 * 60, 16 * 60);
+  if (text.contains('dinner') || text.contains('supper')) return (16 * 60 + 30, 23 * 60 + 59);
+  final t = _mins(h.time);
+  if (t != null) return (t - 180, t + 180);
+  return null;
+}
+
+/// Deterministic meal-identity check — the OFFLINE fallback behind the AI
+/// verdict: a "Dinner" habit needs a food entry actually eaten in dinner's
+/// window, not just "some food today" (a breakfast log used to tick it).
+/// Entries without a time can only satisfy generic eating habits.
+bool mealIdentityMet(Habit h, String day, List<FoodEntry> food) {
+  final entries = entriesFor(food, day);
+  if (entries.isEmpty) return false;
+  final window = mealWindowFor(h);
+  if (window == null) return true; // generic "log meals" — any entry counts
+  for (final f in entries) {
+    final t = _mins(f.time);
+    if (t != null && t >= window.$1 && t <= window.$2) return true;
+  }
+  return false;
+}
+
 /// Is the habit's goal met on [day]? Target habits compare the measured value; binary
-/// habits (no target / manual) pass when any corroborating data exists that day.
+/// habits (no target / manual) pass when any corroborating data exists that day —
+/// except meal-identity diet habits, which also need the right TIME of day.
 bool habitGoalMet(
   Habit h,
   String day, {
@@ -114,6 +160,7 @@ bool habitGoalMet(
   required List<WorkoutSession> workouts,
 }) {
   if (h.verify == 'manual') return false; // nothing to corroborate
+  if (h.verify == 'diet' && h.target == null) return mealIdentityMet(h, day, food);
   final measured = habitMeasured(h, day, logs: logs, food: food, workouts: workouts);
   return meetsTarget(target: h.target, compare: h.compare, measured: measured);
 }

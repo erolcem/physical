@@ -794,3 +794,65 @@ vectors regenerate via the committed `backend/scripts/gen_golden.py` (inputs
 preserved, expecteds recomputed); backend anchor tests pin the new curves.
 
 Tests: **352 Flutter + 138 backend, 0 analyzer issues.**
+
+## 25. Owner review round 9 (July 2026) — verification precision & habits UX
+
+**Meal identity: a breakfast can no longer tick "Dinner".** The reported bug: a
+no-target diet habit passed on ANY food logged that day — the rule had no
+concept of WHICH meal. Three-layer fix: (1) `FoodEntry` now carries an
+**eaten-at time** (manual logs stamp "now"; Google imports parse it from the
+nutrition-log interval, plus Google's own `meal_type` label) — shown on each
+diet row; (2) the **AI verifier now judges no-target diet habits** (meal
+identity is semantic, exactly like which-workout-counts) with a new MEAL
+IDENTITY prompt rule — meal windows, "a breakfast entry NEVER satisfies a
+dinner habit", time-less entries can only satisfy generic eating habits, and
+no-eating-after-cutoff semantics; (3) a **deterministic meal-window fallback**
+(`mealIdentityMet`) guards the offline path: named meals get their window
+(breakfast 04–11, lunch 11–16, dinner 16:30–24), unnamed timed habits get
+±3h of their ideal time. Numeric-target diet habits (protein ≥ 150 g) stay
+exact-rule — the LLM still can't out-compute a total.
+
+**Habits screen, decluttered.** The TODAY card is just x/y done + the bar (the
+roster below IS the "still to do" list); the summary stats are now **TIME/DAY +
+TIME/WEEK** (`weeklyScheduledMins` — duration × due-days/week, ÷7 for the day
+average) instead of time/month + habit count; and the **"choose one" preset
+grid is gone**: you type anything, and `inferPreset` silently matches the title
+against the preset knowledge base — a title naming a known quantity ("sleep
+score 80+", "protein", "steps") adopts its exact data wiring (linked metric /
+goal key, with the default target suggested into an empty field), everything
+else is AI-judged (workout/diet) or tick-only, with a live hint line showing
+which. The timeline now computes **column layout from VISUAL spans** (min
+32-min block), so a min-height short habit can never be drawn over the next
+one, and ≤20-min habits render as compact `HH:MM · title` chips.
+
+**AI: current models + the coach truly sees everything.** Defaults upgraded to
+the best-per-tier GA models (July 2026): `gemini-3.1-pro` (chat/planner/
+digest/verification) + `gemini-3-flash` (nudges/nutrition — cheaper AND
+stronger than the old 2.5-flash); Gemini-3-family flash gets
+`thinkingLevel: low` (2.x keeps `thinkingBudget: 0`), and the 404→fast-model
+degrade still guards unavailable ids. Context fixes: the **aesthetics section
+had been silently EMPTY** since aesthetics moved tracked→ranked (a stale tier
+filter) — the coach sees them again; **meals now carry eaten-at times** (meal
+timing is coaching signal, and the system prompt says so); the **energy series
+uses the honest burn estimate** (BMR × 1.2 + workouts — raw BMR told the coach
+every day was a surplus); habit context gains **90-day adherence** alongside
+30-day, plus cadence/days/time/created — the coach's habit memory is now:
+adherence 90 days, streaks to 90 due-days, metric history 730 days
+(180 pts/metric), meals 14 days, sets 20 sessions, verdicts backed up 180 days.
+
+**Aesthetics audit — verified sound, one real bug found (the context one
+above).** Per-path status: **skin/oral** classical-CV composites with
+tone-robust signals (variance-based redness patchiness, luminance CV) and
+guard rails (raises when <5% skin pixels / no teeth found), anchors unit-tested
+(`test_photo.py`); **hair** macro-photo strand counting with user-calibrated
+FOV (density scales with FOV, tested); **eye** tumbling-E with credit-card
+px/mm calibration + correct 5×MAR optotype math + screen-resolution floor,
+helpers unit-tested; **ear** ascending pure-tone ramp, honestly framed as
+uncalibrated dBFS screening; **voice** Praat jitter/shimmer/HNR + AVQI v03.01
+(vowel-only, flagged) with silence rejection — and the sheet REFUSES to log
+when AVQI fails rather than popping the /100 composite into the AVQI-ranked
+metric; **grooming** a weighted structured self-rating, framed as such. All
+seven flagged provisional in the UI; none feed the overall rank headline
+beyond the aesthetics category's 0.15 weight.
+
+Tests: **358 Flutter + 139 backend, 0 analyzer issues.**

@@ -75,6 +75,10 @@ class FoodEntry {
   final Map<String, double> health; // diet-health axis points (0–100 per axis)
   final String source; // 'manual' | 'google'
   final String? googleId; // nutrition-log datapoint id (dedupe imports)
+  // WHEN it was eaten (HH:MM local) — meal-identity habits ("Dinner") need it:
+  // without a time, a breakfast log used to tick an evening-meal habit.
+  final String? time;
+  final String? mealType; // Google's BREAKFAST/LUNCH/DINNER/SNACK when synced
 
   const FoodEntry({
     required this.id,
@@ -89,6 +93,8 @@ class FoodEntry {
     this.health = const {},
     this.source = 'manual',
     this.googleId,
+    this.time,
+    this.mealType,
   });
 
   bool get fromGoogle => source == 'google';
@@ -98,6 +104,7 @@ class FoodEntry {
         id: id, dateKey: dateKey, name: name, calories: calories, protein: protein,
         carbs: carbs, fat: fat, fibre: fibre, micros: micros ?? this.micros,
         health: health ?? this.health, source: source, googleId: googleId,
+        time: time, mealType: mealType,
       );
 
   /// Build from a parsed Google nutrition-log food dict (macros only; no health axes).
@@ -112,6 +119,8 @@ class FoodEntry {
         fibre: (g['fibre'] as num?)?.toDouble() ?? 0,
         source: 'google',
         googleId: g['google_id'] as String?,
+        time: g['time'] as String?,
+        mealType: g['meal_type'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -121,6 +130,8 @@ class FoodEntry {
         if (health.isNotEmpty) 'hl': health,
         if (source != 'manual') 'src': source,
         if (googleId != null) 'gid': googleId,
+        if (time != null) 't': time,
+        if (mealType != null) 'mt': mealType,
       };
 
   factory FoodEntry.fromJson(Map<String, dynamic> j) => FoodEntry(
@@ -142,6 +153,8 @@ class FoodEntry {
         },
         source: j['src'] as String? ?? 'manual',
         googleId: j['gid'] as String?,
+        time: j['t'] as String?,
+        mealType: j['mt'] as String?,
       );
 }
 

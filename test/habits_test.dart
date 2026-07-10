@@ -196,4 +196,31 @@ void main() {
       expect(r.loadCompletions().containsKey('1'), false);
     });
   });
+
+  group('inferPreset (free-typed titles adopt data verification)', () {
+    test('a typed title naming a known quantity wires its exact verification', () {
+      final sleep = inferPreset('sleep', 'Sleep score 80+');
+      expect(sleep?.linkedMetricId, 'sleep_score');
+      final hrv = inferPreset('recovery', 'morning HRV check');
+      expect(hrv?.linkedMetricId, 'hrv');
+      final steps = inferPreset('exercise', 'hit my steps');
+      expect(steps?.linkedMetricId, 'steps');
+      final protein = inferPreset('diet', 'Protein every day');
+      expect(protein?.goalKey, 'protein');
+      final chest = inferPreset('exercise', 'chest sets on push day');
+      expect(chest?.goalKey, contains('chest'));
+    });
+
+    test('unrelated titles do NOT match — they stay AI-judged/tick-only', () {
+      expect(inferPreset('diet', 'Dinner'), isNull);
+      expect(inferPreset('exercise', 'Makiwara punching'), isNull);
+      expect(inferPreset('misc', 'Call grandma'), isNull);
+      expect(inferPreset('sleep', ''), isNull);
+    });
+
+    test('matching is scoped to the chosen section', () {
+      // "protein" is a diet goal — typing it under exercise must not wire diet.
+      expect(inferPreset('exercise', 'protein'), isNull);
+    });
+  });
 }
