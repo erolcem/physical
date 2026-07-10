@@ -10,14 +10,24 @@ import 'habits.dart';
 import 'repository.dart';
 import 'workout.dart' show WorkoutTemplate;
 
-/// The habits the AI judges on [date]: WORKOUT habits due that day. Only these
-/// need the LLM — the rule can't tell which session counts for which habit,
-/// whether a custom activity ("evening makiwara") matches, or enforce
-/// evidence-exclusivity. Metric/diet/rank_log habits are DETERMINISTIC (an exact
-/// measured value vs target), so the rule verifies them precisely and the LLM
-/// would only add latency, cost and arithmetic risk.
+/// Whether the LLM (not the exact rule) is the authority for this habit.
+/// - WORKOUT habits: always — the rule can't tell which session counts for
+///   which habit, whether a custom activity ("evening makiwara") matches, or
+///   enforce evidence-exclusivity.
+/// - DIET habits WITHOUT a numeric target: meal-IDENTITY habits ("Dinner",
+///   "No late-night snacks", "Vegetables with lunch") — the rule's only signal
+///   was "some food was logged today", which let a breakfast entry tick a
+///   Dinner habit. The LLM judges these against each entry's name + eaten-at
+///   time.
+/// Metric / rank_log / target-diet habits stay DETERMINISTIC: an exact measured
+/// value vs its target (protein total, sleep score) — the rule verifies those
+/// precisely and the LLM would only add latency, cost and arithmetic risk.
+bool aiJudged(Habit h) =>
+    h.verify == 'workout' || (h.verify == 'diet' && h.target == null);
+
+/// The habits the AI judges on [date]: the [aiJudged] ones due that day.
 List<Habit> verifiableHabitsOn(List<Habit> habits, DateTime date) =>
-    [for (final h in habits) if (h.verify == 'workout' && isDueOn(h, date)) h];
+    [for (final h in habits) if (aiJudged(h) && isDueOn(h, date)) h];
 
 /// One habit → the compact dict the verifier reasons over. When the habit
 /// carries a workout [plan], the verifier can judge the actual session against
@@ -79,6 +89,10 @@ Map<String, dynamic> dayEvidence(Repository repo, String day) {
       if (f.dateKey == day)
         {
           'name': f.name,
+          // Eaten-at time + meal label so meal-identity habits are judged
+          // against WHEN it was eaten, not just that something was.
+          if (f.time != null) 'time': f.time,
+          if (f.mealType != null) 'meal_type': f.mealType,
           'calories': f.calories,
           'protein': f.protein,
           'carbs': f.carbs,
@@ -96,11 +110,12 @@ Map<String, dynamic> dayEvidence(Repository repo, String day) {
   return {'workouts': workouts, 'food': food, 'metrics': metrics};
 }
 
-/// Run the LLM verification for [day] (defaults to today): sends the due WORKOUT
-/// habits + the day's evidence, stores each verdict. Returns how many habits were
-/// judged, or null when unavailable (offline / not signed in / no AI key) — the
-/// rule-based check keeps working as the fallback. Metric/diet/rank_log habits
-/// verify deterministically from their exact measured value, not the LLM.
+/// Run the LLM verification for [day] (defaults to today): sends the due
+/// AI-judged habits (workout + no-target diet) + the day's evidence, stores
+/// each verdict. Returns how many habits were judged, or null when unavailable
+/// (offline / not signed in / no AI key) — the rule-based check keeps working
+/// as the fallback. Metric/rank_log/target-diet habits verify deterministically
+/// from their exact measured value, not the LLM.
 Future<int?> runAiVerification(ApiClient api, Repository repo, {DateTime? date}) async {
   final d = date ?? DateTime.now();
   final day = dateKey(d);

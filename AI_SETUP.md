@@ -53,7 +53,8 @@ The coach needs one free key from Google. This is the only setup step.
 3. Go to your **Railway** project → the backend **service** → the **Variables** tab.
 4. Add a variable:
    - **Name:** `GEMINI_API_KEY`  **Value:** *(paste the key)*
-   - *(optional)* **Name:** `GEMINI_MODEL`  **Value:** `gemini-2.5-flash` (cheap + fast; the default)
+   - *(optional)* **Name:** `GEMINI_MODEL`  **Value:** `gemini-3.1-pro` (the default — deep coach/verification reasoning)
+   - *(optional)* **Name:** `GEMINI_FAST_MODEL`  **Value:** `gemini-3-flash` (the default — nudges/nutrition, ~$0.50/$3 per 1M tokens)
 5. Railway **redeploys automatically** (~1–2 min).
 
 Done. Open the app's **Coach** tab — it switches from "not set up yet" to a live chat.

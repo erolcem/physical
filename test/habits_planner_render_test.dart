@@ -26,8 +26,13 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('TIME / MONTH'), findsOneWidget);
-    expect(find.text('COST / MONTH'), findsOneWidget);
+    // Summarised time stats at the two scales you plan at: day + week.
+    // (70 min/day roster → 1h 10m/day, 8h 10m/week.)
+    expect(find.text('TIME / DAY'), findsOneWidget);
+    expect(find.text('TIME / WEEK'), findsOneWidget);
+    expect(find.text('1h 10m'), findsOneWidget);
+    expect(find.text('8h 10m'), findsOneWidget);
+    expect(find.text('COST / MONTH'), findsOneWidget); // legacy cost still surfaces
     expect(find.text('TIMELINE'), findsOneWidget);
     expect(find.textContaining('CeraVe'), findsOneWidget); // product pill
   });

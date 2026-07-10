@@ -89,17 +89,20 @@ void main() {
         aiVerdict: false), isFalse);
   });
 
-  test('only WORKOUT habits are sent to the AI verifier', () {
+  test('WORKOUT habits + no-target (meal-identity) DIET habits go to the AI '
+      'verifier; exact-value habits never do', () {
     final habits = [
       h('t1', 'Train'), // workout → sent
       const Habit(id: 'm1', title: 'Sleep', section: 'sleep', verify: 'metric',
           linkedMetricId: 'sleep_score', createdAt: 'x'), // deterministic → not sent
       const Habit(id: 'd1', title: 'Protein', section: 'diet', verify: 'diet',
-          goalKey: 'protein', createdAt: 'x'), // deterministic → not sent
+          goalKey: 'protein', target: 150, createdAt: 'x'), // exact total → not sent
+      const Habit(id: 'd2', title: 'Dinner', section: 'diet', verify: 'diet',
+          createdAt: 'x'), // meal identity — WHICH meal counts is semantic → sent
       const Habit(id: 'r1', title: 'Rank check-in', section: 'misc',
           verify: 'rank_log', createdAt: 'x'), // deterministic → not sent
     ];
-    expect(verifiableHabitsOn(habits, today).map((x) => x.id), ['t1']);
+    expect(verifiableHabitsOn(habits, today).map((x) => x.id), ['t1', 'd2']);
   });
 
   test('runAiVerification sends the day evidence and stores verdicts', () async {

@@ -28,6 +28,26 @@ def test_prompt_encodes_the_exclusivity_and_strictness_rules():
     assert "HONOUR THE DESCRIPTION" in VERIFY_PROMPT
     assert "Makiwara" in VERIFY_PROMPT
     assert "TIME-OF-DAY" in VERIFY_PROMPT
+    # Meal identity: a breakfast entry can never tick a Dinner habit — food
+    # entries carry an eaten-at time the verifier must match to the meal window.
+    assert "MEAL IDENTITY" in VERIFY_PROMPT
+    assert "breakfast entry NEVER satisfies a dinner habit" in VERIFY_PROMPT
+    assert "WATCH ANCHORING" in VERIFY_PROMPT
+
+
+def test_build_evidence_carries_food_times():
+    payload = build_evidence(
+        "2026-07-01",
+        habits=[{"id": "d1", "title": "Dinner", "section": "diet", "verify": "diet"}],
+        workouts=[],
+        food=[{"name": "Eggs", "time": "07:40", "calories": 420},
+              {"name": "Chicken and rice", "time": "19:10", "meal_type": "DINNER",
+               "calories": 700}],
+        metrics={})
+    obj = json.loads(payload)
+    foods = obj["evidence"]["food_log"]
+    assert foods[0]["time"] == "07:40"
+    assert foods[1]["meal_type"] == "DINNER"
 
 
 def test_build_evidence_carries_the_habit_description():

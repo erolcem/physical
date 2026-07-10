@@ -48,6 +48,72 @@ void main() {
     expect(habitGoalMet(train, day, logs: const {}, food: const [], workouts: const []), isFalse);
   });
 
+  test('meal identity: a breakfast log can NOT tick a Dinner habit', () {
+    // The reported bug: "dinner got verified even though i didnt eat it yet
+    // (i logged a breakfast meal)". Food now carries an eaten-at time and
+    // meal-identity habits demand the right window.
+    final breakfastOnly = [
+      const FoodEntry(id: 'a', dateKey: day, name: 'eggs on toast',
+          calories: 420, protein: 22, time: '07:40'),
+    ];
+    const dinner = Habit(id: 'dinner', title: 'Dinner', section: 'diet',
+        verify: 'diet', createdAt: day);
+    expect(habitGoalMet(dinner, day, logs: const {}, food: breakfastOnly, workouts: const []),
+        isFalse);
+    // An actual evening meal satisfies it.
+    final withDinner = [
+      ...breakfastOnly,
+      const FoodEntry(id: 'b', dateKey: day, name: 'chicken and rice',
+          calories: 700, protein: 45, time: '19:10'),
+    ];
+    expect(habitGoalMet(dinner, day, logs: const {}, food: withDinner, workouts: const []),
+        isTrue);
+    // A time-less entry can't prove a meal-specific habit…
+    final noTime = [const FoodEntry(id: 'c', dateKey: day, name: 'meal', calories: 600)];
+    expect(habitGoalMet(dinner, day, logs: const {}, food: noTime, workouts: const []),
+        isFalse);
+    // …but still satisfies a generic "log meals" habit.
+    const logMeals = Habit(id: 'lm', title: 'Log all meals', section: 'diet',
+        verify: 'diet', createdAt: day);
+    expect(habitGoalMet(logMeals, day, logs: const {}, food: noTime, workouts: const []),
+        isTrue);
+  });
+
+  test('meal identity: the habit\'s ideal time defines a ±3h window when unnamed', () {
+    const evening = Habit(id: 'e', title: 'Eat clean', section: 'diet',
+        verify: 'diet', time: '19:00', createdAt: day);
+    final lunchOnly = [
+      const FoodEntry(id: 'a', dateKey: day, name: 'salad', calories: 350, time: '12:30'),
+    ];
+    expect(habitGoalMet(evening, day, logs: const {}, food: lunchOnly, workouts: const []),
+        isFalse); // 12:30 is outside 16:00–22:00
+    final dinnerTime = [
+      const FoodEntry(id: 'b', dateKey: day, name: 'salmon', calories: 600, time: '18:20'),
+    ];
+    expect(habitGoalMet(evening, day, logs: const {}, food: dinnerTime, workouts: const []),
+        isTrue);
+  });
+
+  test('AI verdict is authoritative for no-target diet habits (meal identity), '
+      'but never for exact target-diet habits', () {
+    const dinner = Habit(id: 'dinner', title: 'Dinner', section: 'diet',
+        verify: 'diet', createdAt: day);
+    final food = [
+      const FoodEntry(id: 'a', dateKey: day, name: 'eggs', calories: 420, time: '07:40'),
+    ];
+    // The verifier judged it done (e.g. user described a special schedule) → honoured.
+    expect(habitDoneOn(dinner, day, logs: const {}, food: food, workouts: const [],
+        aiVerdict: true), isTrue);
+    expect(habitDoneOn(dinner, day, logs: const {}, food: food, workouts: const [],
+        aiVerdict: false), isFalse);
+    // A protein habit has an EXACT total — the rule wins even with a verdict.
+    final protein = h('diet', 'diet', goalKey: 'protein', target: 150, unit: 'g');
+    final rich = [const FoodEntry(id: 'b', dateKey: day, name: 'shake',
+        calories: 900, protein: 160, time: '10:00')];
+    expect(habitDoneOn(protein, day, logs: const {}, food: rich, workouts: const [],
+        aiVerdict: false), isTrue); // 160 ≥ 150 — verdict can't unmeasure it
+  });
+
   test('rank_log counts the day\'s manually-tested ranked logs only', () {
     final checkIn = h('misc', 'rank_log', unit: 'tests');
     // Nothing logged → no evidence, not done.

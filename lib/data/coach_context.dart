@@ -8,7 +8,7 @@ import 'habit_verify.dart';
 import 'habits.dart';
 import 'metrics.dart' show metricById, metrics, rankedCountByCategory;
 import 'workout.dart';
-import 'diet.dart' show FoodEntry, dietTotals, bmrMifflin;
+import 'diet.dart' show FoodEntry, dietTotals, bmrMifflin, estimatedDailyBurn;
 import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log, RankResult;
 
@@ -43,9 +43,11 @@ Map<String, List<double>> coachHistory(Map<String, List<Log>> logs,
   return out;
 }
 
-/// Daily energy balance over the last [days] days: calories IN (food) and estimated
-/// calories OUT (Mifflin BMR + active calories from sessions). Bodyweight is in history,
-/// so the coach can relate intake/expenditure to weight change and adjust its advice.
+/// Daily energy balance over the last [days] days: calories IN (food) and the
+/// estimated calories OUT (BMR × 1.2 sedentary baseline + tracked workout kcal
+/// — the same honest estimate the Diet page shows; raw BMR under-read a real
+/// day ~20% and told the coach every day was a surplus). Bodyweight is in
+/// history, so the coach can relate intake/expenditure to weight change.
 Map<String, dynamic> coachEnergy(List<FoodEntry> entries, List<WorkoutSession> sessions,
     {double? weightKg, double? heightCm, int? age, int days = 30}) {
   final keys = lastNDays(days);
@@ -53,9 +55,14 @@ Map<String, dynamic> coachEnergy(List<FoodEntry> entries, List<WorkoutSession> s
   if (inSeries.every((c) => c == 0)) return const {};
   final out = <String, dynamic>{'in': inSeries};
   if (weightKg != null && heightCm != null && age != null) {
-    final bmr = bmrMifflin(weightKg, heightCm, age);
-    out['out'] = [for (final d in keys) (bmr + activeCaloriesOn(sessions, d)).round()];
-    out['bmr'] = bmr.round();
+    out['out'] = [
+      for (final d in keys)
+        estimatedDailyBurn(weightKg, heightCm, age,
+                activeKcal: activeCaloriesOn(sessions, d))
+            .round()
+    ];
+    out['bmr'] = bmrMifflin(weightKg, heightCm, age).round();
+    out['method'] = 'bmr x 1.2 sedentary + workout kcal (estimate)';
   }
   return out;
 }
@@ -72,6 +79,9 @@ List<Map<String, dynamic>> coachMeals(List<FoodEntry> entries,
     for (final e in recent.take(cap))
       {
         'd': e.dateKey,
+        // Eaten-at time — meal timing (late eating, skipped breakfasts, pre-
+        // workout meals) is real coaching signal, not just what was eaten.
+        if (e.time != null) 't': e.time,
         'n': e.name,
         'kcal': e.calories.round(),
         'p': e.protein.round(),
@@ -326,9 +336,11 @@ List<({String title, String body, String ask})> coachInsights({
   return out.take(5).toList();
 }
 
-/// Rich habit context: target, today's measured value + met, streak, 30-day adherence,
-/// and the products used (for aesthetics reasoning). [aiVerdicts] (from the LLM
-/// verification round) override the rule-based done-check per habit+day.
+/// Rich habit context: target, today's measured value + met, streak, adherence
+/// at BOTH scales (30-day and 90-day — the coach's habit memory), schedule
+/// (cadence/time/created), and the products used (for aesthetics reasoning).
+/// [aiVerdicts] (from the LLM verification round) override the rule-based
+/// done-check per habit+day.
 List<Map<String, dynamic>> coachHabits(
   List<Habit> habits,
   Map<String, Set<String>> completions, {
@@ -340,7 +352,8 @@ List<Map<String, dynamic>> coachHabits(
 }) {
   final t = today ?? DateTime.now();
   final tkey = dateKey(t);
-  final window = lastNDays(30, today: t);
+  final window = lastNDays(90, today: t);
+  final recent30 = window.sublist(window.length - 30).toSet();
   return [
     for (final h in habits)
       () {
@@ -349,9 +362,13 @@ List<Map<String, dynamic>> coachHabits(
             aiVerdict: aiVerdicts[h.id]?[day]);
         final dueDays = [for (final d in window) if (isDueAndActive(h, DateTime.parse('${d}T12:00:00'))) d];
         final doneDays = {for (final d in window) if (metOn(d)) d};
-        final adherence = dueDays.isEmpty
-            ? null
-            : (dueDays.where(doneDays.contains).length / dueDays.length * 100).round();
+        int? adherenceOver(Iterable<String> due) {
+          final list = due.toList();
+          if (list.isEmpty) return null;
+          return (list.where(doneDays.contains).length / list.length * 100).round();
+        }
+        final adherence = adherenceOver(dueDays.where(recent30.contains));
+        final adherence90 = adherenceOver(dueDays);
         return {
           'title': h.title,
           'section': h.section,
@@ -359,11 +376,17 @@ List<Map<String, dynamic>> coachHabits(
           if (h.target != null) 'target': h.target,
           if (h.target != null) 'compare': h.compare,
           if (h.unit.isNotEmpty) 'unit': h.unit,
+          // Schedule — so the coach reasons about WHEN, not just whether.
+          'cadence': h.cadence,
+          if (h.days.isNotEmpty) 'days': h.days,
+          if (h.time != null) 'time': h.time,
+          'created': h.createdAt.length >= 10 ? h.createdAt.substring(0, 10) : h.createdAt,
           if (h.verify != 'manual')
             'measured': habitMeasured(h, tkey, logs: logs, food: food, workouts: workouts),
           'met': metOn(tkey),
-          'streak': dueStreak(h, doneDays, today: t, horizon: 30),
+          'streak': dueStreak(h, doneDays, today: t, horizon: 90),
           if (adherence != null) 'adherence': adherence,
+          if (adherence90 != null) 'adherence_90d': adherence90,
           if (h.products.isNotEmpty) 'products': h.products,
         };
       }()
