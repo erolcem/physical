@@ -14,8 +14,8 @@ import '../state/habit_providers.dart';
 import '../state/log_providers.dart';
 import 'progress_screen.dart' show GraphArea;
 
-const _bg = Color(0xFF08091A);
-const _card = Color(0xFF12152E);
+const _bg = Color(0xFF04050C);
+const _card = Color(0xFF0D1024);
 const _accent = Color(0xFF5B6AF8);
 const _teal = Color(0xFF4CE0C3);
 const _muted = Color(0xFF7880A8);

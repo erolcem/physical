@@ -11,8 +11,8 @@ import '../engine/rank_engine.dart' as eng;
 import '../engine/rank_engine.dart' show Log;
 import '../state/providers.dart';
 
-const _bg = Color(0xFF08091A);
-const _card = Color(0xFF161830);
+const _bg = Color(0xFF04050C);
+const _card = Color(0xFF101226);
 const _accent = Color(0xFF5B6AF8);
 const _teal = Color(0xFF4CE0C3);
 const _muted = Color(0xFF7880A8);

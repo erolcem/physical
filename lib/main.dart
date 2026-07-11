@@ -36,11 +36,11 @@ class PhysicalApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF08091A),
+        scaffoldBackgroundColor: const Color(0xFF04050C),
         colorScheme: ColorScheme.fromSeed(
             seedColor: const Color(0xFF5B6AF8), brightness: Brightness.dark),
         cardTheme: CardThemeData(
-          color: const Color(0xFF12152E),
+          color: const Color(0xFF0D1024),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           margin: const EdgeInsets.symmetric(vertical: 5),
         ),

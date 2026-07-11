@@ -147,14 +147,20 @@ STANDARDS = {
     # ── Performance ──
     "vo2max":     Standard("vo2max", +1, False, Dist("normal", 48.0, 9.0),
                            "HUNT men 45.4±8.9, youth-nudged"),
-    "plank":      Standard("plank", +1, False, Dist("lognormal", math.log(80), 0.5),
-                           "plank hold sec (WKU norm, genpop/form-adjusted) — form-dependent"),
+    # Strict-form general-population holds cluster 20-60 s (fit adults 40-60+);
+    # young-male median ~65 s. The old median of 80 ranked a solid 60 s hold
+    # below the population middle.
+    "plank":      Standard("plank", +1, False, Dist("lognormal", math.log(65), 0.5),
+                           "strict plank hold sec; young-male median ~65 (genpop norms, "
+                           "form-adjusted) — form-dependent"),
     "vert":       Standard("vert", +1, False, Dist("normal", 43.0, 11.0),
                            "CMJ-with-arms norms, genpop young male"),
     "run5k_kmh":  Standard("run5k_kmh", +1, False, Dist("lognormal", math.log(8.5), 0.28),
                            "5k speed vs GENERAL pop (selection-bias corrected) — FLAG"),
-    "deadhang":   Standard("deadhang", +1, False, Dist("lognormal", math.log(60), 0.5),
-                           "deadhang hold sec — provisional"),
+    # Common benchmarks: untrained men ~20-40 s, 60 s "good", 90 s+ strong →
+    # young-male median ~50 s (a median of 60 made "good" the mere middle).
+    "deadhang":   Standard("deadhang", +1, False, Dist("lognormal", math.log(50), 0.5),
+                           "deadhang hold sec; young-male median ~50 — provisional"),
     # Sit-and-reach measured as CM PAST THE TOES (0 = fingertips touch toes;
     # negative = short). ACSM/YMCA-style norms put young men's median right
     # around the toes with a wide spread — the old N(15,5) said the median man

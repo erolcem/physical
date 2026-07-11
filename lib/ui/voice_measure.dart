@@ -17,7 +17,7 @@ Future<double?> measureVoiceFlow(BuildContext context, WidgetRef ref) {
   return showModalBottomSheet<double>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF12152E),
+    backgroundColor: const Color(0xFF0D1024),
     shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => const _VoiceMeasureSheet(),
@@ -166,7 +166,7 @@ class _VoiceMeasureSheetState extends ConsumerState<_VoiceMeasureSheet> {
       const SizedBox(height: 18),
       _btn('Use this result', _accent, () => Navigator.of(context).pop(avqi)),
       const SizedBox(height: 8),
-      _btn('Re-record', const Color(0xFF2A2F4A), () => setState(() => _phase = _Phase.idle)),
+      _btn('Re-record', const Color(0xFF232741), () => setState(() => _phase = _Phase.idle)),
     ];
   }
 

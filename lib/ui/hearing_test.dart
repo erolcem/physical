@@ -49,7 +49,7 @@ Future<double?> measureHearingFlow(BuildContext context, WidgetRef ref) {
   return showModalBottomSheet<double>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF12152E),
+    backgroundColor: const Color(0xFF0D1024),
     shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => const _HearingSheet(),

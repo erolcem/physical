@@ -33,8 +33,8 @@ const List<String> _tierFull = [
   'Wood', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Champion', 'Titan', 'Glory'
 ];
 
-const Color _bg = Color(0xFF08091A);
-const Color _bg3 = Color(0xFF161830);
+const Color _bg = Color(0xFF04050C);
+const Color _bg3 = Color(0xFF101226);
 const Color _accent = Color(0xFF5B6AF8);
 const Color _muted = Color(0xFF525878);
 const Color _border = Color(0x12FFFFFF);
@@ -1036,7 +1036,7 @@ class _GraphAreaState extends ConsumerState<GraphArea> {
             lineBarsData: lineBars,
             lineTouchData: LineTouchData(
               touchTooltipData: LineTouchTooltipData(
-                getTooltipColor: (_) => const Color(0xFF1E213E),
+                getTooltipColor: (_) => const Color(0xFF181B33),
                 getTooltipItems: (touchedSpots) {
                   if (touchedSpots.isEmpty) return [];
                   final xVal = touchedSpots.first.x;

@@ -856,3 +856,48 @@ seven flagged provisional in the UI; none feed the overall rank headline
 beyond the aesthetics category's 0.15 weight.
 
 Tests: **358 Flutter + 139 backend, 0 analyzer issues.**
+
+## 26. Owner review round 10 (July 2026) — the presentation pass
+
+**Body graph redrawn.** The prototype-ported blocky figure (rectangular slab
+silhouette, floating muscle quads) is replaced by an athletic male outline —
+head/neck/trap slope, deltoid caps, arms hanging with a real gap from a
+V-tapered torso, narrow waist, hip flare, knee/calf taper, feet — authored
+right-side and mirrored exactly about x=74 (`gen_body.py` scratch generator),
+with every muscle poly re-placed to fit (pec fans with a delt gap, 6-cell abs +
+inert obliques, quad sweep/teardrop pairs, trapezius kite + lats V + inert
+erectors on the back, gastrocnemius heads). Inner-figure hands/shins/feet
+re-seated to the new limbs. Iterated visually via a golden-render harness
+(deleted after use; goldens are platform-sensitive).
+
+**Darker, cohesive theme.** All nine dark tokens shifted down one step in a
+single consistent map (screen 0xFF08091A→0xFF04050C, cards
+0xFF12152E→0xFF0D1024, etc.) across every screen + the Material theme — deeper
+blacks make the tier glows carry the UI.
+
+**The energy graph explains itself.** An ⓘ on the ENERGY TREND card opens a
+plain-language sheet: IN = logged food; OUT = watch total or BMR×1.2+workouts
+estimate; NET = IN−OUT; ~7,700 kcal ≈ 1 kg so avg-net×7÷7700 = expected
+kg/week; the weight strip is the ground truth to trust when they disagree;
+gaps are unlogged days, excluded from the averages.
+
+**Every metric says HOW to log it.** `MetricDef.howTo` — a one-line protocol
+(equipment, form standard, what number to enter) — shown as a 📝 card in the
+detail sheet beside the 📍 movement line, for all 24 ranked non-aesthetic
+metrics + bodyweight/height (aesthetics keep their richer measurement guides).
+
+**Deep rank research (web-grounded).** Every distribution checked against
+published norms: FRIEND registry pins VO₂max men-20s median at exactly 48
+(app: N(48,9) ✓); NHANES-era RHR ~70-72 ✓; RMSSD 40-80 ms young adults ✓
+(lognormal median 50 spans it); vertical jump ~43-45 cm ✓; untrained 100 m
+15-17 s ✓; recreational-male 5k 33-35 min vs the app's general-pop 35-min
+median ✓; HRR average 15-26 bpm (Apple real-world mean 26) ✓; strength
+trained-tail medians land on published intermediate standards (bench 1.15×,
+squat 1.6×, deadlift 2.0×, OHP 0.7×BW) ✓. Two fixes shipped: **plank**
+median 80→65 s (strict-form genpop holds cluster 20-60 s — a 60 s hold ranked
+below the middle) and **deadhang** median 60→50 s (60 s is "good", not
+average). US NHANES young-male body fat (~23-25%) runs above the app's 20±6
+global compromise — kept deliberately, noted here. Goldens regenerated;
+Python⇄Dart parity re-proven.
+
+Tests: **358 Flutter + 139 backend, 0 analyzer issues.**

@@ -14,7 +14,7 @@ import '../state/providers.dart' show repositoryProvider;
 
 const _accent = Color(0xFF5B6AF8);
 const _teal = Color(0xFF4CE0C3);
-const _bg = Color(0xFF12152E);
+const _bg = Color(0xFF0D1024);
 
 void openCloudSheet(BuildContext context) {
   showModalBottomSheet(
@@ -268,7 +268,7 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF12152E),
+        backgroundColor: const Color(0xFF0D1024),
         title: const Text('Restore from cloud?'),
         content: const Text('This replaces ALL data on this device with your last cloud '
             'backup (logs, food, workouts, habits…). Use it on a new device.'),

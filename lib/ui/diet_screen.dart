@@ -21,8 +21,8 @@ import '../state/providers.dart' show latestLogsProvider, logsProvider;
 import 'profile_screen.dart' show promptQuickLog;
 import 'progress_screen.dart' show GraphArea;
 
-const _bg = Color(0xFF08091A);
-const _card = Color(0xFF12152E);
+const _bg = Color(0xFF04050C);
+const _card = Color(0xFF0D1024);
 const _gold = Color(0xFFF6CF3E);
 const _teal = Color(0xFF4CE0C3);
 const _accent = Color(0xFF5B6AF8);
@@ -601,8 +601,18 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            const Expanded(child: Text('ENERGY TREND',
-                style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted))),
+            const Text('ENERGY TREND',
+                style: TextStyle(fontSize: 10, letterSpacing: 2, color: _muted)),
+            // ⓘ how this graph works — the balance maths in plain language.
+            InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => _explainEnergy(context),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                child: Icon(Icons.info_outline, size: 14, color: _muted),
+              ),
+            ),
+            const Spacer(),
             for (final (d, label) in _frames)
               GestureDetector(
                 onTap: () => setState(() => _days = d),
@@ -697,7 +707,7 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
               borderData: FlBorderData(show: false),
               lineTouchData: LineTouchData(
                 touchTooltipData: LineTouchTooltipData(
-                  getTooltipColor: (_) => const Color(0xFF1E213E),
+                  getTooltipColor: (_) => const Color(0xFF181B33),
                   getTooltipItems: (spots) => [
                     for (var i = 0; i < spots.length; i++)
                       LineTooltipItem(
@@ -761,7 +771,7 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
                   borderData: FlBorderData(show: false),
                   lineTouchData: LineTouchData(
                     touchTooltipData: LineTouchTooltipData(
-                      getTooltipColor: (_) => const Color(0xFF1E213E),
+                      getTooltipColor: (_) => const Color(0xFF181B33),
                       getTooltipItems: (spots) => [
                         for (final s in spots)
                           LineTooltipItem(
@@ -780,6 +790,54 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
             ),
           ],
         ]),
+      ),
+    );
+  }
+
+  // Plain-language walkthrough of the energy graph — every number explained.
+  void _explainEnergy(BuildContext context) {
+    Widget item(String emoji, String title, String body) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(emoji, style: const TextStyle(fontSize: 16)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text(body, style: const TextStyle(fontSize: 12.5, color: _muted, height: 1.35)),
+              ]),
+            ),
+          ]),
+        );
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _bg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('How the energy graph works',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            const Text('Weight change is energy in minus energy out. This graph shows both sides of that equation, per day.',
+                style: TextStyle(fontSize: 12.5, color: _muted, height: 1.35)),
+            const SizedBox(height: 16),
+            item('🟡', 'IN — what you ate',
+                'The gold line: each day\'s food-log calories. A day you didn\'t log is a GAP in the line, not a zero — the maths only counts logged days.'),
+            item('🟢', 'OUT — what you burned',
+                'The teal line: your watch\'s total daily burn when synced. Without it, an estimate: your resting burn (BMR from weight/height/age) × 1.2 for everyday movement, plus tracked workout calories.'),
+            item('⚖️', 'NET = IN − OUT',
+                'Eat more than you burn (surplus) and the body stores it; less (deficit) and it draws on reserves. The headline shows the average across the window.'),
+            item('📐', 'The kg/week prediction',
+                'Body tissue stores roughly 7,700 kcal per kg. Average net × 7 days ÷ 7,700 = the expected weekly weight change at this eating pattern.'),
+            item('⚖️', 'The weight strip below',
+                'Your actual scale readings on the same dates. If prediction and scale disagree, trust the scale — it means the OUT estimate is off for your body (or logging is incomplete), so adjust intake by what the scale says.'),
+          ]),
+        ),
       ),
     );
   }

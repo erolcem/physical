@@ -355,10 +355,10 @@
    "bodyweight": null,
    "expected": {
     "tier": "Wood",
-    "sub": "II",
-    "percentile": 8.282852,
-    "top_pct": 91.717148,
-    "rank_value": 0.414143
+    "sub": "III",
+    "percentile": 16.577025,
+    "top_pct": 83.422975,
+    "rank_value": 0.828851
    }
   },
   {
@@ -366,11 +366,11 @@
    "value": 75,
    "bodyweight": null,
    "expected": {
-    "tier": "Silver",
+    "tier": "Gold",
     "sub": "I",
-    "percentile": 44.864834,
-    "top_pct": 55.135166,
-    "rank_value": 2.243242
+    "percentile": 61.263817,
+    "top_pct": 38.736183,
+    "rank_value": 3.063191
    }
   },
   {
@@ -378,11 +378,11 @@
    "value": 120,
    "bodyweight": null,
    "expected": {
-    "tier": "Gold",
+    "tier": "Platinum",
     "sub": "III",
-    "percentile": 79.129713,
-    "top_pct": 20.870287,
-    "rank_value": 3.956486
+    "percentile": 88.993997,
+    "top_pct": 11.006003,
+    "rank_value": 4.8994
    }
   },
   {
@@ -390,11 +390,11 @@
    "value": 200,
    "bodyweight": null,
    "expected": {
-    "tier": "Diamond",
+    "tier": "Champion",
     "sub": "III",
-    "percentile": 96.656758,
-    "top_pct": 3.343242,
-    "rank_value": 5.950965
+    "percentile": 98.770745,
+    "top_pct": 1.229255,
+    "rank_value": 6.885372
    }
   },
   {
@@ -1652,8 +1652,8 @@
    "expected": {
     "tier": "Platinum",
     "sub": "II",
-    "top_pct": 15.363723,
-    "rank_value": 4.463628
+    "top_pct": 13.479364,
+    "rank_value": 4.652064
    }
   },
   {

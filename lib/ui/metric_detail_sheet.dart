@@ -26,7 +26,7 @@ void openDetailSheet(BuildContext context, String metricId) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF12152E),
+    backgroundColor: const Color(0xFF0D1024),
     shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => _MetricDetailSheet(metricId: metricId),
@@ -215,6 +215,26 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
             ]),
             const SizedBox(height: 2),
             Text('📍 ${m.exercise}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            // How to log it — the exact protocol, so numbers are comparable
+            // session to session (and to the population standard).
+            if (m.howTo.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0A0D1D),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0x14FFFFFF)),
+                ),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('📝 ', style: TextStyle(fontSize: 12)),
+                  Expanded(
+                    child: Text(m.howTo,
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF8A90B0), height: 1.35)),
+                  ),
+                ]),
+              ),
+            ],
             const SizedBox(height: 10),
             if (r != null) ...[
               Text('Top ${r.topPct.toStringAsFixed(1)}% of young men',
@@ -265,7 +285,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0E1124),
+                  color: const Color(0xFF0A0D1D),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0x14FFFFFF)),
                 ),
@@ -380,7 +400,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0E1124),
+        color: const Color(0xFF0A0D1D),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0x14FFFFFF)),
       ),
@@ -421,7 +441,7 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
       margin: const EdgeInsets.only(bottom: 5),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: achieved ? col.withValues(alpha: 0.12) : const Color(0xFF0E1124),
+        color: achieved ? col.withValues(alpha: 0.12) : const Color(0xFF0A0D1D),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: isNext ? col : Colors.transparent, width: 1),
       ),
