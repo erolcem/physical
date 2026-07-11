@@ -11,7 +11,7 @@
 // verification.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/habits.dart' show isDueOn, todayKey;
+import '../data/habits.dart' show isDueAndActive, todayKey;
 import '../data/metrics.dart' show MetricDef, MetricTier;
 import '../data/sync.dart' show apiClientProvider;
 import '../data/workout.dart';
@@ -231,7 +231,7 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
     final planned = [
       for (final h in habits)
         if (h.section == 'exercise' && h.templateId != null &&
-            templates.containsKey(h.templateId) && isDueOn(h, today))
+            templates.containsKey(h.templateId) && isDueAndActive(h, today))
           h
     ];
     if (planned.isEmpty) return const SizedBox.shrink();

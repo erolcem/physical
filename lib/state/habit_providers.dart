@@ -82,8 +82,18 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
     _reload();
   }
 
+  /// "Delete" ARCHIVES: the habit leaves the roster, but its identity,
+  /// completions and AI verdicts stay — past days keep showing it, and the
+  /// coach can reference it ("you used to…"). Removing an already-archived
+  /// habit purges it for real (tombstoned so it can't ride back in on a merge).
   void removeHabit(String id) {
-    repo.deleteHabit(id);
+    final h = state.habits.where((x) => x.id == id).firstOrNull;
+    if (h == null) return;
+    if (h.archived) {
+      repo.deleteHabit(id);
+    } else {
+      repo.saveHabit(h.archive());
+    }
     _reload();
   }
 
@@ -128,7 +138,9 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
   void _reload() {
     state = HabitsState(
         repo.loadHabits(), repo.loadCompletions(), repo.loadAiVerdicts());
-    // Keep the daily habit reminders in step with the current set (no-op off iOS/Android).
-    unawaited(NotificationService.instance.syncHabitReminders(state.habits));
+    // Keep the daily habit reminders in step with the ACTIVE roster (archived
+    // habits are history — no reminders). No-op off iOS/Android.
+    unawaited(
+        NotificationService.instance.syncHabitReminders(activeHabits(state.habits)));
   }
 }

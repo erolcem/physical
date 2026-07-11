@@ -201,6 +201,12 @@ class Habit {
   final String cadence; // 'daily' | 'weekly'
   final List<int> days; // weekly: weekday ints 1..7 (Mon..Sun); empty = all
   final String createdAt; // ISO-8601
+  // ARCHIVED, not erased: "deleting" a habit sets this instead of purging it,
+  // so its identity + completions + AI verdicts stay as history — past days
+  // still show it, adherence over its active window stays computable, and the
+  // coach can reference it ("you used to run Tuesdays until June"). null =
+  // active. The active window is createdAt ≤ day < archivedAt.
+  final String? archivedAt; // ISO-8601
 
   const Habit({
     required this.id,
@@ -221,7 +227,23 @@ class Habit {
     this.cadence = 'daily',
     this.days = const [],
     required this.createdAt,
+    this.archivedAt,
   });
+
+  bool get archived => archivedAt != null;
+
+  /// An archived copy (or the habit itself when already archived).
+  Habit archive({DateTime? at}) => archived
+      ? this
+      : Habit(
+          id: id, title: title, section: section, verify: verify,
+          linkedMetricId: linkedMetricId, target: target, compare: compare,
+          goalKey: goalKey, unit: unit, description: description,
+          products: products, templateId: templateId, time: time,
+          durationMins: durationMins, cost: cost, cadence: cadence, days: days,
+          createdAt: createdAt,
+          archivedAt: (at ?? DateTime.now()).toIso8601String(),
+        );
 
   /// Roughly how many times this habit recurs in a 30-day month.
   double get occurrencesPerMonth => cadence == 'weekly' && days.isNotEmpty
@@ -249,6 +271,7 @@ class Habit {
         'time': time, 'dur': durationMins,
         if (cost > 0) 'cost': cost,
         'cadence': cadence, 'days': days, 'created': createdAt,
+        if (archivedAt != null) 'arch': archivedAt,
       };
 
   factory Habit.fromJson(Map<String, dynamic> j) {
@@ -272,9 +295,20 @@ class Habit {
       cadence: j['cadence'] as String? ?? 'daily',
       days: [for (final d in (j['days'] as List? ?? const [])) (d as num).toInt()],
       createdAt: j['created'] as String? ?? DateTime.now().toIso8601String(),
+      archivedAt: j['arch'] as String?,
     );
   }
 }
+
+/// The current roster — everything the user is committed to NOW.
+List<Habit> activeHabits(List<Habit> habits) =>
+    [for (final h in habits) if (!h.archived) h];
+
+/// Past roster, newest archival first — kept as history for past-day views
+/// and the coach's memory.
+List<Habit> archivedHabits(List<Habit> habits) =>
+    [for (final h in habits) if (h.archived) h]
+      ..sort((a, b) => (b.archivedAt ?? '').compareTo(a.archivedAt ?? ''));
 
 /// Does a measured value satisfy a target? No target → any measurement corroborates.
 bool meetsTarget({double? target, String compare = 'gte', double? measured}) {
@@ -306,14 +340,22 @@ String? _createdKey(Habit h) {
   return d == null ? null : dateKey(d);
 }
 
-/// Whether a habit was ACTIVE and due on [date]: scheduled that day AND on or
-/// after the day it was created. Days before creation are not "missed" — the
-/// habit didn't exist yet — so adherence, streaks and the heatmap must not
-/// count them (a brand-new weekly habit otherwise shows weeks of false red).
+/// Whether a habit was ACTIVE and due on [date]: scheduled that day, on or
+/// after the day it was created, AND before the day it was archived. Days
+/// before creation are not "missed" — the habit didn't exist yet — and days
+/// from archival on are not due — the commitment ended. This one rule makes
+/// archived habits vanish from TODAY's roster while still appearing (with
+/// their real done/missed state) when browsing the past days they lived on.
 bool isDueAndActive(Habit h, DateTime date) {
   if (!isDueOn(h, date)) return false;
+  final key = dateKey(date);
   final created = _createdKey(h);
-  return created == null || dateKey(date).compareTo(created) >= 0;
+  if (created != null && key.compareTo(created) < 0) return false;
+  final arch = h.archivedAt;
+  if (arch != null && arch.length >= 10 && key.compareTo(arch.substring(0, 10)) >= 0) {
+    return false;
+  }
+  return true;
 }
 
 /// Two-step verification: a ticked habit is [verified] when its `verify` rule is

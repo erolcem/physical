@@ -91,7 +91,12 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       return ta.compareTo(tb);
     }
 
-    final dueToday = habits.where((h) => isDueOn(h, _selected)).toList()..sort(byTime);
+    // Due list for the shown day, over ALL habits with the active-window rule:
+    // archived habits drop out of today automatically but still appear — with
+    // their real done/missed state — when browsing the past days they lived on
+    // (deleting a habit retires it; the history stays).
+    final active = activeHabits(habits);
+    final dueToday = habits.where((h) => isDueAndActive(h, _selected)).toList()..sort(byTime);
     final doneCount = dueToday.where((h) => done(h, dayKey0)).length;
 
     return Container(
@@ -175,7 +180,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           if (habits.isEmpty)
             _empty()
           else if (_week) ...[
-            _budgetCard(habits),
+            _budgetCard(active),
             const SizedBox(height: 12),
             _weekView(habits, st, met, done),
           ]
@@ -184,7 +189,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                 label: _dayLabel(_selected).toUpperCase(),
                 verified: dueToday.where((h) => verified(h, dayKey0)).length),
             const SizedBox(height: 12),
-            _budgetCard(habits),
+            _budgetCard(active),
             const SizedBox(height: 12),
             if (dueToday.isNotEmpty) _dayTimeline(context, ref, dueToday, done, dayKey0),
             const SizedBox(height: 12),
@@ -212,8 +217,8 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                     measuredToday: measured(h, dayKey0),
                     last7: lastNDays(7),
                     doneDays: _doneDaysOf(h, done)),
-            // Habits scheduled on other days only — for awareness.
-            for (final h in (habits.where((h) => !isDueOn(h, _selected)).toList()..sort(byTime)))
+            // ACTIVE habits scheduled on other days only — for awareness.
+            for (final h in (active.where((h) => !isDueAndActive(h, _selected)).toList()..sort(byTime)))
               _habitTile(context, ref, h,
                   day: dayKey0,
                   done: done(h, dayKey0), streak: dueStreak(h, _doneDaysOf(h, done), horizon: 60),
@@ -344,17 +349,21 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               Expanded(
                   child: Text(h.title,
                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900))),
+              if (!h.archived)
+                IconButton(
+                  tooltip: 'Edit',
+                  icon: const Icon(Icons.edit_outlined, size: 20, color: _teal),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _showAddDialog(context, ref, edit: h);
+                  },
+                ),
               IconButton(
-                tooltip: 'Edit',
-                icon: const Icon(Icons.edit_outlined, size: 20, color: _teal),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _showAddDialog(context, ref, edit: h);
-                },
-              ),
-              IconButton(
-                tooltip: 'Delete',
-                icon: const Icon(Icons.delete_outline, size: 20, color: Color(0xFFFA3737)),
+                // First delete ARCHIVES (history + coach memory kept); deleting
+                // an archived habit purges it for good.
+                tooltip: h.archived ? 'Delete forever' : 'Archive',
+                icon: Icon(h.archived ? Icons.delete_forever : Icons.archive_outlined,
+                    size: 20, color: const Color(0xFFFA3737)),
                 onPressed: () {
                   Navigator.pop(ctx);
                   ref.read(habitsProvider.notifier).removeHabit(h.id);
@@ -762,7 +771,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
               final date = DateTime(monday.year, monday.month, monday.day + i);
               final key = dateKey(date);
               final isToday = key == todayKey();
-              final dayHabits = habits.where((h) => isDueOn(h, date)).toList();
+              final dayHabits = habits.where((h) => isDueAndActive(h, date)).toList();
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 5),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -855,19 +864,25 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
             onLongPress: () => _habitDetail(context, ref, h, doneDays, streak),
             // Manual habits toggle on tap. Data-verifiable ones are STRICT:
             // only real evidence counts (watch session, logged sets, food
-            // totals) — that's what keeps the AI's picture honest.
+            // totals) — that's what keeps the AI's picture honest. Archived
+            // habits are history: read-only, on the days they lived.
             onTap: dimmed
                 ? null
-                : (h.verify == 'manual'
-                    ? () {
-                        HapticFeedback.lightImpact();
-                        ref.read(habitsProvider.notifier).toggleOn(h.id, day);
-                      }
-                    : () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        duration: const Duration(seconds: 3),
-                        content: Text('"${h.title}" counts only from real data — '
-                            'train with the watch / log the sets or food, then sync. '
-                            'The AI check verifies it.')))),
+                : h.archived
+                    ? () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        duration: Duration(seconds: 3),
+                        content: Text('Archived habit — its history is kept for '
+                            'reference (the coach still remembers it), but it\'s read-only.')))
+                    : (h.verify == 'manual'
+                        ? () {
+                            HapticFeedback.lightImpact();
+                            ref.read(habitsProvider.notifier).toggleOn(h.id, day);
+                          }
+                        : () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            duration: const Duration(seconds: 3),
+                            content: Text('"${h.title}" counts only from real data — '
+                                'train with the watch / log the sets or food, then sync. '
+                                'The AI check verifies it.')))),
             child: IntrinsicHeight(
               child: Row(children: [
                 Container(width: 4, color: cc),
@@ -929,7 +944,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                         _badge('🔥 $streak', _accent),
                       // The habit carries its workout plan → one tap starts the
                       // session pre-filled; log what actually happened.
-                      if (h.templateId != null && !done && day == todayKey())
+                      if (!h.archived && h.templateId != null && !done && day == todayKey())
                         IconButton(
                           visualDensity: VisualDensity.compact,
                           iconSize: 22, color: _teal,
@@ -937,13 +952,14 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                           icon: const Icon(Icons.play_circle_outline),
                           onPressed: () => _startPlanned(context, ref, h),
                         ),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 18, color: _muted,
-                        tooltip: 'Edit habit',
-                        icon: const Icon(Icons.edit_outlined),
-                        onPressed: () => _showAddDialog(context, ref, edit: h),
-                      ),
+                      if (!h.archived)
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          iconSize: 18, color: _muted,
+                          tooltip: 'Edit habit',
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: () => _showAddDialog(context, ref, edit: h),
+                        ),
                       // (No per-habit "add to calendar" button: it created an
                       // UNTAGGED event via a template URL that the reconciler
                       // can't see or prune — a guaranteed duplicate of the
@@ -986,6 +1002,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
   }
 
   List<Widget> _pills(Habit h) => [
+        if (h.archived) _pill('🗄 archived', _muted),
         if (h.templateId != null) _pill('🏋 planned workout', _teal),
         if (h.time != null) _pill('⏰ ${_fmt12(h.time!)}', _muted),
         if (h.durationMins > 0) _pill('⏱ ${_fmtDur(h.durationMins)}', _muted),
@@ -1038,7 +1055,9 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
   // prune, no duplicates). Needs the calendar scope — prompts a reconnect if missing.
   Future<void> _pushCalendar(BuildContext context, WidgetRef ref) async {
     setState(() => _calBusy = true);
-    final habits = [for (final h in ref.read(habitsProvider).habits) h.toJson()];
+    final habits = [
+      for (final h in activeHabits(ref.read(habitsProvider).habits)) h.toJson()
+    ];
     String? tz;
     try {
       tz = await FlutterTimezone.getLocalTimezone();

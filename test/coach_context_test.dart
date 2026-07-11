@@ -57,6 +57,32 @@ void main() {
     expect(met.first['target'], 150);
     expect(met.first['met'], isTrue);
     expect(met.first['adherence'], isNotNull);
+    // Pattern memory: the last 14 due days ride along as a ✓/×/– string.
+    expect((met.first['recent_days'] as String).length, 14);
+    expect(met.first['recent_days'], endsWith('✓')); // today, met from evidence
+  });
+
+  test('coachHabits remembers ARCHIVED habits: past roster + lifetime adherence '
+      '(deleting a habit never erases the coach\'s memory of it)', () {
+    final now = DateTime.now();
+    String iso(int daysAgo) =>
+        now.subtract(Duration(days: daysAgo)).toIso8601String();
+    final old = Habit(
+        id: 'old', title: 'Morning run', section: 'exercise', verify: 'manual',
+        createdAt: iso(30), archivedAt: iso(10));
+    // Ticked on 15 of its ~20 active days.
+    final ticks = {for (var d = 11; d < 26; d++) dateKey(now.subtract(Duration(days: d)))};
+    final out = coachHabits([old], {'old': ticks},
+        logs: const {}, food: const [], workouts: const []);
+    final e = out.single;
+    expect(e['archived'], isTrue);
+    expect(e['archived_on'], (old.archivedAt as String).substring(0, 10));
+    expect(e['lifetime_due_days'], 20); // created ≤ d < archived
+    expect(e['lifetime_done_days'], 15);
+    expect(e['lifetime_adherence'], 75);
+    // Archived entries carry no active-only fields (met/streak/recent_days).
+    expect(e.containsKey('met'), isFalse);
+    expect(e.containsKey('recent_days'), isFalse);
   });
 
   test('coachInsights surfaces readiness, correlation, weak area, slipping habit', () {

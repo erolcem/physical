@@ -483,11 +483,19 @@ void repoMerge(Repository r, Map<String, dynamic> m) {
           bodyweight: (j['bw'] as num?)?.toDouble(), ts: ts));
     }
   });
-  final haveHabits = {for (final h in r.loadHabits()) h.id};
+  final localHabits = {for (final h in r.loadHabits()) h.id: h};
   for (final h in ((m['habits'] as List?) ?? const [])) {
     final j = (h as Map).cast<String, dynamic>();
     if (tombs.contains(entityKey('habit', j['id'] as String))) continue;
-    if (!haveHabits.contains(j['id'])) r.saveHabit(Habit.fromJson(j));
+    final incoming = Habit.fromJson(j);
+    final local = localHabits[incoming.id];
+    if (local == null) {
+      r.saveHabit(incoming);
+    } else if (incoming.archived && !local.archived) {
+      // Archival propagates one-way across devices: once retired anywhere,
+      // the habit is history everywhere (its completions/verdicts remain).
+      r.saveHabit(local.archive(at: DateTime.tryParse(incoming.archivedAt!)));
+    }
   }
   ((m['completions'] as Map?) ?? const {}).forEach((hid, days) {
     for (final d in (days as List)) {

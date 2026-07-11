@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'data/habits.dart' show activeHabits;
 import 'data/notifications.dart';
 import 'data/persistent_repository.dart';
 import 'data/rank_history.dart' show backfillRankLogs;
@@ -33,7 +34,8 @@ Future<void> main() async {
   // Proactive habit reminders (no-op on desktop/web; iOS/Android only).
   // Fire-and-forget so the iOS permission prompt never blocks first render.
   unawaited(NotificationService.instance.init().then(
-      (_) => NotificationService.instance.syncHabitReminders(repo.loadHabits())));
+      (_) => NotificationService.instance
+          .syncHabitReminders(activeHabits(repo.loadHabits()))));
   runApp(ProviderScope(
     overrides: [repositoryProvider.overrideWithValue(repo)],
     child: const PhysicalApp(),

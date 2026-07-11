@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:physical/data/habits.dart';
 import 'package:physical/data/repository.dart';
 import 'package:physical/engine/rank_engine.dart' show Log;
+import 'package:physical/state/habit_providers.dart' show HabitsNotifier;
 
 void main() {
   group('sections & presets', () {
@@ -221,6 +222,63 @@ void main() {
     test('matching is scoped to the chosen section', () {
       // "protein" is a diet goal — typing it under exercise must not wire diet.
       expect(inferPreset('exercise', 'protein'), isNull);
+    });
+  });
+
+  group('archive: deleting a habit retires it, history stays', () {
+    Habit mk(String id, {String? created, String? archived}) => Habit(
+        id: id, title: 'Meditate', section: 'recovery', verify: 'manual',
+        createdAt: created ?? '2026-06-01T08:00:00', archivedAt: archived);
+
+    test('remove = archive (completions + verdicts kept); second remove purges', () {
+      final r = InMemoryRepository();
+      final n = HabitsNotifier(r);
+      n.addHabit('Meditate', section: 'recovery');
+      final id = n.state.habits.single.id;
+      n.toggleOn(id, '2026-07-01');
+      r.setAiVerdict(id, '2026-07-02', true);
+      // First delete: archived, NOT gone — history intact, no tombstone.
+      n.removeHabit(id);
+      final archived = n.state.habits.single;
+      expect(archived.archived, isTrue);
+      expect(n.state.completions[id], contains('2026-07-01'));
+      expect(n.state.aiVerdicts[id]?['2026-07-02'], isTrue);
+      expect(r.loadTombstones().any((t) => t.contains(id)), isFalse);
+      // Second delete: purged for good, tombstoned against merges.
+      n.removeHabit(id);
+      expect(n.state.habits, isEmpty);
+      expect(r.loadTombstones(), contains(entityKey('habit', id)));
+    });
+
+    test('isDueAndActive honours the active window: created ≤ day < archived', () {
+      final h = mk('a', created: '2026-06-10T08:00:00', archived: '2026-07-01T09:00:00');
+      expect(isDueAndActive(h, DateTime(2026, 6, 9)), isFalse); // before creation
+      expect(isDueAndActive(h, DateTime(2026, 6, 15)), isTrue); // lived here
+      expect(isDueAndActive(h, DateTime(2026, 7, 1)), isFalse); // archive day on
+      expect(isDueAndActive(h, DateTime(2026, 7, 5)), isFalse); // after retirement
+    });
+
+    test('activeHabits/archivedHabits split; archived JSON round-trips', () {
+      final habits = [mk('a'), mk('b', archived: '2026-07-01T09:00:00')];
+      expect(activeHabits(habits).single.id, 'a');
+      expect(archivedHabits(habits).single.id, 'b');
+      final back = Habit.fromJson(habits[1].toJson());
+      expect(back.archived, isTrue);
+      expect(back.archivedAt, '2026-07-01T09:00:00');
+    });
+
+    test('merge adopts archival from another device (one-way; never resurrects)', () {
+      final r = InMemoryRepository();
+      r.saveHabit(mk('a')); // active here
+      repoMerge(r, {
+        'habits': [mk('a', archived: '2026-07-02T10:00:00').toJson()],
+      });
+      expect(r.loadHabits().single.archived, isTrue);
+      // The reverse: an old snapshot with the ACTIVE version can't un-archive.
+      repoMerge(r, {
+        'habits': [mk('a').toJson()],
+      });
+      expect(r.loadHabits().single.archived, isTrue);
     });
   });
 }

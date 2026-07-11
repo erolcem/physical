@@ -336,9 +336,15 @@ List<({String title, String body, String ask})> coachInsights({
   return out.take(5).toList();
 }
 
-/// Rich habit context: target, today's measured value + met, streak, adherence
-/// at BOTH scales (30-day and 90-day — the coach's habit memory), schedule
-/// (cadence/time/created), and the products used (for aesthetics reasoning).
+/// Rich habit context — the coach's habit memory:
+/// - ACTIVE habits: target, today's measured value + met, streak, adherence at
+///   BOTH scales (30-day + 90-day), schedule (cadence/time/created), products,
+///   and `recent_days` — the last 14 due days as a ✓/×/– string so the model
+///   reads the actual pattern ("missed the last 3 days"), not just an average.
+/// - ARCHIVED habits (newest 20): deleting a habit only RETIRES it, so the
+///   coach still sees what the user used to commit to, when it lived
+///   (created → archived_on), and its lifetime adherence — reference for past
+///   days, never an active commitment.
 /// [aiVerdicts] (from the LLM verification round) override the rule-based
 /// done-check per habit+day.
 List<Map<String, dynamic>> coachHabits(
@@ -354,41 +360,85 @@ List<Map<String, dynamic>> coachHabits(
   final tkey = dateKey(t);
   final window = lastNDays(90, today: t);
   final recent30 = window.sublist(window.length - 30).toSet();
+  final recent14 = window.sublist(window.length - 14);
+
+  bool metOn(Habit h, String day) => habitDoneOn(h, day,
+      logs: logs, food: food, workouts: workouts, ticked: completions[h.id],
+      aiVerdict: aiVerdicts[h.id]?[day]);
+
+  Map<String, dynamic> activeEntry(Habit h) {
+    final dueDays = [
+      for (final d in window)
+        if (isDueAndActive(h, DateTime.parse('${d}T12:00:00'))) d
+    ];
+    final doneDays = {for (final d in window) if (metOn(h, d)) d};
+    int? adherenceOver(Iterable<String> due) {
+      final list = due.toList();
+      if (list.isEmpty) return null;
+      return (list.where(doneDays.contains).length / list.length * 100).round();
+    }
+    final adherence = adherenceOver(dueDays.where(recent30.contains));
+    final adherence90 = adherenceOver(dueDays);
+    // Oldest → newest; today last. ✓ done · × due-but-missed · – not due.
+    final bits = [
+      for (final d in recent14)
+        !isDueAndActive(h, DateTime.parse('${d}T12:00:00'))
+            ? '–'
+            : (doneDays.contains(d) ? '✓' : '×')
+    ].join();
+    return {
+      'title': h.title,
+      'section': h.section,
+      if (h.description.isNotEmpty) 'description': h.description,
+      if (h.target != null) 'target': h.target,
+      if (h.target != null) 'compare': h.compare,
+      if (h.unit.isNotEmpty) 'unit': h.unit,
+      // Schedule — so the coach reasons about WHEN, not just whether.
+      'cadence': h.cadence,
+      if (h.days.isNotEmpty) 'days': h.days,
+      if (h.time != null) 'time': h.time,
+      'created': h.createdAt.length >= 10 ? h.createdAt.substring(0, 10) : h.createdAt,
+      if (h.verify != 'manual')
+        'measured': habitMeasured(h, tkey, logs: logs, food: food, workouts: workouts),
+      'met': metOn(h, tkey),
+      'streak': dueStreak(h, doneDays, today: t, horizon: 90),
+      if (adherence != null) 'adherence': adherence,
+      if (adherence90 != null) 'adherence_90d': adherence90,
+      'recent_days': bits,
+      if (h.products.isNotEmpty) 'products': h.products,
+    };
+  }
+
+  Map<String, dynamic> archivedEntry(Habit h) {
+    // Lifetime adherence over the habit's ACTIVE window (capped to the last
+    // 365 days before archival) — done-ness recomputed from the kept
+    // completions/verdicts/evidence, exactly like a live habit.
+    final archDay = (h.archivedAt ?? tkey).substring(0, 10);
+    final end = DateTime.tryParse('${archDay}T12:00:00') ?? t;
+    final span = lastNDays(365, today: end);
+    var due = 0, done = 0;
+    for (final d in span) {
+      if (!isDueAndActive(h, DateTime.parse('${d}T12:00:00'))) continue;
+      due++;
+      if (metOn(h, d)) done++;
+    }
+    return {
+      'title': h.title,
+      'section': h.section,
+      if (h.description.isNotEmpty) 'description': h.description,
+      if (h.target != null) 'target': h.target,
+      if (h.unit.isNotEmpty) 'unit': h.unit,
+      'archived': true,
+      'created': h.createdAt.length >= 10 ? h.createdAt.substring(0, 10) : h.createdAt,
+      'archived_on': archDay,
+      if (due > 0) 'lifetime_due_days': due,
+      if (due > 0) 'lifetime_done_days': done,
+      if (due > 0) 'lifetime_adherence': (done / due * 100).round(),
+    };
+  }
+
   return [
-    for (final h in habits)
-      () {
-        bool metOn(String day) => habitDoneOn(h, day,
-            logs: logs, food: food, workouts: workouts, ticked: completions[h.id],
-            aiVerdict: aiVerdicts[h.id]?[day]);
-        final dueDays = [for (final d in window) if (isDueAndActive(h, DateTime.parse('${d}T12:00:00'))) d];
-        final doneDays = {for (final d in window) if (metOn(d)) d};
-        int? adherenceOver(Iterable<String> due) {
-          final list = due.toList();
-          if (list.isEmpty) return null;
-          return (list.where(doneDays.contains).length / list.length * 100).round();
-        }
-        final adherence = adherenceOver(dueDays.where(recent30.contains));
-        final adherence90 = adherenceOver(dueDays);
-        return {
-          'title': h.title,
-          'section': h.section,
-          if (h.description.isNotEmpty) 'description': h.description,
-          if (h.target != null) 'target': h.target,
-          if (h.target != null) 'compare': h.compare,
-          if (h.unit.isNotEmpty) 'unit': h.unit,
-          // Schedule — so the coach reasons about WHEN, not just whether.
-          'cadence': h.cadence,
-          if (h.days.isNotEmpty) 'days': h.days,
-          if (h.time != null) 'time': h.time,
-          'created': h.createdAt.length >= 10 ? h.createdAt.substring(0, 10) : h.createdAt,
-          if (h.verify != 'manual')
-            'measured': habitMeasured(h, tkey, logs: logs, food: food, workouts: workouts),
-          'met': metOn(tkey),
-          'streak': dueStreak(h, doneDays, today: t, horizon: 90),
-          if (adherence != null) 'adherence': adherence,
-          if (adherence90 != null) 'adherence_90d': adherence90,
-          if (h.products.isNotEmpty) 'products': h.products,
-        };
-      }()
+    for (final h in activeHabits(habits)) activeEntry(h),
+    for (final h in archivedHabits(habits).take(20)) archivedEntry(h),
   ];
 }

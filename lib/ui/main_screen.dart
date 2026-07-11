@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import '../data/ai_verify.dart' show runAiVerification;
-import '../data/habits.dart' show Habit, todayKey;
+import '../data/habits.dart' show Habit, activeHabits, todayKey;
 import '../data/notifications.dart';
 import '../data/profile.dart' show syncAgeFromDob;
 import '../data/sync.dart' show apiClientProvider, cloudSync;
@@ -97,7 +97,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
         try {
           tz = await FlutterTimezone.getLocalTimezone();
         } catch (_) {/* floating times */}
-        await api.pushCalendar([for (final h in habits) h.toJson()], tz);
+        await api.pushCalendar(
+            [for (final h in activeHabits(habits)) h.toJson()], tz);
       } catch (_) {/* best-effort — sync + the Calendar button retry it */}
     });
   }
@@ -144,7 +145,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
     // Keep daily habit reminders in sync as habits change (no-op off-device),
     // and mirror habit add/edit/remove into Google Calendar automatically.
     ref.listen<HabitsState>(habitsProvider, (prev, next) {
-      NotificationService.instance.syncHabitReminders(next.habits);
+      NotificationService.instance.syncHabitReminders(activeHabits(next.habits));
       if (prev != null &&
           _habitsFingerprint(prev.habits) != _habitsFingerprint(next.habits)) {
         _scheduleCalendarPush(next.habits);

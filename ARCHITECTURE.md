@@ -901,6 +901,39 @@ title-match broke once plans applied into the watch session). The
 link/absorb machinery stays solely as MIGRATION for legacy holders arriving
 from old backups via `repoMerge`; tests reframed accordingly.
 
+## 25d. Habit archive — the coach never forgets (July 2026)
+
+**Deleting a habit now RETIRES it instead of erasing it.** `deleteHabit` used
+to purge the habit + its completions + its AI verdicts in one stroke — the
+coach forgot the habit ever existed and past days lost their roster. Now
+`Habit.archivedAt` marks retirement: the first delete archives (identity +
+completions + verdicts all stay; no tombstone), a second delete on the
+archived habit purges for real (tombstoned).
+
+**One rule drives every view**: `isDueAndActive` = due AND createdAt ≤ day <
+archivedAt. Archived habits therefore vanish from today's roster, reminders,
+Calendar (their events auto-prune on the next push), verification and the
+planner — but still appear, with their true done/missed state, when browsing
+the past days they lived on (day view, week view, heatmap, adherence).
+Archived tiles are read-only with a 🗄 pill; long-press shows the story with
+"Delete forever" as the purge.
+
+**The coach's habit memory, spelled out:** active habits now carry
+`recent_days` — the last 14 due days as a ✓/×/– pattern string — plus 30-day
+and 90-day adherence, streaks (90-day horizon), schedule and creation date;
+archived habits (newest 20) ride every request as `archived: true` entries
+with created/archived_on and lifetime due/done/adherence over their active
+window (≤365 d). The system prompt instructs: archived = reference/history
+("you used to…"), never an active commitment. Archival propagates one-way
+across devices via the backup merge (an old snapshot can't resurrect a
+retired habit as active).
+
+Full AI-memory windows after this round: habits — completions kept forever
+locally, 90-day adherence + 14-day patterns + archived lifetime stats sent
+per request, AI verdicts backed up 180 days; metrics — 730 days
+(180 pts/metric); meals 14 days (with times); workout sets 20 sessions;
+pins always.
+
 ## 26. Owner review round 10 (July 2026) — the presentation pass
 
 **Body graph redrawn.** The prototype-ported blocky figure (rectangular slab

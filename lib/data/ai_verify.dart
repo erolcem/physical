@@ -25,9 +25,10 @@ import 'workout.dart' show WorkoutTemplate;
 bool aiJudged(Habit h) =>
     h.verify == 'workout' || (h.verify == 'diet' && h.target == null);
 
-/// The habits the AI judges on [date]: the [aiJudged] ones due that day.
+/// The habits the AI judges on [date]: the [aiJudged] ones due AND active that
+/// day (archived habits are history — never re-verified).
 List<Habit> verifiableHabitsOn(List<Habit> habits, DateTime date) =>
-    [for (final h in habits) if (aiJudged(h) && isDueOn(h, date)) h];
+    [for (final h in habits) if (aiJudged(h) && isDueAndActive(h, date)) h];
 
 /// One habit → the compact dict the verifier reasons over. When the habit
 /// carries a workout [plan], the verifier can judge the actual session against

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import '../engine/rank_engine.dart' show Log;
 import '../state/habit_providers.dart' show habitsProvider;
+import 'habits.dart' show activeHabits;
 import '../state/log_providers.dart' show dietProvider, workoutProvider, pinsProvider;
 import '../state/providers.dart';
 import 'ai_verify.dart' show runAiVerification;
@@ -200,7 +201,9 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
   // know if it needs the calendar scope (then we can prompt a reconnect).
   var calendarNeedsReconnect = false;
   try {
-    final habits = [for (final h in ref.read(habitsProvider).habits) h.toJson()];
+    final habits = [
+      for (final h in activeHabits(ref.read(habitsProvider).habits)) h.toJson()
+    ];
     if (habits.isNotEmpty) {
       String? tzName;
       try {
