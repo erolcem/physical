@@ -884,6 +884,23 @@ so no stock-M3 widget can leak into the near-black look:
 - Verified visually via a temporary golden-render harness (home / progress /
   habits / diet / dialog screenshots), then removed.
 
+## 25c. Sets exist ONLY inside imported exercises (owner correction, July 2026)
+
+The round-8 "pre-log holder" read the owner's intent wrong. The actual rule:
+**a set cannot exist outside a Google-imported (watch) exercise — you only
+create sets from inside one.** Shipped: `createSession`/`createFromTemplate`
+are DELETED from `WorkoutNotifier` (no code path mints a standalone workout);
+the Exercise FAB, template chips, Today's Plan and the Habits tab's
+"start planned workout" all route through one shared
+`openTodaysWatchExercise(…, {plan})` — it opens today's watch exercise (chooser
+when several), drops a plan's blank set slots INTO it, and when none exists yet
+it says to record with the watch and sync (no holder is created). The
+"WAITING FOR THE WATCH EXERCISE" strip is gone. Today's-Plan "done" now means
+today's watch exercise contains one of the plan's exercises (the old
+title-match broke once plans applied into the watch session). The
+link/absorb machinery stays solely as MIGRATION for legacy holders arriving
+from old backups via `repoMerge`; tests reframed accordingly.
+
 ## 26. Owner review round 10 (July 2026) — the presentation pass
 
 **Body graph redrawn.** The prototype-ported blocky figure (rectangular slab
