@@ -123,42 +123,17 @@ final workoutProvider =
 
 // Exercise sessions are a training/volume log (stats + coach + habits) — decoupled
 // from ranks. Lifts are logged separately in their metric cards for ranking.
+//
+// SETS EXIST ONLY INSIDE A GOOGLE-IMPORTED (WATCH) EXERCISE — the owner's rule.
+// There is deliberately NO createSession/createFromTemplate: nothing in the UI
+// can mint a standalone workout. Sessions enter this store two ways only:
+// importGoogle (the watch exercises) and repoMerge (legacy holders riding an
+// old backup, which relinkToWatch migrates into their covering exercise).
 class WorkoutNotifier extends StateNotifier<List<WorkoutSession>> {
   final Repository repo;
   WorkoutNotifier(this.repo) : super(repo.loadWorkouts());
 
-  /// Create a new set-holder (sets are CHILDREN of a tracked exercise: if a
-  /// watch session already covers this window it absorbs the holder instantly,
-  /// and the sets land inside the real exercise — no separate instance).
-  WorkoutSession createSession({required String type, String? title, int? durationMins}) {
-    final s = WorkoutSession(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      type: type, title: title, durationMins: durationMins,
-      start: DateTime.now().toIso8601String(),
-    );
-    repo.saveWorkout(s);
-    relinkToWatch();
-    state = repo.loadWorkouts();
-    return resolve(s.id) ?? s;
-  }
-
-  /// Start a new session pre-filled with a template's sets (fast logging —
-  /// tweak the odd weight instead of retyping the whole workout). Same child
-  /// rule: absorbs straight into a covering watch exercise when one exists.
-  WorkoutSession createFromTemplate(WorkoutTemplate t) {
-    final s = WorkoutSession(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      type: t.type, title: t.name,
-      start: DateTime.now().toIso8601String(),
-      sets: t.blankSets, // empty slots — fill in the real loads as you lift
-    );
-    repo.saveWorkout(s);
-    relinkToWatch();
-    state = repo.loadWorkouts();
-    return resolve(s.id) ?? s;
-  }
-
-  /// The live session for [id], following the absorption trail: when a manual
+  /// The live session for [id], following the absorption trail: when a legacy
   /// holder has merged into its watch parent, the parent is the answer.
   WorkoutSession? resolve(String id) =>
       state.where((x) => x.id == id).firstOrNull ??

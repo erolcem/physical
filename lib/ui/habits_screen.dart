@@ -20,7 +20,8 @@ import '../data/sync.dart' show apiClientProvider;
 import '../state/habit_providers.dart';
 import '../state/log_providers.dart';
 import '../state/providers.dart' show logsProvider, repositoryProvider;
-import 'exercise_screen.dart' show SessionDetailScreen, TemplateEditorScreen;
+import 'exercise_screen.dart'
+    show TemplateEditorScreen, openTodaysWatchExercise;
 
 const _bg = Color(0xFF04050C);
 const _card = Color(0xFF0D1024);
@@ -1017,8 +1018,9 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
         child: Text(text, style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 12)),
       );
 
-  // Start the habit's planned workout: a new session pre-filled from its
-  // template, opened for logging what actually happened.
+  // Start the habit's planned workout: its set slots drop INTO today's
+  // tracked watch exercise (sets never exist outside one) — or the shared
+  // flow explains to record with the watch and sync first.
   void _startPlanned(BuildContext context, WidgetRef ref, Habit h) {
     final t = ref
         .read(templatesProvider)
@@ -1029,9 +1031,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           content: Text('This habit\'s workout plan was deleted — edit the habit to pick a new one.')));
       return;
     }
-    final s = ref.read(workoutProvider.notifier).createFromTemplate(t);
-    Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => SessionDetailScreen(sessionId: s.id)));
+    openTodaysWatchExercise(context, ref, plan: t);
   }
 
   // Write habits straight into the user's Google Calendar via the Calendar API (upsert +

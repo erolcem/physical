@@ -95,27 +95,29 @@ void main() {
     expect(WorkoutSession.fromJson(parent.toJson()).absorbedIds, contains('m1'));
   });
 
-  test('sets are CHILDREN: a new session absorbs into a covering watch exercise '
-      'instantly — no separate instance is ever visible', () {
+  test('sets are CHILDREN: a legacy holder (e.g. from an old backup) absorbs '
+      'into the covering watch exercise — no separate instance survives', () {
     final repo = InMemoryRepository();
     final now = DateTime.now();
     repo.saveWorkout(WorkoutSession(
         id: 'g:live', type: 'Weightlifting',
         start: now.subtract(const Duration(minutes: 30)).toIso8601String(),
         durationMins: 60, source: 'google', googleId: 'live'));
-    final n = WorkoutNotifier(repo);
-    final s = n.createFromTemplate(const WorkoutTemplate(
-        id: 't1', name: 'Push day',
-        sets: [WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 80, reps: 5)]));
-    // The returned session IS the watch parent, already holding the sets.
+    // A pre-rule standalone session, as repoMerge could still deliver one.
+    repo.saveWorkout(WorkoutSession(
+        id: 'legacy1', type: 'Weightlifting', title: 'Push day',
+        start: now.toIso8601String(),
+        sets: const [WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 80, reps: 5)]));
+    final n = WorkoutNotifier(repo)..relinkToWatch();
+    // One workout, one entry: the watch parent, holding the legacy sets.
+    expect(n.state, hasLength(1));
+    final s = n.state.single;
     expect(s.googleId, 'live');
     expect(s.watchVerified, isTrue);
     expect(s.sets.single.name, 'Bench');
-    expect(n.state, hasLength(1)); // one workout, one entry
     // Adding a set through the old holder id lands in the parent too.
-    final holderId = s.absorbedIds.single;
-    n.addSet(holderId, const WorkoutSet(name: 'Fly', mode: SetMode.weightReps, weight: 20, reps: 12));
-    expect(n.resolve(holderId)!.sets, hasLength(2));
+    n.addSet('legacy1', const WorkoutSet(name: 'Fly', mode: SetMode.weightReps, weight: 20, reps: 12));
+    expect(n.resolve('legacy1')!.sets, hasLength(2));
   });
 
   test('a template drops EMPTY slots you fill in with updateSet', () {
@@ -136,16 +138,18 @@ void main() {
     expect(n.state.single.sets.single.isBlank, isFalse);
   });
 
-  test('pre-logged sets typed HOURS after the watch exercise absorb into it '
-      'when it syncs in (the whole point of pre-logging)', () {
+  test('a legacy holder typed HOURS from the watch exercise still migrates '
+      'into it when the exercise imports (same-day fallback)', () {
     final repo = InMemoryRepository();
-    final n = WorkoutNotifier(repo);
     final today = DateTime.now();
-    // 1) User types sets before the watch session has synced — a holder.
-    final holder = n.createSession(type: 'Weightlifting', title: 'Push day');
-    n.addSet(holder.id, const WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 80, reps: 5));
+    // A pre-rule standalone session with sets, hours from the watch window.
+    repo.saveWorkout(WorkoutSession(
+        id: 'legacy1', type: 'Weightlifting', title: 'Push day',
+        start: DateTime(today.year, today.month, today.day, 21, 30).toIso8601String(),
+        sets: const [WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 80, reps: 5)]));
+    final n = WorkoutNotifier(repo);
     expect(n.state.single.watchVerified, isFalse);
-    // 2) The watch exercise from EARLIER TODAY (no window overlap) syncs in.
+    // The watch exercise from EARLIER TODAY (no window overlap) syncs in.
     final morning = DateTime(today.year, today.month, today.day, 0, 5);
     n.importGoogle([
       {'google_id': 'gwatch', 'type': 'Weightlifting',
@@ -163,36 +167,36 @@ void main() {
   test('updateSetRef/removeSetRef survive absorption mid-edit (never corrupt '
       'a different set)', () {
     final repo = InMemoryRepository();
-    final n = WorkoutNotifier(repo);
-    // Watch parent already has a set of its own.
+    // Watch parent already has a set of its own + a legacy holder alongside.
     final now = DateTime.now();
     repo.saveWorkout(WorkoutSession(
         id: 'g:live', type: 'Weightlifting',
         start: now.subtract(const Duration(minutes: 30)).toIso8601String(),
         durationMins: 120, source: 'google', googleId: 'live',
         sets: const [WorkoutSet(name: 'Squat', mode: SetMode.weightReps, weight: 100, reps: 5)]));
-    final holder = n.createSession(type: 'Weightlifting');
-    // The holder absorbed instantly (covering watch exercise exists) — but the
-    // UI may still hold the pre-absorption set instance. Simulate: grab the
-    // set AFTER absorption, then edit through the STALE holder id.
-    n.addSet(holder.id, const WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 60, reps: 8));
-    final live = n.resolve(holder.id)!;
+    repo.saveWorkout(WorkoutSession(
+        id: 'legacy1', type: 'Weightlifting', start: now.toIso8601String()));
+    final n = WorkoutNotifier(repo);
+    // Adding through the holder id absorbs it into the covering watch parent —
+    // the UI may still hold the pre-absorption id/instances afterwards.
+    n.addSet('legacy1', const WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 60, reps: 8));
+    final live = n.resolve('legacy1')!;
     expect(live.googleId, 'live');
     final benchSet = live.sets.firstWhere((s) => s.name == 'Bench');
-    n.updateSetRef(holder.id, benchSet,
+    n.updateSetRef('legacy1', benchSet,
         const WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 65, reps: 8));
-    final after = n.resolve(holder.id)!;
+    final after = n.resolve('legacy1')!;
     // The BENCH set changed; the parent's own Squat set is untouched.
     expect(after.sets.firstWhere((s) => s.name == 'Bench').weight, 65);
     expect(after.sets.firstWhere((s) => s.name == 'Squat').weight, 100);
     // A value-identical stale copy still resolves (identity fallback → values).
-    n.removeSetRef(holder.id,
+    n.removeSetRef('legacy1',
         const WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 65, reps: 8));
-    expect(n.resolve(holder.id)!.sets.map((s) => s.name), ['Squat']);
+    expect(n.resolve('legacy1')!.sets.map((s) => s.name), ['Squat']);
     // A set that no longer exists is a NO-OP, not a positional guess.
-    n.removeSetRef(holder.id,
+    n.removeSetRef('legacy1',
         const WorkoutSet(name: 'Ghost', mode: SetMode.weightReps, weight: 1, reps: 1));
-    expect(n.resolve(holder.id)!.sets, hasLength(1));
+    expect(n.resolve('legacy1')!.sets, hasLength(1));
   });
 
   test('repoMerge adopts the RICHER set record for the same workout id '
