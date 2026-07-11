@@ -495,8 +495,10 @@ class ApiClient {
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
-  /// Returns {reply: String, actions: List} — actions are confirmable habit
-  /// changes the coach proposed.
+  /// Returns {reply: String, actions: List, queries: List} — actions are
+  /// confirmable habit changes; queries are pending `query_history` lookups
+  /// the caller must resolve from local data and re-post via [toolEvents]
+  /// (each event: {text, calls, results}) until queries comes back empty.
   Future<Map<String, dynamic>> coachChat({
     required String message,
     List<Map<String, String>> history = const [],
@@ -513,6 +515,7 @@ class ApiClient {
     Map<String, dynamic>? energy,
     List<Map<String, dynamic>> meals = const [],
     List<String> pins = const [],
+    List<Map<String, dynamic>> toolEvents = const [],
   }) async {
     final r = await _client
         .post(Uri.parse('$baseUrl/me/coach/chat'),
@@ -533,6 +536,7 @@ class ApiClient {
               if (energy != null && energy.isNotEmpty) 'energy': energy,
               if (meals.isNotEmpty) 'meals': meals,
               if (pins.isNotEmpty) 'pins': pins,
+              if (toolEvents.isNotEmpty) 'tool_events': toolEvents,
             }))
         .timeout(const Duration(seconds: 120));
     if (r.statusCode != 200) throw ApiException(r.body, r.statusCode);

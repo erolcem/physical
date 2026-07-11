@@ -6,8 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth import current_user
-from ..coach import (ACTION_TOOLS, actions_from_calls, compose_system,
-                     context_sections, dedupe_actions, parse_actions)
+from ..coach import (ACTION_TOOLS, MAX_QUERY_ROUNDS, QUERY_TOOL_NAMES,
+                     QUERY_TOOLS, actions_from_calls, compose_system,
+                     context_sections, dedupe_actions, parse_actions,
+                     tool_event_turns, validate_queries)
 from ..config import settings
 from ..db import get_db
 from ..integrations.gemini import client as gemini
@@ -50,13 +52,28 @@ def chat(body: CoachChatIn,
                             body.metric_history, body.energy, body.meals, body.pins)
     turns = [{"role": t.role, "text": t.text} for t in body.history]
     turns.append({"role": "user", "text": body.message})
+    # Replay any resolved history-lookup rounds (functionCall + functionResponse
+    # pairs) so the model continues from its own queries' results.
+    events = [e.model_dump() for e in body.tool_events]
+    turns += tool_event_turns(events)
+    # Under the round cap the model may keep querying; at the cap the query tool
+    # is withheld so it must answer in text (actions stay available — they
+    # terminate anyway, behind a user tap).
+    tools = ACTION_TOOLS + (QUERY_TOOLS if len(events) < MAX_QUERY_ROUNDS else [])
     try:
-        reply, calls = gemini.generate_full(system, turns, tools=ACTION_TOOLS)
+        reply, calls = gemini.generate_full(system, turns, tools=tools)
     except gemini.GeminiError as e:
         raise HTTPException(502, f"Coach unavailable: {e}")
+    queries = validate_queries([c for c in calls if c.get("name") in QUERY_TOOL_NAMES])
+    if queries and len(events) < MAX_QUERY_ROUNDS:
+        # Interim round: hand the lookups back to the app (which holds the data).
+        # Any co-proposed actions are deferred — the model re-proposes them in its
+        # final, fully-informed reply.
+        return CoachChatOut(reply=reply.strip(), actions=[], queries=queries)
     # Actions can arrive as tool calls (preferred) or ```action blocks (fallback).
     clean, fenced = parse_actions(reply)
-    actions = dedupe_actions(actions_from_calls(calls) + fenced)
+    action_calls = [c for c in calls if c.get("name") not in QUERY_TOOL_NAMES]
+    actions = dedupe_actions(actions_from_calls(action_calls) + fenced)
     # If the model only called a tool with no prose, give the bubble a short line.
     if not clean and actions:
         clean = "Here's a change I'd suggest — tap to apply."

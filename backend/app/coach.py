@@ -66,6 +66,14 @@ SYSTEM_PROMPT = (
     "add a short mobility or recovery habit.\n"
     "AESTHETICS — habits can list the products used; reason about them specifically (active "
     "ingredients, routine gaps) when advising on skin/hair/oral.\n\n"
+    "HISTORY LOOKUP — USER DATA is a summary (downsampled history, last-14-days meals, "
+    "recent sets). When the user asks about a SPECIFIC period ('last March', 'before my "
+    "break', 'the week I was sick') or you need finer detail than the summary, call "
+    "query_history: topic 'metric' (full-resolution daily values for one metric id), "
+    "'habit' (day-by-day ✓/× for one habit title — works for archived habits too), "
+    "'meals' (each day's foods with times), or 'workouts' (sessions with sets). The app "
+    "answers instantly from on-device data. Gather what you need FIRST (up to 3 lookups), "
+    "then answer; never guess at history you could look up.\n\n"
     "You are a coach, not a clinician: do not diagnose or give medical treatment advice; "
     "for anything medical, briefly say to consult a professional. Be thorough yet readable: "
     "use short bold headers or tight bullets; no filler.\n\n"
@@ -126,6 +134,107 @@ ACTION_TOOLS = [
             "required": ["text"]},
     },
 ]
+
+# Read-only history lookup the model can call mid-answer. The backend holds no
+# user data, so the router returns validated calls to the APP, which resolves
+# them from its on-device repository and re-posts with the results appended
+# (`tool_events`); the router replays them as functionCall/functionResponse
+# turns and Gemini continues. Capped at MAX_QUERY_ROUNDS so a looping model
+# always lands on a text answer.
+QUERY_TOOLS = [
+    {
+        "name": "query_history",
+        "description": (
+            "Fetch the user's raw on-device history for a date range, beyond the "
+            "summaries in USER DATA. topic 'metric': daily values for one metric id "
+            "(full resolution, unlike the downsampled history). topic 'habit': "
+            "day-by-day done/missed for one habit title — including archived "
+            "(deleted) habits. topic 'meals': each day's foods with kcal/protein "
+            "and eaten-at times. topic 'workouts': sessions with exercises and "
+            "sets. Results return instantly from the device."),
+        "parameters": {"type": "object", "properties": {
+            "topic": {"type": "string",
+                      "enum": ["metric", "habit", "meals", "workouts"]},
+            "id": {"type": "string",
+                   "description": ("metric id (topic=metric, e.g. bench, sleep_score) "
+                                   "or habit title (topic=habit); omit otherwise")},
+            "start": {"type": "string", "description": "YYYY-MM-DD, inclusive"},
+            "end": {"type": "string", "description": "YYYY-MM-DD, inclusive"},
+        }, "required": ["topic", "start", "end"]},
+    },
+]
+
+QUERY_TOOL_NAMES = {t["name"] for t in QUERY_TOOLS}
+MAX_QUERY_ROUNDS = 3          # tool rounds before the model must answer in text
+MAX_QUERY_RANGE_DAYS = 366    # widest window one lookup may span
+
+_QUERY_TOPICS = {"metric", "habit", "meals", "workouts"}
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def validate_queries(calls) -> list[dict]:
+    """Validated query_history calls from the model ([{"name","args"}, ...]) →
+    clean [{"name","args":{topic,id?,start,end}}]. Drops malformed calls; swaps
+    a reversed range; clamps spans wider than MAX_QUERY_RANGE_DAYS (keeping the
+    newest end of the window). Never raises — a bad call is just skipped."""
+    import datetime as _dt
+    out = []
+    for c in (calls or []):
+        if c.get("name") not in QUERY_TOOL_NAMES:
+            continue
+        args = c.get("args") if isinstance(c.get("args"), dict) else {}
+        topic = args.get("topic")
+        start, end = str(args.get("start", "")), str(args.get("end", ""))
+        if topic not in _QUERY_TOPICS:
+            continue
+        if not (_DATE_RE.match(start) and _DATE_RE.match(end)):
+            continue
+        try:
+            s, e = _dt.date.fromisoformat(start), _dt.date.fromisoformat(end)
+        except ValueError:
+            continue
+        if s > e:
+            s, e = e, s
+        if (e - s).days >= MAX_QUERY_RANGE_DAYS:
+            s = e - _dt.timedelta(days=MAX_QUERY_RANGE_DAYS - 1)
+        clean = {"topic": topic, "start": s.isoformat(), "end": e.isoformat()}
+        ident = str(args.get("id", "")).strip()[:80]
+        if topic in ("metric", "habit"):
+            if not ident:
+                continue
+            clean["id"] = ident
+        out.append({"name": "query_history", "args": clean})
+    return out[:4]  # a single round never fans out unboundedly
+
+
+def tool_event_turns(events) -> list[dict]:
+    """Replay turns for resolved tool rounds. Each event is one model round:
+    {text?, calls:[{name,args}], results:[obj]} → a model turn carrying the
+    functionCalls (plus any interim text) and a user turn carrying one
+    functionResponse per call, in order — the pairing Gemini requires.
+    Results get the same PII scrub as the main context (habit titles and food
+    names are free text; the scrub must not depend on which path data takes)."""
+    def _scrubbed(obj: dict) -> dict:
+        try:
+            return json.loads(scrub_pii(json.dumps(obj)))
+        except Exception:
+            return {"error": "result could not be encoded"}
+    turns: list[dict] = []
+    for ev in (events or [])[:MAX_QUERY_ROUNDS]:
+        calls = validate_queries(ev.get("calls"))
+        if not calls:
+            continue
+        results = ev.get("results") or []
+        turns.append({"role": "model", "text": str(ev.get("text") or ""),
+                      "fn_calls": calls})
+        turns.append({"role": "user", "fn_responses": [
+            {"name": c["name"],
+             "response": (_scrubbed(results[i]) if i < len(results)
+                          and isinstance(results[i], dict)
+                          else {"error": "no result returned"})}
+            for i, c in enumerate(calls)]})
+    return turns
+
 
 _ACTION_RE = re.compile(r"```action\s*(\{.*?\})\s*```", re.DOTALL)
 _ACTION_TYPES = {"add_habit", "remove_habit", "adjust_habit_target", "pin_correlation",
@@ -401,7 +510,10 @@ def _meals_lines(meals) -> str | None:
     by_day: dict[str, list[str]] = {}
     for m in meals[:120]:
         d = str(m.get("d", "?"))
-        bits = f"{m.get('n', '?')} ({int(m.get('kcal') or 0)}kcal, {int(m.get('p') or 0)}g P"
+        # Eaten-at time first — the prompt tells the model to use meal TIMING,
+        # so the formatter must surface it (it used to drop it).
+        when = f"{m['t']} " if m.get("t") else ""
+        bits = f"{when}{m.get('n', '?')} ({int(m.get('kcal') or 0)}kcal, {int(m.get('p') or 0)}g P"
         if m.get("fib"):
             bits += f", {int(m['fib'])}g fib"
         bits += ")"
@@ -428,12 +540,22 @@ def _sets_lines(workout_sets) -> str | None:
     return "Recent sets:\n  " + "\n  ".join(out) if out else None
 
 
+_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
 def _habit_lines(habits) -> str | None:
+    """Renders EVERY habit-memory field the app computes — the prompt tells the
+    model about recent_days and archived entries, so this formatter must actually
+    surface them (it used to drop them, leaving the model blind to fields it was
+    told to read). Active and archived habits are split; the done-count denominator
+    is active-only."""
     if not habits:
         return None
-    done = sum(1 for h in habits if h.get("done_today") or h.get("met"))
+    active = [h for h in habits if not h.get("archived")]
+    archived = [h for h in habits if h.get("archived")]
+    done = sum(1 for h in active if h.get("done_today") or h.get("met"))
     items = []
-    for h in habits[:40]:
+    for h in active[:40]:
         bits = [h.get("title", "?")]
         if h.get("section") or h.get("category"):
             bits.append(f"[{h.get('section') or h.get('category')}]")
@@ -444,16 +566,46 @@ def _habit_lines(habits) -> str | None:
             meas = h.get("measured")
             meas_s = f"{meas:g}" if isinstance(meas, (int, float)) else "–"
             bits.append(f"{meas_s}{cmp}{h['target']:g}{h.get('unit', '')}")
+        sched = []
+        if h.get("cadence") == "weekly" and h.get("days"):
+            sched.append(" ".join(_WEEKDAYS[int(d) - 1] for d in h["days"]
+                                  if isinstance(d, (int, float)) and 1 <= int(d) <= 7))
+        if h.get("time"):
+            sched.append(f"at {h['time']}")
+        if sched:
+            bits.append("(" + " ".join(sched) + ")")
         if h.get("met") or h.get("done_today"):
             bits.append("✓done")
         if h.get("streak"):
             bits.append(f"streak {int(h['streak'])}")
         if h.get("adherence") is not None:
-            bits.append(f"{int(h['adherence'])}% adherence")
+            bits.append(f"{int(h['adherence'])}% 30d")
+        if h.get("adherence_90d") is not None:
+            bits.append(f"{int(h['adherence_90d'])}% 90d")
+        if h.get("recent_days"):
+            bits.append(f"last14 {h['recent_days']}")
+        if h.get("since") or h.get("created"):
+            bits.append(f"since {h.get('since') or h.get('created')}")
         if h.get("products"):
             bits.append("uses " + ", ".join(h["products"][:6]))
         items.append(" ".join(bits))
-    return f"Habits ({done}/{len(habits)} done today):\n  " + "\n  ".join(items)
+    for h in archived[:20]:
+        bits = ["🗄", h.get("title", "?")]
+        if h.get("section") or h.get("category"):
+            bits.append(f"[{h.get('section') or h.get('category')}]")
+        span = f"{h.get('created', '?')} → {h.get('archived_on', '?')}"
+        bits.append(f"RETIRED ({span}")
+        if h.get("lifetime_due_days"):
+            bits.append(f"· {int(h.get('lifetime_done_days') or 0)}/"
+                        f"{int(h['lifetime_due_days'])} days")
+        if h.get("lifetime_adherence") is not None:
+            bits.append(f"· {int(h['lifetime_adherence'])}% lifetime")
+        bits[-1] += ")"
+        items.append(" ".join(bits))
+    head = f"Habits ({done}/{len(active)} active done today"
+    if archived:
+        head += f"; {len(archived)} retired shown as history"
+    return head + "):\n  " + "\n  ".join(items)
 
 
 def build_context(samples, habits=None, profile=None, diet=None, training=None,
@@ -527,8 +679,10 @@ def context_sections(samples, habits=None, profile=None, diet=None, training=Non
         "history": _history_summary(metric_history),
         "pins": _pins_lines(pins),
         "coverage": None, "habits": [],
-        "note": ("Only this data is sent to your AI coach. Your email, name, and "
-                 "account id are never shared."),
+        "note": ("Only this data is sent to your AI coach. During a chat the coach can "
+                 "also request a specific date range of your on-device history (one "
+                 "metric, habit, meals, or workouts) — each lookup is shown in the "
+                 "thread. Your email, name, and account id are never shared."),
     }
     if ranks and (ranks.get("coverage") or {}).get("overall"):
         ov = ranks["coverage"]["overall"]
@@ -566,8 +720,10 @@ def context_sections(samples, habits=None, profile=None, diet=None, training=Non
             out["strongest"] = f"{ranked[-1][0]} — {_fmt_rank(ranked[-1][1])}"
         out["recent"] = {m: metrics[m]["value"] for m in _RECENT if m in metrics}
     out["habits"] = [
-        h.get("title", "?")
+        ("🗄 " if h.get("archived") else "")
+        + h.get("title", "?")
         + (f" [{h.get('section') or h.get('category')}]" if (h.get('section') or h.get("category")) else "")
+        + (f" · retired {h['archived_on']}" if h.get("archived") and h.get("archived_on") else "")
         + (f" · streak {int(h['streak'])}" if h.get("streak") else "")
         + (" · done today" if (h.get("met") or h.get("done_today")) else "")
         for h in habits

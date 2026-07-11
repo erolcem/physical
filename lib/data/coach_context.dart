@@ -442,3 +442,141 @@ List<Map<String, dynamic>> coachHabits(
     for (final h in archivedHabits(habits).take(20)) archivedEntry(h),
   ];
 }
+
+/// Answers ONE of the coach's `query_history` tool calls from on-device data —
+/// the backend holds nothing, so mid-chat lookups round-trip through the app.
+/// Topics: 'metric' (full-resolution daily values, unlike the downsampled
+/// context history), 'habit' (day-by-day ✓/× — archived habits included),
+/// 'meals' (foods + eaten-at times per day), 'workouts' (sessions + sets).
+/// Never throws: malformed args come back as a {'error'/'note'} object the
+/// model can read and recover from (e.g. it's told the real habit titles).
+Map<String, dynamic> coachQueryResult(
+  Map<String, dynamic> args, {
+  required List<Habit> habits,
+  required Map<String, Set<String>> completions,
+  required Map<String, List<Log>> logs,
+  required List<FoodEntry> food,
+  required List<WorkoutSession> workouts,
+  Map<String, Map<String, bool>> aiVerdicts = const {},
+  DateTime? today,
+}) {
+  final topic = args['topic'];
+  final t = today ?? DateTime.now();
+  final todayDay = DateTime(t.year, t.month, t.day);
+  var start = DateTime.tryParse('${args['start']}T12:00:00');
+  var end = DateTime.tryParse('${args['end']}T12:00:00');
+  if (start == null || end == null) {
+    return {'error': 'start/end must be YYYY-MM-DD dates'};
+  }
+  if (end.isBefore(start)) (start, end) = (end, start);
+  if (end.isAfter(todayDay)) end = DateTime(todayDay.year, todayDay.month, todayDay.day, 12);
+  if (end.difference(start).inDays >= 366) {
+    start = end.subtract(const Duration(days: 365)); // widest span per lookup
+  }
+  final startKey = dateKey(start), endKey = dateKey(end);
+  bool inRange(String day) =>
+      day.compareTo(startKey) >= 0 && day.compareTo(endKey) <= 0;
+  final head = {'topic': topic, 'start': startKey, 'end': endKey};
+
+  switch (topic) {
+    case 'metric':
+      final id = (args['id'] as String?)?.trim() ?? '';
+      final series = logs[id];
+      if (series == null || series.isEmpty) {
+        return {...head, 'id': id, 'note': "no logs for metric '$id'",
+                'logged_metrics': logs.keys.take(60).toList()};
+      }
+      final byDay = <String, double>{};
+      for (final l in series) {
+        if (l.ts.length >= 10 && inRange(l.ts.substring(0, 10))) {
+          byDay[l.ts.substring(0, 10)] = l.value; // last reading per day
+        }
+      }
+      final days = byDay.keys.toList()..sort();
+      return {
+        ...head, 'id': id,
+        if (days.isEmpty) 'note': 'no readings in this range',
+        'days': {for (final d in days) d: double.parse(byDay[d]!.toStringAsFixed(2))},
+      };
+
+    case 'habit':
+      final wanted = ((args['id'] as String?) ?? '').trim().toLowerCase();
+      final exact = [for (final h in habits) if (h.title.toLowerCase() == wanted) h];
+      final loose = exact.isNotEmpty
+          ? exact
+          : [for (final h in habits) if (h.title.toLowerCase().contains(wanted)) h];
+      if (wanted.isEmpty || loose.isEmpty) {
+        return {...head, 'note': "no habit titled '${args['id']}'",
+                'known_habits': [for (final h in habits.take(40)) h.title]};
+      }
+      final h = loose.first;
+      final days = <String, String>{};
+      var due = 0, done = 0;
+      for (var d = start; !d.isAfter(end); d = d.add(const Duration(days: 1))) {
+        if (!isDueAndActive(h, d)) continue;
+        final key = dateKey(d);
+        final met = habitDoneOn(h, key,
+            logs: logs, food: food, workouts: workouts,
+            ticked: completions[h.id], aiVerdict: aiVerdicts[h.id]?[key]);
+        days[key] = met ? '✓' : '×';
+        due++;
+        if (met) done++;
+      }
+      return {
+        ...head, 'title': h.title, 'archived': h.archived,
+        if (days.isEmpty) 'note': 'habit was not scheduled in this range',
+        'days': days, 'due': due, 'done': done,
+        if (due > 0) 'adherence': (done / due * 100).round(),
+      };
+
+    case 'meals':
+      final byDay = <String, List<Map<String, dynamic>>>{};
+      var total = 0;
+      // Newest days first so a cap keeps the most recent part of the range.
+      final entries = [for (final e in food) if (inRange(e.dateKey)) e]
+        ..sort((a, b) => b.dateKey.compareTo(a.dateKey));
+      for (final e in entries) {
+        if (total >= 150) break;
+        byDay.putIfAbsent(e.dateKey, () => []).add({
+          if (e.time != null) 't': e.time,
+          'n': e.name,
+          'kcal': e.calories.round(),
+          'p': e.protein.round(),
+        });
+        total++;
+      }
+      return {
+        ...head,
+        if (byDay.isEmpty) 'note': 'no food logged in this range',
+        if (total >= 150) 'truncated': true,
+        'days': byDay,
+      };
+
+    case 'workouts':
+      final sessions = [
+        for (final s in sortedByRecent(workouts))
+          if (inRange(s.dateKey)) s
+      ].take(40);
+      final out = [
+        for (final s in sessions)
+          {
+            'date': s.dateKey,
+            'type': s.type,
+            'exercises': [
+              for (final e in groupByExercise(s.sets).entries)
+                {
+                  'name': e.key,
+                  'sets': e.value.length,
+                  'volume': e.value.fold<double>(0, (a, st) => a + st.volume).round(),
+                }
+            ],
+          }
+      ];
+      return {
+        ...head,
+        if (out.isEmpty) 'note': 'no workouts in this range',
+        'sessions': out,
+      };
+  }
+  return {'error': "unknown topic '$topic' — use metric, habit, meals or workouts"};
+}

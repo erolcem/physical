@@ -41,7 +41,7 @@ const _coachFunctions = <(String, String)>[
 ];
 
 class _Msg {
-  final String role; // 'user' | 'model'
+  final String role; // 'user' | 'model' | 'note' (transparency line, not a bubble)
   final String text;
   final List<Map<String, dynamic>> actions; // confirmable habit changes
   _Msg(this.role, this.text, {this.actions = const []});
@@ -63,6 +63,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
   final _scroll = ScrollController();
   final List<_Msg> _messages = [];
   bool _loading = true, _signedIn = false, _configured = false, _sending = false;
+  String _pendingStatus = ''; // shown in the typing bubble during history lookups
   int? _age; // auto-ported from the Google Health profile (no manual profile page)
 
   @override
@@ -203,6 +204,26 @@ class _CoachTabState extends ConsumerState<CoachTab>
     return out;
   }
 
+  // Resolve ONE of the coach's query_history calls from local data (the backend
+  // holds nothing — history lookups round-trip through the app). A failed
+  // lookup becomes an error object the model reads; it must never sink the reply.
+  Map<String, dynamic> _resolveQuery(Map<String, dynamic> args) {
+    try {
+      final hs = ref.read(habitsProvider);
+      return coachQueryResult(args,
+          habits: hs.habits, completions: hs.completions, aiVerdicts: hs.aiVerdicts,
+          logs: ref.read(logsProvider), food: ref.read(dietProvider),
+          workouts: ref.read(workoutProvider));
+    } catch (_) {
+      return const {'error': 'lookup failed on the device'};
+    }
+  }
+
+  String _queryLabel(Map<String, dynamic> args) {
+    final id = args['id'] != null ? ' ${args['id']}' : '';
+    return '${args['topic']}$id ${args['start']}→${args['end']}';
+  }
+
   Future<void> _send(String raw) async {
     final text = raw.trim();
     if (text.isEmpty || _sending) return;
@@ -210,28 +231,69 @@ class _CoachTabState extends ConsumerState<CoachTab>
     // Cap the replayed transcript: the full data context is rebuilt fresh every
     // message anyway, so only recent conversational turns matter — an unbounded
     // history just grows each request until it crowds out the data itself.
-    final turns = _messages.length > 24
-        ? _messages.sublist(_messages.length - 24)
-        : _messages;
+    // Notes (lookup transparency lines) aren't conversation — skip them.
+    final talk = [for (final m in _messages) if (m.role != 'note') m];
+    final turns = talk.length > 24 ? talk.sublist(talk.length - 24) : talk;
     final history = [for (final m in turns) {'role': m.role, 'text': m.text}];
     setState(() {
       _messages.add(_Msg('user', text));
       _sending = true;
+      _pendingStatus = '';
       _input.clear();
     });
     _scrollToBottom();
     try {
-      final res = await api.coachChat(
-          message: text, history: history, habits: _habitsCtx(), profile: _profileCtx(),
-          diet: _dietCtx(), training: _trainingCtx(), aesthetics: _aestheticsCtx(),
-          ranks: _ranksCtx(), trends: _trendsCtx(),
-          correlations: _correlationsCtx(), workoutSets: _setsCtx(),
-          metricHistory: _historyCtx(), energy: _energyCtx(), meals: _mealsCtx(),
-          pins: _pinsCtx());
-      final reply = (res['reply'] as String?) ?? '';
+      // Tool loop: the coach may ask for specific history ranges before
+      // answering. Resolve each round locally and continue, up to 3 rounds
+      // (the backend withholds the query tool past the cap, forcing an answer).
+      final toolEvents = <Map<String, dynamic>>[];
+      final lookedUp = <String>[];
+      Map<String, dynamic> res;
+      while (true) {
+        res = await api.coachChat(
+            message: text, history: history, habits: _habitsCtx(), profile: _profileCtx(),
+            diet: _dietCtx(), training: _trainingCtx(), aesthetics: _aestheticsCtx(),
+            ranks: _ranksCtx(), trends: _trendsCtx(),
+            correlations: _correlationsCtx(), workoutSets: _setsCtx(),
+            metricHistory: _historyCtx(), energy: _energyCtx(), meals: _mealsCtx(),
+            pins: _pinsCtx(), toolEvents: toolEvents);
+        final queries = [
+          for (final q in (res['queries'] as List?) ?? const [])
+            if (q is Map) q.cast<String, dynamic>()
+        ];
+        if (queries.isEmpty || toolEvents.length >= 3) break;
+        final results = <Map<String, dynamic>>[];
+        for (final q in queries) {
+          final args = ((q['args'] as Map?) ?? const {}).cast<String, dynamic>();
+          results.add(_resolveQuery(args));
+          lookedUp.add(_queryLabel(args));
+        }
+        toolEvents.add({
+          'text': (res['reply'] as String?) ?? '',
+          'calls': queries,
+          'results': results,
+        });
+        if (mounted) {
+          setState(() => _pendingStatus =
+              '🔎 Checking your ${queries.first['args']?['topic'] ?? ''} history…');
+        }
+      }
+      var reply = (res['reply'] as String?) ?? '';
+      if (reply.isEmpty && lookedUp.isNotEmpty) {
+        reply = "I dug through your history but couldn't put an answer together "
+            '— ask me again, a little more specifically.';
+      }
       final actions =
           ((res['actions'] as List?) ?? const []).cast<Map<String, dynamic>>();
-      if (mounted) setState(() => _messages.add(_Msg('model', reply, actions: actions)));
+      if (mounted) {
+        setState(() {
+          // Transparency: show exactly what the coach looked up mid-answer.
+          if (lookedUp.isNotEmpty) {
+            _messages.add(_Msg('note', '🔎 Looked up ${lookedUp.join(' · ')}'));
+          }
+          _messages.add(_Msg('model', reply, actions: actions));
+        });
+      }
     } on ApiException catch (e) {
       if (mounted) {
         // Surface a short server detail so a persistent failure is diagnosable.
@@ -252,7 +314,12 @@ class _CoachTabState extends ConsumerState<CoachTab>
         _input.text = text;
       }
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _pendingStatus = '';
+        });
+      }
       _scrollToBottom();
     }
   }
@@ -693,7 +760,10 @@ class _CoachTabState extends ConsumerState<CoachTab>
                   padding: const EdgeInsets.all(14),
                   itemCount: _messages.length + (_sending ? 1 : 0),
                   itemBuilder: (_, i) {
-                    if (i >= _messages.length) return _bubble(_Msg('model', '…'));
+                    if (i >= _messages.length) {
+                      return _bubble(_Msg('model',
+                          _pendingStatus.isEmpty ? '…' : _pendingStatus));
+                    }
                     return _messageWidget(_messages[i]);
                   },
                 ),
@@ -787,6 +857,17 @@ class _CoachTabState extends ConsumerState<CoachTab>
   }
 
   Widget _messageWidget(_Msg m) {
+    if (m.role == 'note') {
+      // A lookup-transparency line, not a chat bubble.
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Center(
+          child: Text(m.text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10.5, color: _muted)),
+        ),
+      );
+    }
     if (m.actions.isEmpty) return _bubble(m);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _bubble(m),

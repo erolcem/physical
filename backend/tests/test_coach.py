@@ -188,7 +188,7 @@ def test_build_context_prefers_app_ranks_and_includes_analysis():
     assert "deep_sleep ↔ bench: r=+0.62 (n=14)" in ctx
     assert "sleep_score" in ctx and "↓" in ctx          # trend arrow
     assert "Bench Press (80×8, 80×7)" in ctx             # individual sets
-    assert "120≥150g" in ctx and "70% adherence" in ctx  # rich habit
+    assert "120≥150g" in ctx and "70% 30d" in ctx        # rich habit
 
 
 def test_parse_adjust_habit_target_action():
@@ -248,10 +248,196 @@ def test_context_includes_meals_and_watch_rule():
     from app.coach import build_context
     from app.habit_check import VERIFY_PROMPT
     ctx = build_context([], meals=[
-        {"d": "2026-07-01", "n": "Oats + whey", "kcal": 420, "p": 38, "fib": 6},
+        {"d": "2026-07-01", "t": "08:10", "n": "Oats + whey", "kcal": 420, "p": 38, "fib": 6},
         {"d": "2026-07-01", "n": "Chicken rice", "kcal": 650, "p": 45},
     ])
     assert "Meals (last days" in ctx
-    assert "Oats + whey (420kcal, 38g P, 6g fib)" in ctx
+    # Eaten-at time is real signal — the formatter must surface it, not drop it.
+    assert "08:10 Oats + whey (420kcal, 38g P, 6g fib)" in ctx
+    assert "Chicken rice (650kcal, 45g P)" in ctx  # time-less entries still fine
     # And the verifier knows typed sets need a tracked watch exercise.
     assert "WATCH ANCHORING" in VERIFY_PROMPT and "watch_verified" in VERIFY_PROMPT
+
+
+# ── Habit memory rendering: every field the app computes must reach the model ──
+
+
+def test_habit_lines_render_pattern_schedule_and_archived():
+    from app.coach import build_context
+    ctx = build_context([], habits=[
+        {"title": "Protein", "section": "diet", "target": 150, "unit": "g",
+         "compare": "gte", "measured": 120, "met": False, "streak": 4,
+         "adherence": 70, "adherence_90d": 82, "recent_days": "––✓✓×✓✓✓×✓✓✓✓×",
+         "cadence": "weekly", "days": [1, 3, 5], "time": "18:30",
+         "created": "2026-05-01"},
+        {"title": "Morning run", "section": "exercise", "archived": True,
+         "created": "2026-01-10", "archived_on": "2026-06-01",
+         "lifetime_due_days": 20, "lifetime_done_days": 15,
+         "lifetime_adherence": 75},
+    ])
+    # Active habit: the 14-day pattern, both adherence scales, and the schedule.
+    assert "last14 ––✓✓×✓✓✓×✓✓✓✓×" in ctx
+    assert "70% 30d" in ctx and "82% 90d" in ctx
+    assert "Mon Wed Fri" in ctx and "at 18:30" in ctx and "since 2026-05-01" in ctx
+    # Archived habit: clearly retired, with its lifespan + lifetime adherence —
+    # never rendered as if it were an active commitment.
+    assert "🗄 Morning run" in ctx
+    assert "RETIRED (2026-01-10 → 2026-06-01" in ctx
+    assert "15/20 days" in ctx and "75% lifetime" in ctx
+    # The done-today denominator counts ACTIVE habits only.
+    assert "0/1 active done today" in ctx and "1 retired shown as history" in ctx
+
+
+def test_context_sections_mark_archived_habits(client):
+    r = client.post("/me/coach/context", json={
+        "habits": [
+            {"title": "Train", "section": "exercise", "streak": 4, "met": True},
+            {"title": "Old run", "section": "exercise", "archived": True,
+             "archived_on": "2026-06-01"},
+        ]})
+    assert r.status_code == 200
+    habits = r.json()["habits"]
+    assert "Train [exercise] · streak 4 · done today" in habits
+    assert "🗄 Old run [exercise] · retired 2026-06-01" in habits
+
+
+# ── History lookup tool (query_history): validation + replay turns ──
+from app.coach import (MAX_QUERY_ROUNDS, QUERY_TOOLS, tool_event_turns,  # noqa: E402
+                       validate_queries)
+
+
+def test_validate_queries_accepts_clean_and_drops_malformed():
+    good = {"name": "query_history",
+            "args": {"topic": "metric", "id": "bench",
+                     "start": "2026-03-01", "end": "2026-03-31"}}
+    out = validate_queries([
+        good,
+        {"name": "query_history", "args": {"topic": "bogus", "start": "2026-03-01", "end": "2026-03-02"}},
+        {"name": "query_history", "args": {"topic": "metric", "id": "hrv", "start": "March", "end": "2026-03-02"}},
+        {"name": "query_history", "args": {"topic": "metric", "start": "2026-03-01", "end": "2026-03-02"}},  # no id
+        {"name": "add_habit", "args": {"title": "X"}},  # not a query tool
+    ])
+    assert out == [{"name": "query_history",
+                    "args": {"topic": "metric", "id": "bench",
+                             "start": "2026-03-01", "end": "2026-03-31"}}]
+
+
+def test_validate_queries_swaps_reversed_and_clamps_wide_ranges():
+    out = validate_queries([
+        {"name": "query_history", "args": {"topic": "meals",
+                                           "start": "2026-03-31", "end": "2026-03-01"}},
+        {"name": "query_history", "args": {"topic": "workouts",
+                                           "start": "2020-01-01", "end": "2026-07-01"}},
+    ])
+    assert out[0]["args"]["start"] == "2026-03-01" and out[0]["args"]["end"] == "2026-03-31"
+    # Six years collapses to the newest 366 days, keeping the requested end.
+    assert out[1]["args"]["end"] == "2026-07-01" and out[1]["args"]["start"] == "2025-07-01"
+
+
+def test_tool_event_turns_builds_paired_call_response_turns():
+    events = [{
+        "text": "Let me check March.",
+        "calls": [{"name": "query_history",
+                   "args": {"topic": "metric", "id": "bench",
+                            "start": "2026-03-01", "end": "2026-03-31"}}],
+        "results": [{"days": {"2026-03-02": 100.0}}],
+    }]
+    turns = tool_event_turns(events)
+    assert len(turns) == 2
+    model, user = turns
+    assert model["role"] == "model" and model["text"] == "Let me check March."
+    assert model["fn_calls"][0]["args"]["id"] == "bench"
+    assert user["role"] == "user"
+    assert user["fn_responses"] == [{"name": "query_history",
+                                     "response": {"days": {"2026-03-02": 100.0}}}]
+    # A missing/malformed result still pairs the call with a readable error.
+    broken = tool_event_turns([{"calls": events[0]["calls"], "results": []}])
+    assert broken[1]["fn_responses"][0]["response"] == {"error": "no result returned"}
+    # Events whose calls are all invalid are skipped entirely.
+    assert tool_event_turns([{"calls": [{"name": "nope"}], "results": []}]) == []
+    # Results get the same PII scrub as the main context — free-text habit
+    # titles / food names must not become a scrub bypass.
+    leaky = tool_event_turns([{"calls": events[0]["calls"],
+                               "results": [{"note": "email a@b.com id 12345678901"}]}])
+    resp = leaky[1]["fn_responses"][0]["response"]["note"]
+    assert "a@b.com" not in resp and "12345678901" not in resp
+
+
+def test_gemini_turn_parts_encode_function_calls_and_responses():
+    from app.integrations.gemini.client import _turn_parts
+    # Plain text turns are unchanged (back-compat with every other caller).
+    assert _turn_parts({"text": "hi"}) == [{"text": "hi"}]
+    model = _turn_parts({"text": "Checking…", "fn_calls": [
+        {"name": "query_history", "args": {"topic": "meals"}}]})
+    assert model == [{"text": "Checking…"},
+                     {"functionCall": {"name": "query_history",
+                                       "args": {"topic": "meals"}}}]
+    # A call-only model turn carries no empty text part.
+    only_call = _turn_parts({"text": "", "fn_calls": [{"name": "query_history", "args": {}}]})
+    assert only_call == [{"functionCall": {"name": "query_history", "args": {}}}]
+    user = _turn_parts({"fn_responses": [{"name": "query_history",
+                                          "response": {"days": {}}}]})
+    assert user == [{"functionResponse": {"name": "query_history",
+                                          "response": {"days": {}}}}]
+
+
+def test_coach_chat_returns_pending_queries_then_final_answer(client, monkeypatch):
+    from app.integrations.gemini import client as gem
+    monkeypatch.setattr(gem, "configured", lambda: True)
+    captured = {}
+
+    def fake_generate_full(system, turns, tools=None, **kw):
+        captured["turns"] = turns
+        captured["tools"] = tools
+        # No resolved lookups yet → the model asks for March bench history.
+        if not any("fn_responses" in t for t in turns):
+            return "", [{"name": "query_history",
+                         "args": {"topic": "metric", "id": "bench",
+                                  "start": "2026-03-01", "end": "2026-03-31"}}]
+        return "March bench averaged 100kg — flat month.", []
+
+    monkeypatch.setattr(gem, "generate_full", fake_generate_full)
+
+    # Round 1: the app gets the pending query back (no actions yet).
+    r1 = client.post("/me/coach/chat", json={"message": "How was my bench in March?"})
+    assert r1.status_code == 200
+    body = r1.json()
+    assert body["queries"] == [{"name": "query_history",
+                                "args": {"topic": "metric", "id": "bench",
+                                         "start": "2026-03-01", "end": "2026-03-31"}}]
+    assert body["actions"] == []
+    assert any(t["name"] == "query_history" for t in captured["tools"])
+
+    # Round 2: the app resolved it locally and re-posts with the tool event.
+    r2 = client.post("/me/coach/chat", json={
+        "message": "How was my bench in March?",
+        "tool_events": [{"text": "", "calls": body["queries"],
+                         "results": [{"days": {"2026-03-02": 100.0}}]}]})
+    assert r2.status_code == 200
+    assert r2.json()["reply"] == "March bench averaged 100kg — flat month."
+    assert r2.json()["queries"] == []
+    # The replay reached Gemini as paired functionCall / functionResponse turns.
+    roles = [(t["role"], "fn_calls" in t, "fn_responses" in t) for t in captured["turns"]]
+    assert ("model", True, False) in roles and ("user", False, True) in roles
+
+
+def test_coach_chat_withholds_query_tool_at_round_cap(client, monkeypatch):
+    from app.integrations.gemini import client as gem
+    monkeypatch.setattr(gem, "configured", lambda: True)
+    captured = {}
+
+    def fake_generate_full(system, turns, tools=None, **kw):
+        captured["tools"] = tools
+        return "Final answer.", []
+
+    monkeypatch.setattr(gem, "generate_full", fake_generate_full)
+    ev = {"text": "", "calls": [{"name": "query_history",
+                                 "args": {"topic": "meals", "start": "2026-06-01",
+                                          "end": "2026-06-07"}}],
+          "results": [{"days": {}}]}
+    r = client.post("/me/coach/chat", json={
+        "message": "hi", "tool_events": [ev] * MAX_QUERY_ROUNDS})
+    assert r.status_code == 200 and r.json()["reply"] == "Final answer."
+    # At the cap the model gets NO query tool — it must answer in text.
+    assert not any(t["name"] == "query_history" for t in captured["tools"])
+    assert QUERY_TOOLS[0]["name"] == "query_history"  # declaration intact

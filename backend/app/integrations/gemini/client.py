@@ -23,8 +23,18 @@ def configured() -> bool:
 def _turn_parts(t: dict) -> list[dict]:
     """A turn's content parts: its text, plus an optional inline image
     (`image_b64` + `image_mime`) for multimodal turns (e.g. a meal photo
-    alongside the food description)."""
-    parts: list[dict] = [{"text": t["text"]}]
+    alongside the food description). Tool-loop replay turns instead carry
+    `fn_calls` (a model turn's functionCalls) or `fn_responses` (the user
+    turn answering them) — Gemini requires each call paired with a response
+    in the following turn."""
+    parts: list[dict] = []
+    if t.get("text") or not (t.get("fn_calls") or t.get("fn_responses")):
+        parts.append({"text": t.get("text", "")})
+    for c in t.get("fn_calls") or []:
+        parts.append({"functionCall": {"name": c["name"], "args": c.get("args") or {}}})
+    for r in t.get("fn_responses") or []:
+        parts.append({"functionResponse": {"name": r["name"],
+                                           "response": r.get("response") or {}}})
     if t.get("image_b64"):
         parts.append({"inline_data": {
             "mime_type": t.get("image_mime") or "image/jpeg",

@@ -67,6 +67,14 @@ class CoachTurn(BaseModel):
     text: str
 
 
+class CoachToolEvent(BaseModel):
+    """One resolved history-lookup round: the model's interim text + its
+    query_history calls, and the app-computed results (same order)."""
+    text: str = ""
+    calls: list[dict] = []    # [{"name": "query_history", "args": {...}}]
+    results: list[dict] = []  # one result object per call
+
+
 class CoachChatIn(BaseModel):
     message: str
     history: list[CoachTurn] = []
@@ -84,11 +92,17 @@ class CoachChatIn(BaseModel):
     energy: dict | None = None      # {in:[daily kcal], out:[daily est kcal], bmr}
     meals: list[dict] = []          # last-7-days food entries [{d, n, kcal, p, fib?}]
     pins: list[str] = []            # standing goals/context the user pinned for the coach
+    # Resolved history-lookup rounds (the app answers the coach's query_history
+    # calls from on-device data and re-posts with them appended).
+    tool_events: list[CoachToolEvent] = []
 
 
 class CoachChatOut(BaseModel):
     reply: str
     actions: list[dict] = []  # confirmable habit changes the coach proposed
+    # Pending history lookups: the app must resolve these locally and re-post
+    # with tool_events extended. When present, `reply` is interim, not final.
+    queries: list[dict] = []
 
 
 class CoachContextIn(BaseModel):

@@ -978,3 +978,64 @@ global compromise — kept deliberately, noted here. Goldens regenerated;
 Python⇄Dart parity re-proven.
 
 Tests: **358 Flutter + 139 backend, 0 analyzer issues.**
+
+## 27. Owner review round 12 (July 2026) — the coach can query history on demand
+
+The final robustness gap: the coach's context is a *summary* (downsampled
+730-day history, last-14-days meals, 20 recent set sessions), so questions
+about a specific period — "was I more consistent last March?", "what did I
+eat the week I plateaued?" — used to get answered from thin air. Now the
+model has a **read-only `query_history` tool** and is instructed to gather
+before answering, never to guess at history it could look up.
+
+**Architecture — the app answers its own coach's questions.** The backend
+holds no user data, so the tool round-trips through the device:
+
+1. `/me/coach/chat` declares `QUERY_TOOLS` (alongside the action tools) and
+   returns any validated `query_history` calls to the app as
+   `CoachChatOut.queries` (reply is interim, actions deferred).
+2. The app resolves each call locally — `coachQueryResult` in
+   `coach_context.dart`, pure + unit-tested — and re-posts with
+   `tool_events: [{text, calls, results}]`.
+3. The router replays each event as a paired functionCall/functionResponse
+   turn (`tool_event_turns` → `_turn_parts` in the Gemini client) and the
+   model continues with real data.
+
+Topics: `metric` (full-resolution daily values — the context history is
+downsampled, this is not), `habit` (day-by-day ✓/× for one title,
+**archived habits included** — the archive round's memory is now queryable),
+`meals` (foods + eaten-at times per day), `workouts` (sessions with
+per-exercise sets/volume). Guardrails at every layer: topics/dates validated
+and clamped server-side (≤366 days, reversed ranges swapped, ≤4 calls per
+round); `MAX_QUERY_ROUNDS = 3`, after which the query tool is withheld so a
+looping model must answer in text; unknown ids answer with the *real* metric
+ids / habit titles so the model self-corrects in the next call; app-side
+caps (150 meal entries, 40 sessions), future ends clamped to today; a failed
+device lookup becomes `{'error': …}`, never a crashed reply; results pass
+the same `scrub_pii` as the main context (free-text names must not become a
+scrub bypass). Transparency: each lookup is shown in the thread as a muted
+"🔎 Looked up …" line, the typing bubble says what's being checked, and the
+"What I see" sheet's privacy note discloses the capability.
+
+**Formatter honesty audit (bug fix).** The system prompt told the model about
+fields the backend formatter silently dropped — the model was instructed to
+read data it never received: `_habit_lines` ignored `recent_days` (the
+14-day ✓/×/– pattern), `adherence_90d`, schedule (weekly days/time/created)
+and EVERY archived field, so retired habits rendered exactly like active
+ones and inflated the done-today denominator; `_meals_lines` dropped the
+eaten-at time the prompt calls "real signal". Now: active habits render
+pattern + both adherence scales + schedule; archived render as
+`🗄 title RETIRED (created → archived_on · done/due days · N% lifetime)`;
+the header counts active only ("2/5 active done today; 3 retired shown as
+history"); meals lead with their time; the transparency sheet marks
+archived (`🗄 … · retired <date>`). The planner prompt gained rule 5:
+retired habits are history — learn from their lifetime adherence, don't
+quietly re-propose them. Rule of the round: **a prompt may only reference
+fields a test proves the formatter renders.**
+
+Tests: backend — query validation (malformed/reversed/oversized), replay-turn
+pairing incl. the PII scrub, Gemini part encoding, the two-round chat
+round-trip, the round-cap tool withholding, habit/meal formatter rendering;
+Flutter — `coachQueryResult` per topic incl. archived-habit adherence,
+last-per-day metric collapse, unknown-id self-correction payloads, range
+guards.

@@ -129,4 +129,122 @@ void main() {
     expect(e['out'], isNotNull);   // BMR + active
     expect(e['bmr'], isNotNull);
   });
+
+  // ── coachQueryResult: the coach's mid-chat query_history lookups, answered
+  // entirely from on-device data. ──
+  group('coachQueryResult', () {
+    Map<String, dynamic> run(Map<String, dynamic> args,
+            {List<Habit> habits = const [],
+            Map<String, Set<String>> completions = const {},
+            Map<String, List<Log>> logs = const {},
+            List<FoodEntry> food = const [],
+            List<WorkoutSession> workouts = const [],
+            DateTime? today}) =>
+        coachQueryResult(args,
+            habits: habits, completions: completions, logs: logs,
+            food: food, workouts: workouts,
+            today: today ?? DateTime.parse('2026-07-10T12:00:00'));
+
+    test('metric: full-resolution daily values within the range, last per day', () {
+      final logs = {
+        'bench': [
+          Log('bench', 95, ts: '2026-02-28T10:00:00'),  // before range
+          Log('bench', 100, ts: '2026-03-02T09:00:00'),
+          Log('bench', 98, ts: '2026-03-02T18:00:00'),  // same day → last wins
+          Log('bench', 105, ts: '2026-03-20T10:00:00'),
+          Log('bench', 110, ts: '2026-04-05T10:00:00'), // after range
+        ],
+      };
+      final r = run({'topic': 'metric', 'id': 'bench',
+                     'start': '2026-03-01', 'end': '2026-03-31'}, logs: logs);
+      expect(r['days'], {'2026-03-02': 98.0, '2026-03-20': 105.0});
+      expect(r.containsKey('note'), isFalse);
+    });
+
+    test('metric: unknown id answers with the real logged metric ids', () {
+      final r = run({'topic': 'metric', 'id': 'benchpress',
+                     'start': '2026-03-01', 'end': '2026-03-31'},
+          logs: {'bench': [Log('bench', 100, ts: '2026-03-02T09:00:00')]});
+      expect(r['note'], contains('benchpress'));
+      expect(r['logged_metrics'], ['bench']);
+    });
+
+    test('habit: day-by-day ✓/× with adherence — archived habits included', () {
+      const h = Habit(id: 'run', title: 'Morning run', section: 'exercise',
+          verify: 'manual', createdAt: '2026-03-01T08:00:00',
+          archivedAt: '2026-03-11T08:00:00');
+      final ticks = {'run': {'2026-03-02', '2026-03-04', '2026-03-05'}};
+      final r = run({'topic': 'habit', 'id': 'morning RUN',
+                     'start': '2026-03-01', 'end': '2026-03-31'},
+          habits: [h], completions: ticks);
+      // Active window is created ≤ day < archived → due 1st..10th only.
+      expect(r['title'], 'Morning run');
+      expect(r['archived'], isTrue);
+      expect(r['due'], 10);
+      expect(r['done'], 3);
+      expect(r['adherence'], 30);
+      expect((r['days'] as Map)['2026-03-02'], '✓');
+      expect((r['days'] as Map)['2026-03-03'], '×');
+      expect((r['days'] as Map).containsKey('2026-03-11'), isFalse);
+    });
+
+    test('habit: unknown title answers with the real habit titles', () {
+      const h = Habit(id: 'x', title: 'Stretch', section: 'recovery',
+          verify: 'manual', createdAt: '2026-01-01T08:00:00');
+      final r = run({'topic': 'habit', 'id': 'Yoga',
+                     'start': '2026-03-01', 'end': '2026-03-31'}, habits: [h]);
+      expect(r['note'], contains('Yoga'));
+      expect(r['known_habits'], ['Stretch']);
+    });
+
+    test('meals: grouped per day with eaten-at times, range-filtered', () {
+      final food = [
+        const FoodEntry(id: 'a', dateKey: '2026-03-02', name: 'Oats', calories: 420,
+            protein: 38, time: '08:10'),
+        const FoodEntry(id: 'b', dateKey: '2026-03-02', name: 'Chicken rice',
+            calories: 650, protein: 45),
+        const FoodEntry(id: 'c', dateKey: '2026-05-01', name: 'Pizza', calories: 900,
+            protein: 30), // outside range
+      ];
+      final r = run({'topic': 'meals', 'start': '2026-03-01', 'end': '2026-03-31'},
+          food: food);
+      final day = (r['days'] as Map)['2026-03-02'] as List;
+      expect(day.length, 2);
+      expect(day.first['t'], '08:10');
+      expect(day.first['n'], 'Oats');
+      expect((r['days'] as Map).containsKey('2026-05-01'), isFalse);
+    });
+
+    test('workouts: sessions in range with per-exercise set counts + volume', () {
+      const w = WorkoutSession(id: 'w', type: 'strength',
+          start: '2026-03-05T18:00:00', sets: [
+            WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 80, reps: 8),
+            WorkoutSet(name: 'Bench', mode: SetMode.weightReps, weight: 80, reps: 7),
+          ]);
+      const later = WorkoutSession(id: 'x', type: 'run', start: '2026-06-01T18:00:00');
+      final r = run({'topic': 'workouts', 'start': '2026-03-01', 'end': '2026-03-31'},
+          workouts: [w, later]);
+      final sessions = r['sessions'] as List;
+      expect(sessions.length, 1);
+      expect(sessions.first['type'], 'strength');
+      expect(sessions.first['exercises'].first['name'], 'Bench');
+      expect(sessions.first['exercises'].first['sets'], 2);
+      expect(sessions.first['exercises'].first['volume'], 80 * 8 + 80 * 7);
+    });
+
+    test('guards: reversed ranges swap, future ends clamp to today, bad topics/dates error', () {
+      final logs = {'hrv': [Log('hrv', 55, ts: '2026-07-09T08:00:00')]};
+      final swapped = run({'topic': 'metric', 'id': 'hrv',
+                           'start': '2026-07-09', 'end': '2026-07-01'}, logs: logs);
+      expect(swapped['start'], '2026-07-01');
+      expect(swapped['days'], {'2026-07-09': 55.0});
+      final future = run({'topic': 'metric', 'id': 'hrv',
+                          'start': '2026-07-01', 'end': '2027-01-01'}, logs: logs);
+      expect(future['end'], '2026-07-10'); // clamped to "today"
+      expect(run({'topic': 'teleport', 'start': '2026-07-01', 'end': '2026-07-02'})['error'],
+          contains('unknown topic'));
+      expect(run({'topic': 'metric', 'id': 'hrv', 'start': 'March'})['error'],
+          contains('YYYY-MM-DD'));
+    });
+  });
 }
