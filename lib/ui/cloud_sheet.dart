@@ -20,9 +20,6 @@ void openCloudSheet(BuildContext context) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: _bg,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => const _CloudSheet(),
   );
 }
@@ -388,7 +385,7 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
                 style: TextStyle(fontSize: 13)),
             const SizedBox(height: 8),
             TextField(controller: ctrl, autofocus: true,
-                decoration: const InputDecoration(hintText: 'paste here', border: OutlineInputBorder())),
+                decoration: const InputDecoration(hintText: 'paste here')),
           ]),
         ),
         actions: [

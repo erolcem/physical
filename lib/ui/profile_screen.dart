@@ -71,7 +71,7 @@ Future<bool> promptQuickLog(BuildContext context, WidgetRef ref, String metricId
           autofocus: true,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: InputDecoration(
-              labelText: '${m.label} (${m.unit})', border: const OutlineInputBorder()),
+              labelText: '${m.label} (${m.unit})'),
         ),
         if (helper != null) ...[
           const SizedBox(height: 8),

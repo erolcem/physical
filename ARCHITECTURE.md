@@ -857,6 +857,33 @@ beyond the aesthetics category's 0.15 weight.
 
 Tests: **358 Flutter + 139 backend, 0 analyzer issues.**
 
+## 25b. Theme perfection (July 2026)
+
+The Material layer is now themed ONCE in `main.dart`'s `buildPhysicalTheme()`
+so no stock-M3 widget can leak into the near-black look:
+
+- **surfaceTint disabled everywhere** (appbar/cards/dialogs/sheets/menus/
+  pickers) — M3's seed-colour wash on elevated dark surfaces was the single
+  biggest "cheap dark theme" artifact; depth now comes from explicit colours,
+  borders and glows. `scrolledUnderElevation: 0` also kills the appbar tint
+  flash when content scrolls beneath it.
+- **Every popup surface matches the hand-built screens**: dialogs (card tone,
+  r20), bottom sheets (sheet tone, top-r20, themed drag handle), date & time
+  pickers (previously stock purple — used by DOB + habit times), popup menus,
+  floating snackbars (raised tone, r12).
+- **Inputs themed once**: rounded-12 fields, faint border, accent focus ring,
+  muted labels/hints/helpers — and every screen's explicit
+  `border: OutlineInputBorder()` override was stripped (18 call sites) so all
+  TextFields actually inherit it.
+- **All 18 modal sheets unified**: explicit per-call `backgroundColor`/`shape`
+  args removed (they spanned four different surface colours); every sheet now
+  inherits the same themed surface.
+- **Chips, tab bar, buttons, FAB, progress, selection** all themed (no M3
+  checkmark chips, label-sized tab indicator with no full-width divider,
+  rounded w800 buttons); edge-to-edge system UI with light status/nav icons.
+- Verified visually via a temporary golden-render harness (home / progress /
+  habits / diet / dialog screenshots), then removed.
+
 ## 26. Owner review round 10 (July 2026) — the presentation pass
 
 **Body graph redrawn.** The prototype-ported blocky figure (rectangular slab

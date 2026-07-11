@@ -12,7 +12,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const _accent = Color(0xFF4CE0C3);
 const _muted = Color(0xFF8A90B0);
-const _bg = Color(0xFF0D1024);
 
 // Credit card (ISO/IEC 7810 ID-1) width in mm — the calibration reference.
 const double _cardWidthMm = 85.6;
@@ -37,9 +36,6 @@ Future<double?> measureAcuityFlow(BuildContext context, WidgetRef ref) {
   return showModalBottomSheet<double>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: _bg,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => const _AcuitySheet(),
   );
 }

@@ -271,9 +271,6 @@ void openOverallBreakdown(BuildContext context) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: _bg2,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => const _OverallBreakdownSheet(),
   );
 }
@@ -710,9 +707,6 @@ void openLogSheet(BuildContext context, {String? initialMetricId}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: _bg2,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => Padding(
       padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
       child: _LogSheet(initialMetricId: initialMetricId),
@@ -826,7 +820,7 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
   Widget _field(TextEditingController c, String label) => TextField(
         controller: c,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        decoration: InputDecoration(labelText: label),
       );
 }
 

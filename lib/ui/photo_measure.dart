@@ -18,9 +18,6 @@ Future<double?> measurePhotoFlow(BuildContext context, WidgetRef ref,
   return showModalBottomSheet<double>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF0D1024),
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => _PhotoSheet(metric: metric, title: title, tip: tip),
   );
 }

@@ -310,9 +310,6 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
   void _templateMenu(WorkoutTemplate t) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: _bg,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
@@ -433,9 +430,6 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
     }
     showModalBottomSheet(
       context: context,
-      backgroundColor: _bg,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Padding(
@@ -496,7 +490,7 @@ class _ExerciseScreenState extends ConsumerState<ExerciseScreen> {
               ]),
               const SizedBox(height: 12),
               TextField(controller: title, decoration: const InputDecoration(
-                  labelText: 'Title (optional)', hintText: 'e.g. Push day', border: OutlineInputBorder())),
+                  labelText: 'Title (optional)', hintText: 'e.g. Push day')),
             ]),
           ),
           actions: [
@@ -686,7 +680,7 @@ class SessionDetailScreen extends ConsumerWidget {
           controller: name,
           autofocus: true,
           decoration: const InputDecoration(
-              labelText: 'Template name', hintText: 'e.g. Push day', border: OutlineInputBorder()),
+              labelText: 'Template name', hintText: 'e.g. Push day'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -714,9 +708,6 @@ class SessionDetailScreen extends ConsumerWidget {
     final templates = ref.read(templatesProvider);
     showModalBottomSheet(
       context: context,
-      backgroundColor: _bg,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Padding(
@@ -770,7 +761,7 @@ Future<WorkoutSet?> promptWorkoutSet(BuildContext context,
                 child: TextField(
                   controller: c,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+                  decoration: InputDecoration(labelText: label),
                 ),
               ),
             );
@@ -781,7 +772,7 @@ Future<WorkoutSet?> promptWorkoutSet(BuildContext context,
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               TextField(controller: name, autofocus: initialName == null && initial == null,
                   decoration: const InputDecoration(
-                  labelText: 'Exercise', hintText: 'e.g. Chest Press', border: OutlineInputBorder())),
+                  labelText: 'Exercise', hintText: 'e.g. Chest Press')),
               const SizedBox(height: 12),
               const Text('Mode', style: TextStyle(fontSize: 11, color: _muted)),
               const SizedBox(height: 6),
@@ -878,7 +869,7 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               TextField(controller: name, autofocus: true, decoration: const InputDecoration(
-                  labelText: 'Exercise', hintText: 'e.g. Bench Press', border: OutlineInputBorder())),
+                  labelText: 'Exercise', hintText: 'e.g. Bench Press')),
               const SizedBox(height: 14),
               Row(children: [
                 const Text('Sets', style: TextStyle(fontSize: 13, color: _muted)),
@@ -967,7 +958,7 @@ class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
         TextField(
           controller: _name,
           decoration: const InputDecoration(
-              labelText: 'Plan name', hintText: 'e.g. Push day', border: OutlineInputBorder()),
+              labelText: 'Plan name', hintText: 'e.g. Push day'),
         ),
         const SizedBox(height: 12),
         const Text('Type', style: TextStyle(fontSize: 11, color: _muted)),

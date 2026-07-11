@@ -260,12 +260,9 @@ class _CoachTabState extends ConsumerState<CoachTab>
   void _showFunctions() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: _bg,
       // Scroll-controlled + capped height so the full list is reachable on small
       // phones (an unscrollable min-height Column clipped the last options).
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
@@ -328,8 +325,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
             controller: goalCtrl,
             decoration: const InputDecoration(
                 labelText: 'Goal to emphasise (optional)',
-                hintText: 'e.g. cut to 12% body fat, bigger bench…',
-                border: OutlineInputBorder()),
+                hintText: 'e.g. cut to 12% body fat, bigger bench…'),
           ),
         ]),
         actions: [
@@ -390,10 +386,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: _bg,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => SafeArea(
           child: ConstrainedBox(
@@ -541,10 +534,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
     if (!mounted) return;
     showModalBottomSheet(
       context: context,
-      backgroundColor: _bg,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => FutureBuilder<Map<String, dynamic>>(
         future: api.coachContext(
             habits: habits, profile: profile, diet: diet, training: training, aesthetics: aesthetics,

@@ -334,9 +334,6 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
     }
     showModalBottomSheet(
       context: context,
-      backgroundColor: _bg,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
@@ -438,8 +435,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           autofocus: true,
           maxLength: 120,
           decoration: const InputDecoration(
-              hintText: 'e.g. Cutting to 78 kg by September',
-              border: OutlineInputBorder()),
+              hintText: 'e.g. Cutting to 78 kg by September'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -1178,8 +1174,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                   onChanged: (_) => reInfer(),
                   decoration: const InputDecoration(
                       labelText: 'Habit',
-                      hintText: 'type anything — e.g. Dinner by 8pm, Sleep score 80+',
-                      border: OutlineInputBorder()),
+                      hintText: 'type anything — e.g. Dinner by 8pm, Sleep score 80+'),
                 ),
                 const SizedBox(height: 6),
                 Text(verifyHint,
@@ -1201,7 +1196,6 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                     hintText: 'e.g. Evening makiwara punching, 20+ min, HR up — a walk does NOT count',
                     helperText: 'Tell the AI exactly what counts, so nothing else ticks it off.',
                     helperMaxLines: 2,
-                    border: OutlineInputBorder(),
                   ),
                 ),
                 // Quantitative target — only for auto-measured sections. Direction
@@ -1216,7 +1210,6 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                     decoration: InputDecoration(
                       labelText:
                           'Target (optional)${unit.isEmpty ? '' : ' · ${compare == 'lte' ? 'stay under' : 'reach'} $unit'}',
-                      border: const OutlineInputBorder(),
                     ),
                   ),
                 ],
@@ -1261,7 +1254,6 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                     decoration: const InputDecoration(
                       labelText: 'Products used (comma-separated)',
                       hintText: 'e.g. CeraVe cleanser, 2% BHA, SPF50',
-                      border: OutlineInputBorder(),
                     ),
                   ),
                 ],
@@ -1311,7 +1303,7 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
                     child: TextField(
                       controller: durCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Mins', border: OutlineInputBorder()),
+                      decoration: const InputDecoration(labelText: 'Mins'),
                     ),
                   ),
                 ]),

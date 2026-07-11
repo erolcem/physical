@@ -5,7 +5,6 @@
 // section heading. Nothing else to touch.
 import 'package:flutter/material.dart';
 
-const _bg = Color(0xFF04050C);
 const _card = Color(0xFF0D1024);
 const _accent = Color(0xFF5B6AF8);
 const _muted = Color(0xFF8A90B0);
@@ -63,10 +62,7 @@ Exercise, diet and sleep data, and a lot of recovery data automatically and excl
 void openGuideSheet(BuildContext context) {
   showModalBottomSheet<void>(
     context: context,
-    backgroundColor: _bg,
     isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => const _GuideSheet(),
   );
 }

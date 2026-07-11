@@ -115,8 +115,7 @@ class DietScreen extends ConsumerWidget {
                 TextField(controller: ctrl, autofocus: true, minLines: 1, maxLines: 3,
                   textCapitalization: TextCapitalization.sentences,
                   decoration: const InputDecoration(
-                      hintText: 'e.g. two eggs on sourdough with avocado',
-                      border: OutlineInputBorder())),
+                      hintText: 'e.g. two eggs on sourdough with avocado')),
                 const SizedBox(height: 10),
                 if (photo == null)
                   Row(children: [
@@ -231,7 +230,7 @@ class DietScreen extends ConsumerWidget {
         title: const Text('Confirm food'),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           TextField(controller: nameCtrl,
-              decoration: const InputDecoration(labelText: 'Name', border: OutlineInputBorder())),
+              decoration: const InputDecoration(labelText: 'Name')),
           const SizedBox(height: 14),
           Text('${n.calories.round()} kcal',
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: _gold)),
@@ -813,9 +812,6 @@ class _EnergyTrendState extends ConsumerState<_EnergyTrend> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: _bg,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),

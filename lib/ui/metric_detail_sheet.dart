@@ -26,9 +26,6 @@ void openDetailSheet(BuildContext context, String metricId) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF0D1024),
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => _MetricDetailSheet(metricId: metricId),
   );
 }
@@ -526,6 +523,6 @@ class _MetricDetailSheetState extends ConsumerState<_MetricDetailSheet> {
   Widget _field(TextEditingController ctrl, String label) => TextField(
         controller: ctrl,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        decoration: InputDecoration(labelText: label),
       );
 }
