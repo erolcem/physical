@@ -10,8 +10,8 @@ import '../engine/rank_engine.dart' show Log, tierOf;
 import '../state/providers.dart';
 import 'progress_screen.dart' show GraphArea;
 
-const _bg = Color(0xFF08091A);
-const _card = Color(0xFF12152E);
+const _bg = Color(0xFF04050C);
+const _card = Color(0xFF0D1024);
 const _indigo = Color(0xFF7A6CF0);
 const _deepC = Color(0xFF3D5AF1);
 const _remC = Color(0xFF9B6CF0);

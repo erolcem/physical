@@ -18,9 +18,6 @@ Future<double?> measurePhotoFlow(BuildContext context, WidgetRef ref,
   return showModalBottomSheet<double>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF12152E),
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => _PhotoSheet(metric: metric, title: title, tip: tip),
   );
 }
@@ -115,7 +112,7 @@ class _PhotoSheetState extends ConsumerState<_PhotoSheet> {
           ],
           _btn('📷  Take photo', _accent, () => _capture(ImageSource.camera)),
           const SizedBox(height: 8),
-          _btn('🖼  Choose from library', const Color(0xFF2A2F4A), () => _capture(ImageSource.gallery)),
+          _btn('🖼  Choose from library', const Color(0xFF232741), () => _capture(ImageSource.gallery)),
         ];
       case _Phase.analyzing:
         return const [
@@ -173,7 +170,7 @@ class _PhotoSheetState extends ConsumerState<_PhotoSheet> {
       const SizedBox(height: 18),
       _btn('Use this result', _accent, () => Navigator.of(context).pop(score)),
       const SizedBox(height: 8),
-      _btn('Retake', const Color(0xFF2A2F4A), () => setState(() => _phase = _Phase.idle)),
+      _btn('Retake', const Color(0xFF232741), () => setState(() => _phase = _Phase.idle)),
     ];
   }
 

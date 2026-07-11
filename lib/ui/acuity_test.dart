@@ -12,7 +12,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const _accent = Color(0xFF4CE0C3);
 const _muted = Color(0xFF8A90B0);
-const _bg = Color(0xFF12152E);
 
 // Credit card (ISO/IEC 7810 ID-1) width in mm — the calibration reference.
 const double _cardWidthMm = 85.6;
@@ -37,9 +36,6 @@ Future<double?> measureAcuityFlow(BuildContext context, WidgetRef ref) {
   return showModalBottomSheet<double>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: _bg,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => const _AcuitySheet(),
   );
 }
@@ -187,7 +183,7 @@ class _AcuitySheetState extends ConsumerState<_AcuitySheet> {
         const SizedBox(height: 12),
         _btn('Start test', _accent, _startTest),
         const SizedBox(height: 8),
-        _btn('Back', const Color(0xFF2A2F4A), () => setState(() => _phase = _Phase.calibrate)),
+        _btn('Back', const Color(0xFF232741), () => setState(() => _phase = _Phase.calibrate)),
       ];
 
   String _smallestMeasurable() {
@@ -241,12 +237,12 @@ class _AcuitySheetState extends ConsumerState<_AcuitySheet> {
       const SizedBox(height: 18),
       _btn('Use this result', _accent, () => Navigator.of(context).pop(r)),
       const SizedBox(height: 8),
-      _btn('Retry', const Color(0xFF2A2F4A), () => setState(() => _phase = _Phase.distance)),
+      _btn('Retry', const Color(0xFF232741), () => setState(() => _phase = _Phase.distance)),
     ];
   }
 
   Widget _dirBtn(IconData icon, int dir) => Material(
-        color: const Color(0xFF2A2F4A),
+        color: const Color(0xFF232741),
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),

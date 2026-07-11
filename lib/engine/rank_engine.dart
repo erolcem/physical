@@ -186,8 +186,10 @@ final Map<String, Standard> standards = {
       ideal: 105.0, provisional: true),
   'hrr': const Standard('hrr', 1, false, Dist('normal', 25.0, 10.0),
       '1-min heart-rate recovery bpm (higher better); healthy ~25±10 — provisional'),
-  'plank': Standard('plank', 1, false, Dist('lognormal', math.log(80), 0.5),
-      'plank hold sec (WKU norm, form-dependent)'),
+  // Strict-form genpop holds cluster 20-60 s; young-male median ~65 s (the old
+  // median of 80 ranked a solid 60 s hold below the middle).
+  'plank': Standard('plank', 1, false, Dist('lognormal', math.log(65), 0.5),
+      'strict plank hold sec; young-male median ~65 — form-dependent'),
   'vert': const Standard('vert', 1, false, Dist('normal', 43.0, 11.0),
       'CMJ-with-arms norms, genpop young male'),
   'run5k_kmh': Standard('run5k_kmh', 1, false, Dist('lognormal', math.log(8.5), 0.28),
@@ -208,7 +210,9 @@ final Map<String, Standard> standards = {
   // So 90+ ≈ top ~5% ("excellent"), 60 ≈ bottom quartile. Provisional but sourced.
   'sleep_score': const Standard('sleep_score', 1, false, Dist('normal', 77.0, 8.0),
       'Fitbit/Google Health sleep score — most users 72–83 (IQR), provisional'),
-  'deadhang': Standard('deadhang', 1, false, Dist('lognormal', math.log(60), 0.5), 'provisional'),
+  // Untrained men hang ~20-40 s, 60 s is "good", 90 s+ strong → median ~50 s.
+  'deadhang': Standard('deadhang', 1, false, Dist('lognormal', math.log(50), 0.5),
+      'deadhang hold sec; young-male median ~50 — provisional'),
   // Sit-and-reach as CM PAST THE TOES (0 = touch; negative = short). Young-male
   // median sits right around the toes with a wide spread (ACSM/YMCA-style
   // norms) — the old N(15,5) ranked a toe-toucher bottom 0.1%.

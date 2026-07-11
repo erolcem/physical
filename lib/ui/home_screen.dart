@@ -15,8 +15,8 @@ import 'metric_detail_sheet.dart';
 import 'profile_screen.dart' show promptDob, promptQuickLog;
 
 // ── Design tokens ──────────────────────────────────────────────────────────
-const _bg2 = Color(0xFF0F1128);
-const _bg3 = Color(0xFF161830);
+const _bg2 = Color(0xFF090B18);
+const _bg3 = Color(0xFF101226);
 const _surface = Color(0x0AFFFFFF); // white @ 4%
 const _border = Color(0x12FFFFFF); // white @ 7%
 const _border2 = Color(0x21FFFFFF); // white @ 13%
@@ -271,9 +271,6 @@ void openOverallBreakdown(BuildContext context) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: _bg2,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => const _OverallBreakdownSheet(),
   );
 }
@@ -710,9 +707,6 @@ void openLogSheet(BuildContext context, {String? initialMetricId}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: _bg2,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => Padding(
       padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
       child: _LogSheet(initialMetricId: initialMetricId),
@@ -826,7 +820,7 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
   Widget _field(TextEditingController c, String label) => TextField(
         controller: c,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        decoration: InputDecoration(labelText: label),
       );
 }
 
@@ -883,12 +877,12 @@ class _AestheticsStrip extends ConsumerWidget {
                         colors: [
                           Color.lerp(color, Colors.white, 0.22)!.withValues(alpha: 0.45),
                           color.withValues(alpha: 0.16),
-                          const Color(0xFF161830),
+                          const Color(0xFF101226),
                         ],
                         stops: const [0.0, 0.5, 1.0],
                       )
                     : null,
-                color: hasData ? null : const Color(0xFF161830),
+                color: hasData ? null : const Color(0xFF101226),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: hasData ? color.withValues(alpha: 0.6) : const Color(0x12FFFFFF)),
                 boxShadow: hasData

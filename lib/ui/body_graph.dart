@@ -146,7 +146,7 @@ class _BodyPainter extends CustomPainter {
       Paint()
         ..shader = const LinearGradient(
           begin: Alignment.topCenter, end: Alignment.bottomCenter,
-          colors: [Color(0xFF272C52), Color(0xFF141631)],
+          colors: [Color(0xFF232849), Color(0xFF11132B)],
         ).createShader(silPath.getBounds()),
     );
     canvas.drawPath(

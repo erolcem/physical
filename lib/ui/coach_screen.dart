@@ -18,8 +18,8 @@ import '../state/log_providers.dart';
 import '../state/providers.dart'
     show categoryRanksProvider, currentBodyweightProvider, latestLogsProvider, logsProvider, overallProvider;
 
-const _bg = Color(0xFF08091A);
-const _card = Color(0xFF12152E);
+const _bg = Color(0xFF04050C);
+const _card = Color(0xFF0D1024);
 const _accent = Color(0xFF5B6AF8);
 const _teal = Color(0xFF4CE0C3);
 const _muted = Color(0xFF7880A8);
@@ -260,12 +260,9 @@ class _CoachTabState extends ConsumerState<CoachTab>
   void _showFunctions() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: _bg,
       // Scroll-controlled + capped height so the full list is reachable on small
       // phones (an unscrollable min-height Column clipped the last options).
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
@@ -328,8 +325,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
             controller: goalCtrl,
             decoration: const InputDecoration(
                 labelText: 'Goal to emphasise (optional)',
-                hintText: 'e.g. cut to 12% body fat, bigger bench…',
-                border: OutlineInputBorder()),
+                hintText: 'e.g. cut to 12% body fat, bigger bench…'),
           ),
         ]),
         actions: [
@@ -390,10 +386,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: _bg,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => SafeArea(
           child: ConstrainedBox(
@@ -541,10 +534,7 @@ class _CoachTabState extends ConsumerState<CoachTab>
     if (!mounted) return;
     showModalBottomSheet(
       context: context,
-      backgroundColor: _bg,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => FutureBuilder<Map<String, dynamic>>(
         future: api.coachContext(
             habits: habits, profile: profile, diet: diet, training: training, aesthetics: aesthetics,

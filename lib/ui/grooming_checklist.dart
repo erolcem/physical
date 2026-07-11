@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 const _accent = Color(0xFF4CE0C3);
 const _muted = Color(0xFF8A90B0);
-const _bg = Color(0xFF12152E);
 
 // (domain, hint, weight). Weights sum to 1.
 const List<(String, String, double)> groomingItems = [
@@ -31,9 +30,6 @@ Future<double?> measureGroomingFlow(BuildContext context, WidgetRef ref) {
   return showModalBottomSheet<double>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: _bg,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (_) => const _GroomingSheet(),
   );
 }

@@ -1,6 +1,13 @@
-// data/body_figure_data.dart — front, back & inner body figures ported verbatim
-// from the prototype SVG (viewBox 0 0 148 420). Each region groups the polygons
-// that belong to one muscle; the muscle maps to an engine metric (or is inert).
+// data/body_figure_data.dart — front, back & inner body figures (viewBox
+// 0 0 148 420). Redrawn from the blocky prototype port into an athletic male
+// outline: real neck/trap slope, deltoid caps, arms hanging with a gap from
+// the V-tapered torso, narrow waist, hip flare, knee/calf taper and feet.
+// Coordinates are authored right-side and mirrored exactly about x=74
+// (scratch generator: gen_body.py), so the figure is perfectly symmetric.
+// Each region groups the polygons that belong to one muscle; the muscle maps
+// to an engine metric (or is inert anatomy — traps/obliques/lower back).
+// The painter smooths every polygon with Catmull-Rom, so shapes are authored
+// as sparse hulls, not pixel outlines.
 import 'dart:ui';
 
 class BodyRegion {
@@ -18,177 +25,175 @@ List<Offset> parsePoly(String s) => s
     })
     .toList();
 
-// Shared silhouette + neck (non-interactive background).
+// Shared silhouette (head → right arm/leg → crotch → mirrored left side) +
+// a neck/throat strip for depth. Non-interactive background.
 const String silhouette =
-    '64,15 84,15 90,45 136,65 140,190 120,200 130,110 100,100 100,170 '
-    '120,265 110,360 85,360 74,200 63,360 38,360 28,265 48,170 48,100 '
-    '18,110 28,200 8,190 12,65 58,45';
-const String neck = '66,15 82,15 86,35 62,35';
+    '74,4 85,7 91,16 91,28 86,38 84,46 92,51 106,56 120,61 129,70 133,82 '
+    '136,100 138,118 137,132 140,148 142,164 140,182 137,196 140,206 139,218 '
+    '133,226 127,220 125,208 124,196 122,178 121,160 119,142 117,124 113,104 '
+    '107,92 103,108 98,130 96,148 99,162 105,178 108,194 107,216 103,244 '
+    '99,268 98,280 102,298 101,318 95,340 91,356 99,368 98,377 83,377 81,364 '
+    '83,350 84,322 83,296 81,280 79,258 77,234 75,214 74,204 73,214 71,234 '
+    '69,258 67,280 65,296 64,322 65,350 67,364 65,377 50,377 49,368 57,356 '
+    '53,340 47,318 46,298 50,280 49,268 45,244 41,216 40,194 43,178 49,162 '
+    '52,148 50,130 45,108 41,92 35,104 31,124 29,142 27,160 26,178 24,196 '
+    '23,208 21,220 15,226 9,218 8,206 11,196 8,182 6,164 8,148 11,132 10,118 '
+    '12,100 15,82 19,70 28,61 42,56 56,51 64,46 62,38 57,28 57,16 63,7';
+const String neck = '68,38 80,38 82,52 66,52';
+
+// Deltoid cap (ohp) + the lateral-head sliver (lateral_raise) hugging its
+// outside — shared by the front and back figures.
+const List<String> _deltCaps = [
+  '106,60 118,62 127,70 129,82 123,92 112,88 106,72',
+  '42,72 36,88 25,92 19,82 21,70 30,62 42,60',
+];
+const List<String> _deltLateral = [
+  '126,70 132,80 135,96 128,104 123,92 129,82',
+  '19,82 25,92 20,104 13,96 16,80 22,70',
+];
+const List<String> _forearms = [
+  '121,148 132,142 139,156 140,176 132,190 124,172',
+  '24,172 16,190 8,176 9,156 16,142 27,148',
+];
+const List<String> _upperArms = [
+  '112,106 123,100 129,112 128,130 120,140 113,126',
+  '35,126 28,140 20,130 19,112 25,100 36,106',
+];
 
 const List<BodyRegion> frontRegions = [
-  BodyRegion('shoulders', [
-    '44,54 28,59 22,85 30,105 42,90 40,68',
-    '104,54 120,59 126,85 118,105 106,90 108,68',
-  ]),
-  BodyRegion('shoulders_m', [
-    '28,59 18,64 12,85 22,85',
-    '120,59 130,64 136,85 126,85',
-  ]),
+  BodyRegion('shoulders', _deltCaps),
+  BodyRegion('shoulders_m', _deltLateral),
   BodyRegion('chest', [
-    '72,50 46,54 32,75 44,100 72,102',
-    '76,50 102,54 116,75 104,100 76,102',
+    '76,66 96,66 103,75 102,90 95,100 78,102',
+    '70,102 53,100 46,90 45,75 52,66 72,66',
   ]),
-  BodyRegion('biceps', [
-    '30,110 16,118 14,142 24,152 36,138',
-    '118,110 132,118 134,142 124,152 112,138',
-  ]),
-  BodyRegion('forearms', [
-    '22,156 10,166 8,190 16,200 28,185',
-    '126,156 138,166 140,190 132,200 120,185',
-  ]),
+  BodyRegion('biceps', _upperArms),
+  BodyRegion('forearms', _forearms),
   BodyRegion('abs', [
-    '72,106 46,104 52,122 72,124',
-    '76,106 102,104 96,122 76,124',
-    '72,128 54,126 58,144 72,146',
-    '76,128 94,126 90,144 76,146',
-    '72,150 60,148 64,166 72,170',
-    '76,150 88,148 84,166 76,170',
+    '60,108 72,110 72,126 60,124',
+    '76,110 88,108 88,124 76,126',
+    '61,129 72,131 72,147 61,145',
+    '76,131 87,129 87,145 76,147',
+    '62,150 72,152 72,172 63,168',
+    '76,152 86,150 85,168 76,172',
+  ]),
+  // Obliques frame the six-pack — inert anatomy (no isolated metric).
+  BodyRegion('obliques', [
+    '90,128 96,124 95,148 89,160 88,140',
+    '60,140 59,160 53,148 52,124 58,128',
   ]),
   BodyRegion('quads', [
-    '54,170 34,180 24,220 30,265 46,260 50,220',
-    '70,174 56,172 52,220 48,260 62,260 70,220',
-    '94,170 114,180 124,220 118,265 102,260 98,220',
-    '78,174 92,172 96,220 100,260 86,260 78,220',
+    '92,206 103,216 104,244 99,268 91,262 88,234',
+    '60,234 57,262 49,268 44,244 45,216 56,206',
+    '78,208 88,214 86,244 90,262 81,270 76,242',
+    '72,242 67,270 58,262 62,244 60,214 70,208',
   ]),
   BodyRegion('calves', [
-    '58,275 36,275 28,310 36,350 50,350 56,310',
-    '90,275 112,275 120,310 112,350 98,350 92,310',
+    '85,292 98,296 99,318 93,340 86,342 83,316',
+    '65,316 62,342 55,340 49,318 50,296 63,292',
   ]),
 ];
 
 const List<BodyRegion> backRegions = [
-  BodyRegion('shoulders', [
-    '58,45 44,54 28,59 22,85 30,105 42,90 44,65',
-    '90,45 104,54 120,59 126,85 118,105 106,90 104,65',
-  ]),
-  BodyRegion('shoulders_m', [
-    '28,59 18,64 12,85 22,85',
-    '120,59 130,64 136,85 126,85',
+  BodyRegion('shoulders', _deltCaps),
+  BodyRegion('shoulders_m', _deltLateral),
+  // Trapezius kite down the spine — inert anatomy (no shrug metric).
+  BodyRegion('traps', [
+    '74,54 90,58 96,68 88,84 78,112 74,122',
+    '74,122 70,112 60,84 52,68 58,58 74,54',
   ]),
   BodyRegion('lats', [
-    '44,65 32,85 40,125 54,140 58,90',
-    '104,65 116,85 108,125 94,140 90,90',
-    // Mid-upper back (spine corridor) so the lats also light the centre, not just the sides.
-    '58,70 90,70 87,104 74,114 61,104',
+    '78,100 90,96 104,100 100,126 91,148 79,142',
+    '69,142 57,148 48,126 44,100 58,96 70,100',
   ]),
   BodyRegion('lower_back', [
-    '74,85 90,90 94,140 74,160 54,140 58,90',
-    '74,160 94,140 86,170 74,175 62,170 54,140',
+    '75,148 86,156 84,176 75,182',
+    '73,182 64,176 62,156 73,148',
   ]),
-  BodyRegion('triceps', [
-    '30,110 16,118 14,142 24,152 36,138',
-    '118,110 132,118 134,142 124,152 112,138',
-  ]),
-  BodyRegion('forearms', [
-    '22,156 10,166 8,190 16,200 28,185',
-    '126,156 138,166 140,190 132,200 120,185',
-  ]),
+  BodyRegion('triceps', _upperArms),
+  BodyRegion('forearms', _forearms),
   BodyRegion('glutes', [
-    '74,175 62,170 42,175 34,195 48,220 72,215',
-    '74,175 86,170 106,175 114,195 100,220 76,215',
+    '76,180 96,178 106,190 103,210 88,218 77,214',
+    '71,214 60,218 45,210 42,190 52,178 72,180',
   ]),
   BodyRegion('hamstrings', [
-    '48,220 34,225 30,265 46,260 50,240',
-    '72,215 48,220 50,240 48,260 62,260 70,230',
-    '100,220 114,225 118,265 102,260 98,240',
-    '76,215 100,220 98,240 100,260 86,260 78,230',
+    '88,224 102,222 101,248 95,274 86,266 84,242',
+    '64,242 62,266 53,274 47,248 46,222 60,224',
   ]),
   BodyRegion('calves', [
-    '58,275 36,275 28,310 36,350 50,350 56,310',
-    '90,275 112,275 120,310 112,350 98,350 92,310',
+    '85,290 99,292 101,316 94,342 86,340 82,312',
+    '66,312 62,340 54,342 47,316 49,292 63,290',
   ]),
 ];
 
-// ── INNER FIGURE — ported from old reference _innerSVG() ──────────────────
-// Every shape (ellipse, rect, path) is converted to polygon point strings.
+// ── INNER FIGURE — stylised organ/system map on the same silhouette. ──────
 
 const List<BodyRegion> innerRegions = [
-  // Brain (ellipse cx=74 cy=22 rx=12 ry=9 → 12-point polygon approximation)
+  // Brain (ellipse approximation inside the head oval)
   BodyRegion('brain', [
     '86,22 85.46,25.39 83.04,28.19 79.18,30 74,31 68.82,30 '
     '64.96,28.19 62.54,25.39 62,22 62.54,18.61 64.96,15.81 '
     '68.82,14 74,13 79.18,14 83.04,15.81 85.46,18.61',
   ]),
 
-  // Heart (path: M62 63 Q58 57 62 53 Q66 49 70 55 Q74 49 78 53 Q82 57 78 63 L70 73 Z)
+  // Heart
   BodyRegion('heart', [
     '62,63 60,58 62,53 66,50 70,55 74,50 78,53 80,58 78,63 70,73',
   ]),
 
-  // Left lung (path: M52 57 Q46 61 46 76 Q46 91 54 96 Q60 99 64 91 L64 59 Q58 55 52 57)
+  // Lungs
   BodyRegion('lung_l', [
     '52,57 48,60 46,68 46,76 46,84 50,92 54,96 58,98 64,91 64,59 58,56',
   ]),
-
-  // Right lung (path: M96 57 Q102 61 102 76 Q102 91 94 96 Q88 99 84 91 L84 59 Q90 55 96 57)
   BodyRegion('lung_r', [
     '96,57 100,60 102,68 102,76 102,84 98,92 94,96 90,98 84,91 84,59 90,56',
   ]),
 
-  // Core / abs (rect x=55 y=104 w=38 h=58 rx=6 → polygon with rounded-ish corners)
+  // Core / plank (rounded rect)
   BodyRegion('core', [
     '61,104 87,104 93,110 93,156 87,162 61,162 55,156 55,110',
   ]),
 
-  // Body Fat % (Semicircle under the core/abs)
+  // Body Fat % (waist-to-hip band under the core)
   BodyRegion('full_body', [
     '42,166 54,192 74,205 94,192 106,166 94,176 74,182 54,176',
   ]),
 
-  // Left hand — 5 rects merged into one polygon approximation
-  // (palm rect + 4 finger rects simplified to a single hand shape)
+  // Hands (HRV) — sit where the new arms end.
   BodyRegion('hand_l', [
-    '4,181 7,178 11,178 15,179 19,182 19,190 19,200 4,200 4,190',
+    '20,218 13,224 8,210 11,198 22,200',
   ]),
-
-  // Right hand — mirror of left
   BodyRegion('hand_r', [
-    '129,182 132,179 136,178 140,178 144,181 144,190 144,200 129,200 129,190',
+    '126,200 137,198 140,210 135,224 128,218',
   ]),
 
-  // Left thigh (path: M63 173 Q55 178 53 212 Q53 242 59 258 L67 256 ...)
+  // Thighs (hamstring mobility)
   BodyRegion('thigh_l', [
     '63,173 58,176 55,190 53,212 53,230 56,248 59,258 67,256 67,234 67,212 67,190 67,173',
   ]),
-
-  // Right thigh (path: M85 173 Q93 178 95 212 Q95 242 89 258 L81 256 ...)
   BodyRegion('thigh_r', [
     '85,173 90,176 93,190 95,212 95,230 92,248 89,258 81,256 81,234 81,212 81,190 81,173',
   ]),
 
-  // Left tibia / shin (rect x=41 y=270 w=16 h=78 rx=5 → polygon)
+  // Shins (5k) — inside the redrawn calves.
   BodyRegion('tibia_l', [
-    '46,270 52,270 57,275 57,343 52,348 46,348 41,343 41,275',
+    '52,270 58,270 62,275 62,343 58,348 52,348 48,343 48,275',
   ]),
-
-  // Right tibia / shin (rect x=91 y=270 w=16 h=78 rx=5 → polygon)
   BodyRegion('tibia_r', [
-    '96,270 102,270 107,275 107,343 102,348 96,348 91,343 91,275',
+    '90,270 96,270 100,275 100,343 96,348 90,348 86,343 86,275',
   ]),
 
-  // Left foot (path: M34 356 Q34 366 38 369 Q50 373 58 369 Q62 365 58 358 L50 356)
+  // Feet (vertical jump) — match the new foot outline.
   BodyRegion('foot_l', [
-    '34,356 34,362 36,367 38,369 44,372 50,373 55,371 58,369 61,365 58,358 50,356',
+    '50,364 64,362 66,369 64,375 52,375 49,370',
   ]),
-
-  // Right foot (path: M114 356 Q114 366 110 369 Q98 373 90 369 Q86 365 90 358 L98 356)
   BodyRegion('foot_r', [
-    '114,356 114,362 112,367 110,369 104,372 98,373 93,371 90,369 87,365 90,358 98,356',
+    '84,362 98,364 99,370 96,375 84,375 82,369',
   ]),
 
-  // Platform (rect x=22 y=376 w=104 h=9 rx=4 → polygon)
+  // Platform (deadhang)
   BodyRegion('platform', [
-    '26,376 122,376 126,380 126,381 122,385 26,385 22,381 22,380',
+    '26,382 122,382 126,386 126,387 122,391 26,391 22,387 22,386',
   ]),
 ];
 
@@ -226,7 +231,8 @@ const List<BodyRegion> headRegions = [
   ]),
 ];
 
-// Muscle -> engine metric. Muscles absent here render inert (no metric yet).
+// Muscle -> engine metric. Muscles absent here render inert (no metric yet):
+// traps / obliques / lower_back are honest anatomy without their own lift.
 
 const Map<String, String> muscleToMetric = {
   // Front

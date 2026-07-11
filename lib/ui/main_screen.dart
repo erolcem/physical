@@ -158,9 +158,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
       if (prev != null && !identical(prev, next)) _scheduleReverify();
     });
     return Scaffold(
-      backgroundColor: const Color(0xFF08091A),
+      backgroundColor: const Color(0xFF04050C),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF08091A),
+        backgroundColor: const Color(0xFF04050C),
         centerTitle: true,
         toolbarHeight: 64,
         leading: IconButton(
