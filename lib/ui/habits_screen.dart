@@ -1077,7 +1077,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
           ? 'The Google Calendar API is disabled for your Cloud project — enable it at '
             'console.cloud.google.com → APIs & Services → Library → Google Calendar API.'
           : (e.status == 401 || e.status == 403)
-              ? 'Connect Google Calendar in the Cloud sheet (☁), then try again.'
+              // Usually the calendar grant expired (Google testing-mode tokens
+              // die after 7 days) — the ☁ sheet now detects that and shows the
+              // reconnect button.
+              ? 'Your Google Calendar link expired or isn\'t set up — open the '
+                'Cloud sheet (☁) and tap "Connect Google Calendar", then try again.'
               : 'Calendar sync failed — try again in a moment.';
     } catch (_) {
       msg = 'Couldn’t reach the calendar service.';

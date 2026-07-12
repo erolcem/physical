@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/api_client.dart';
+import '../data/habits.dart' show activeHabits;
 import '../data/repository.dart' show derivedSeriesIds, repoExport;
 import '../data/sync.dart';
 import '../state/habit_providers.dart' show habitsProvider;
@@ -206,7 +207,9 @@ class _CloudSheetState extends ConsumerState<_CloudSheet> {
         // swallowed: an off-switch in the Cloud console is the usual culprit.
         String detail;
         try {
-          final habits = [for (final h in ref.read(habitsProvider).habits) h.toJson()];
+          final habits = [
+            for (final h in activeHabits(ref.read(habitsProvider).habits)) h.toJson()
+          ];
           String? tz;
           try {
             tz = await FlutterTimezone.getLocalTimezone();

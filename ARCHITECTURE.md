@@ -1039,3 +1039,44 @@ round-trip, the round-cap tool withholding, habit/meal formatter rendering;
 Flutter — `coachQueryResult` per topic incl. archived-habit adherence,
 last-per-day metric collapse, unknown-id self-correction payloads, range
 guards.
+
+## 28. The dead-calendar-grant trap (July 2026 hotfix)
+
+User report: "calendar imports stopped working; the Calendar button says
+connect first, but everything shows synced." No calendar code had changed —
+the cause was TIME, not a commit: Google testing-mode refresh tokens die
+after 7 days, and the app had a state trap for exactly that case.
+
+**The trap.** `/me/calendar/push` correctly failed with 401 needs_reconnect
+when the stored calendar refresh token was dead — but
+`/integrations/google/status` reported `calendar_connected: true` because it
+only checked that a token ROW existed. So the error said "connect in the ☁
+sheet" while the sheet hid the Connect button and showed everything green.
+No path out.
+
+**Fixes.**
+- `calendar_token_usable()` — status now validates the token can actually
+  mint an access token. A dead grant (`invalid_grant`) reports
+  `calendar_connected: false`, so the Connect button reappears exactly when
+  it's needed. A transient refresh blip still reports connected (no
+  reconnect-nagging over a network hiccup).
+- The push distinguishes the two failures: `invalid_grant` → 401
+  needs_reconnect; transient refresh error → 502 "try again" (it used to
+  send users to a re-consent that fixed nothing).
+- The silent launch auto-sync — the only calendar push many users ever run —
+  now surfaces a dead grant as a snackbar instead of failing invisibly, and
+  the Habits-tab error names the real cause ("your Google Calendar link
+  expired").
+
+**Archive-round follow-ups caught in the same sweep** (retired habits are
+kept as history since §25d, and three calendar paths didn't know):
+`/me/calendar/push` and `build_ics` now skip `arch` habits (the push also
+prunes their existing events via the reconcile pass); the cloud sheet's
+connect-flow pushes the ACTIVE roster (it pushed archived ones, resurrecting
+retired habits as events right after connecting); and cloudSync's mirror
+gates on the whole roster but pushes the active list — archiving your last
+habit now clears its events instead of stranding them.
+
+Tests: dead-grant 401 vs transient 502; validated `calendar_connected`
+(fresh token = no refresh round-trip, dead = false, blip = true); archived
+habits never written + their events pruned; ICS skips archived.

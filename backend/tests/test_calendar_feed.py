@@ -211,3 +211,135 @@ def test_recurring_events_anchor_on_a_matching_weekday():
     # The ICS feed anchors the same way.
     ics = build_ics([h], now=wednesday)
     assert "DTSTART:20260702T180000" in ics
+
+
+# ── The dead-grant trap: an expired calendar refresh token must be DETECTED,
+# not reported as "connected" while every push fails with "reconnect". ──
+
+def _seed_calendar_token_expired():
+    import datetime as dt
+    from app.db import get_db
+    from app.main import app as _app
+    from app.models import GoogleCalendarToken
+    gen = _app.dependency_overrides[get_db]()
+    db = next(gen)
+    db.merge(GoogleCalendarToken(
+        user_id="local-dev", access_token="stale", refresh_token="dead",
+        expires_at=dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1),
+        scope="https://www.googleapis.com/auth/calendar.events"))
+    db.commit()
+
+
+def _seed_health_token():
+    import datetime as dt
+    from app.db import get_db
+    from app.main import app as _app
+    from app.models import GoogleHealthToken
+    gen = _app.dependency_overrides[get_db]()
+    db = next(gen)
+    db.merge(GoogleHealthToken(
+        user_id="local-dev", access_token="a", refresh_token="r",
+        expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1),
+        scope=" ".join([
+            "openid", "email", "profile",
+            "https://www.googleapis.com/auth/googlehealth.profile.readonly",
+            "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
+            "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
+            "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
+            "https://www.googleapis.com/auth/googlehealth.nutrition.readonly",
+        ])))
+    db.commit()
+
+
+def test_push_dead_grant_401_reconnect_but_transient_502(client, monkeypatch):
+    """invalid_grant (revoked / 7-day testing expiry) → 401 needs_reconnect.
+    A transient refresh failure is NOT a reconnect — it must 502 so the app
+    says 'try again' instead of sending the user to a pointless re-consent."""
+    from app.integrations.google_health import oauth
+    _seed_calendar_token_expired()
+
+    monkeypatch.setattr(oauth, "refresh_token", lambda r: (_ for _ in ()).throw(
+        RuntimeError('400 {"error": "invalid_grant"}')))
+    r = client.post("/me/calendar/push", json={"habits": [{"id": "h", "title": "T"}]})
+    assert r.status_code == 401 and r.json()["detail"] == "needs_reconnect"
+
+    monkeypatch.setattr(oauth, "refresh_token", lambda r: (_ for _ in ()).throw(
+        RuntimeError("connection reset by peer")))
+    r2 = client.post("/me/calendar/push", json={"habits": [{"id": "h", "title": "T"}]})
+    assert r2.status_code == 502
+    assert "refresh failed" in r2.json()["detail"]
+
+
+def test_status_calendar_connected_is_validated_not_row_exists(client, monkeypatch):
+    """THE TRAP (user report): push said 'reconnect calendar', but /status kept
+    saying calendar_connected=true because the dead token ROW still existed —
+    so the app hid the reconnect button. connected must mean USABLE."""
+    from app.integrations.google_health import oauth
+    _seed_health_token()
+
+    # A fresh (unexpired) calendar token: connected, and NO refresh round-trip.
+    _seed_calendar_token()
+    monkeypatch.setattr(oauth, "refresh_token", lambda r: (_ for _ in ()).throw(
+        AssertionError("must not refresh a fresh token")))
+    assert client.get("/integrations/google/status").json()["calendar_connected"] is True
+
+    # Same row, but expired AND Google says the grant is dead → NOT connected.
+    _seed_calendar_token_expired()
+    monkeypatch.setattr(oauth, "refresh_token", lambda r: (_ for _ in ()).throw(
+        RuntimeError('400 {"error": "invalid_grant", "error_description": "Token has been expired or revoked."}')))
+    assert client.get("/integrations/google/status").json()["calendar_connected"] is False
+
+    # A transient refresh blip keeps reporting connected (no reconnect nagging).
+    monkeypatch.setattr(oauth, "refresh_token", lambda r: (_ for _ in ()).throw(
+        RuntimeError("timeout")))
+    assert client.get("/integrations/google/status").json()["calendar_connected"] is True
+
+
+def test_calendar_push_never_writes_archived_habits(client, monkeypatch):
+    """Archived (retired) habits stay in the app/backup as history — the push
+    must skip them AND prune their existing events via the reconcile pass."""
+    import httpx
+    from app.routers.calendar import habit_event_id
+    _seed_calendar_token()
+    active_id = habit_event_id("h1")
+    deleted, upserts = [], []
+
+    def fake_get(url, **kw):
+        return httpx.Response(200, json={"items": [
+            {"id": habit_event_id("old"),
+             "extendedProperties": {"private": {"habit": "old"}}},
+        ]}, request=httpx.Request("GET", url))
+
+    def fake_post(url, json=None, **kw):
+        upserts.append(json)
+        return httpx.Response(200, json={}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setattr(httpx, "put", lambda url, **kw: httpx.Response(
+        200, json={}, request=httpx.Request("PUT", url)))
+    monkeypatch.setattr(httpx, "delete", lambda url, **kw: (
+        deleted.append(url.rsplit("/", 1)[-1]),
+        httpx.Response(204, request=httpx.Request("DELETE", url)))[1])
+
+    r = client.post("/me/calendar/push", json={"habits": [
+        {"id": "h1", "title": "Train", "time": "18:00", "dur": 45},
+        {"id": "old", "title": "Morning run", "arch": "2026-07-01T08:00:00"},
+    ], "tz": "Australia/Sydney"})
+    assert r.status_code == 200
+    body = r.json()
+    # Only the active habit was written; the archived one's event was pruned.
+    assert body["added"] == 1 and body["failed"] == 0 and body["removed"] == 1
+    assert [u["id"] for u in upserts] == [active_id]
+    assert deleted == [habit_event_id("old")]
+
+
+def test_build_ics_skips_archived_habits():
+    from app.calendar_feed import build_ics
+    ics = build_ics([
+        {"id": "a", "title": "Stretch", "cadence": "daily"},
+        {"id": "b", "title": "Old run", "cadence": "daily",
+         "arch": "2026-07-01T08:00:00"},
+    ])
+    assert "SUMMARY:Stretch" in ics
+    assert "Old run" not in ics

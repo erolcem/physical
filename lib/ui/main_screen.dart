@@ -71,8 +71,17 @@ class _MainScreenState extends ConsumerState<MainScreen>
       final api = ref.read(apiClientProvider);
       await api.loadPersistedToken();
       if (!api.isSignedIn || !mounted) return;
-      await cloudSync(ref); // pulls Google + merges/pushes the backup, refreshing providers
+      final r = await cloudSync(ref); // pulls Google + merges/pushes the backup, refreshing providers
       _lastSyncDay = todayKey(); // only mark done on a real sync
+      // The calendar mirror inside cloudSync failed for lack of a usable grant
+      // (typically Google's 7-day testing-token expiry). This auto-sync is the
+      // ONLY calendar push many users ever run — going quiet here left habits
+      // silently missing from Google Calendar with everything looking "synced".
+      if (r.calendarNeedsReconnect && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Your Google Calendar link expired — reconnect it in '
+                'the Cloud sheet (☁) to keep habits on your calendar.')));
+      }
     } catch (_) {/* best-effort — the ☁ button is always there */} finally {
       _syncing = false;
     }

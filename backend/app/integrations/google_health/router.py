@@ -44,12 +44,31 @@ def exchange(code: str = Query(...), user_id: str = Depends(current_user),
     return {"status": "connected", "user_id": user_id}
 
 
+def calendar_token_usable(db: Session, user_id: str) -> bool:
+    """Whether the stored calendar token can actually mint an access token —
+    NOT merely whether a row exists. Google's testing-mode refresh tokens die
+    after 7 days; a dead row used to keep reporting "connected", so the app hid
+    the reconnect button while every push kept failing with "reconnect" — a
+    trap with no way out. Dead grant (invalid_grant) → False. A transient
+    refresh failure (network blip) stays True so the UI isn't flipped to
+    reconnect over a hiccup — the push path surfaces persistent trouble."""
+    token = db.get(GoogleCalendarToken, user_id)
+    if token is None:
+        return False
+    try:
+        _valid_access_token(db, token)
+        return True
+    except Exception as e:
+        return "invalid_grant" not in str(e)
+
+
 @router.get("/status")
 def status(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     """Whether the signed-in user has a Google Health connection (for the app's
     Connect/Connected UI), plus which health scopes the stored token is missing,
     whether it carries a POISON scope (calendar on the health token makes the
-    Health API 403 everything), and whether the separate Calendar token exists."""
+    Health API 403 everything), and whether the separate Calendar token is
+    USABLE (a validated check, not just row-exists)."""
     token = db.get(GoogleHealthToken, user_id)
     if token is None:
         return {"connected": False}
@@ -60,7 +79,7 @@ def status(user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     # health.googleapis.com — reconnecting (which now consents health-only) fixes it.
     poisoned = any("calendar" in s for s in granted)
     return {"connected": True, "missing_scopes": missing, "health_token_poisoned": poisoned,
-            "calendar_connected": db.get(GoogleCalendarToken, user_id) is not None}
+            "calendar_connected": calendar_token_usable(db, user_id)}
 
 
 # ── Calendar linking (a SEPARATE consent + token: the Health API rejects tokens

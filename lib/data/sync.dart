@@ -201,10 +201,13 @@ Future<CloudSyncResult> cloudSync(WidgetRef ref) async {
   // know if it needs the calendar scope (then we can prompt a reconnect).
   var calendarNeedsReconnect = false;
   try {
-    final habits = [
-      for (final h in activeHabits(ref.read(habitsProvider).habits)) h.toJson()
-    ];
-    if (habits.isNotEmpty) {
+    final roster = ref.read(habitsProvider).habits;
+    // Gate on the WHOLE roster (active + archived), but push only the active
+    // list — possibly empty. Gating on the active list skipped the push when
+    // every habit was archived, stranding the retired habits' events on the
+    // calendar forever; an empty ACTIVE push is exactly what prunes them.
+    if (roster.isNotEmpty) {
+      final habits = [for (final h in activeHabits(roster)) h.toJson()];
       String? tzName;
       try {
         tzName = await FlutterTimezone.getLocalTimezone();

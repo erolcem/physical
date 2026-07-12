@@ -54,9 +54,19 @@ def push_to_google_calendar(
         raise HTTPException(401, "needs_calendar_connect")
     try:
         access = _valid_access_token(db, token)
-    except Exception:
-        raise HTTPException(401, "needs_reconnect")
-    habits = [h for h in (body.get("habits") or []) if isinstance(h, dict)]
+    except Exception as e:
+        # Only a DEAD grant (revoked / 7-day testing expiry → invalid_grant)
+        # means "reconnect". A transient refresh failure is a retry, not a
+        # re-consent — mislabelling it sent users to a reconnect that fixed
+        # nothing.
+        if "invalid_grant" in str(e):
+            raise HTTPException(401, "needs_reconnect")
+        raise HTTPException(502, f"calendar token refresh failed: {str(e)[:160]}")
+    # Archived (retired) habits are history — they must never (re)appear as
+    # calendar events, whichever caller sends them. Filtering here also prunes
+    # their existing events via the reconcile pass below.
+    habits = [h for h in (body.get("habits") or [])
+              if isinstance(h, dict) and not h.get("arch")]
     tz = body.get("tz")
     headers = {"Authorization": f"Bearer {access}"}
 

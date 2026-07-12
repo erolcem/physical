@@ -109,7 +109,9 @@ def _fold(line: str) -> str:
 
 
 def build_ics(habits: list[dict], *, now: dt.datetime | None = None) -> str:
-    """Build a VCALENDAR from the user's habit dicts (the app's Habit.toJson shape)."""
+    """Build a VCALENDAR from the user's habit dicts (the app's Habit.toJson
+    shape). Archived (retired) habits are kept in the backup as history —
+    they must never render as calendar events."""
     now = now or dt.datetime.now()
     stamp = now.strftime("%Y%m%dT%H%M%S")
     lines = [
@@ -118,6 +120,8 @@ def build_ics(habits: list[dict], *, now: dt.datetime | None = None) -> str:
         "REFRESH-INTERVAL;VALUE=DURATION:PT6H", "X-PUBLISHED-TTL:PT6H",
     ]
     for h in habits:
+        if not isinstance(h, dict) or h.get("arch"):
+            continue
         title = _esc(str(h.get("title") or "Habit"))
         hid = str(h.get("id") or title)
         time = h.get("time")
