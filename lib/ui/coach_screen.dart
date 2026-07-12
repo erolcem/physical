@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/api_client.dart';
 import '../data/coach_context.dart';
 import '../data/diet.dart' show todayDiet;
-import '../data/habits.dart' show habitSections, sectionOf;
+import '../data/habits.dart' show activeHabits, habitSections, sectionOf;
 import '../data/metrics.dart' show metricById, metrics;
 import '../data/readiness.dart' show dailyReadiness;
 import '../data/sync.dart' show apiClientProvider;
@@ -513,8 +513,12 @@ class _CoachTabState extends ConsumerState<CoachTab>
                       '${replace ? 'Replace with' : 'Add'} ${selected.where((s) => s).length} habits'),
                   onPressed: () {
                     if (replace) {
+                      // Retire the CURRENT roster only. Sweeping the whole list
+                      // would hit already-archived habits too, and a second
+                      // removeHabit on those PURGES them — erasing the coach's
+                      // history every time the roster was replaced.
                       final notifier = ref.read(habitsProvider.notifier);
-                      for (final h in [...ref.read(habitsProvider).habits]) {
+                      for (final h in activeHabits(ref.read(habitsProvider).habits)) {
                         notifier.removeHabit(h.id);
                       }
                     }
@@ -948,9 +952,12 @@ class _CoachTabState extends ConsumerState<CoachTab>
       notifier.adjustTarget(a['title'] as String? ?? '',
           (a['target'] as num?)?.toDouble() ?? 0, compare: a['compare'] as String?);
     } else if (a['type'] == 'remove_habit') {
+      // ACTIVE habits only: a same-titled archived habit must not be the match
+      // (removeHabit on an archived habit PURGES its history).
       final title = (a['title'] as String? ?? '').toLowerCase();
       final hs = ref.read(habitsProvider);
-      final match = hs.habits.where((h) => h.title.toLowerCase() == title);
+      final match =
+          activeHabits(hs.habits).where((h) => h.title.toLowerCase() == title);
       if (match.isNotEmpty) notifier.removeHabit(match.first.id);
     } else if (a['type'] == 'pin_correlation') {
       final am = a['a'] as String?, bm = a['b'] as String?;

@@ -230,6 +230,25 @@ void main() {
         id: id, title: 'Meditate', section: 'recovery', verify: 'manual',
         createdAt: created ?? '2026-06-01T08:00:00', archivedAt: archived);
 
+    test('adjustTarget touches the ACTIVE habit only — a same-titled archived '
+        'habit is never matched (matching it would resurrect it)', () {
+      final r = InMemoryRepository();
+      final n = HabitsNotifier(r);
+      // An archived "Protein" from an earlier era + a live "Protein".
+      r.saveHabit(const Habit(
+          id: 'old', title: 'Protein', section: 'diet', target: 120, unit: 'g',
+          createdAt: '2026-01-01T08:00:00', archivedAt: '2026-06-01T08:00:00'));
+      n.reload();
+      n.addHabit('Protein', section: 'diet', target: 150, unit: 'g');
+      n.adjustTarget('protein', 170);
+      final byId = {for (final h in n.state.habits) h.id: h};
+      // The archived era is untouched — still archived, still its old target.
+      expect(byId['old']!.archived, isTrue);
+      expect(byId['old']!.target, 120);
+      // The live habit took the new target.
+      expect(activeHabits(n.state.habits).single.target, 170);
+    });
+
     test('remove = archive (completions + verdicts kept); second remove purges', () {
       final r = InMemoryRepository();
       final n = HabitsNotifier(r);

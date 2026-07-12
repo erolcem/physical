@@ -104,8 +104,11 @@ class HabitsNotifier extends StateNotifier<HabitsState> {
   }
 
   /// Retune an existing habit's quantitative target (the coach's adjust action).
+  /// ACTIVE habits only: a same-titled archived habit must never be touched —
+  /// matching it would rebuild it without archivedAt and silently resurrect it.
   void adjustTarget(String title, double target, {String? compare}) {
-    final matches = state.habits.where((h) => h.title.toLowerCase() == title.toLowerCase());
+    final matches = activeHabits(state.habits)
+        .where((h) => h.title.toLowerCase() == title.toLowerCase());
     if (matches.isEmpty) return;
     final o = matches.first;
     repo.saveHabit(Habit(

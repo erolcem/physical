@@ -847,7 +847,11 @@ class _HabitsTabState extends ConsumerState<HabitsTab> {
       opacity: dimmed ? 0.5 : 1.0,
       child: Dismissible(
         key: ValueKey(h.id),
-        direction: DismissDirection.endToStart,
+        // Active: swipe = retire (history kept — recoverable in spirit).
+        // Archived: NOT swipeable — a second remove is a permanent purge, which
+        // must stay behind the detail sheet's deliberate "Delete forever".
+        direction:
+            h.archived ? DismissDirection.none : DismissDirection.endToStart,
         background: Container(
           alignment: Alignment.centerRight,
           padding: const EdgeInsets.only(right: 20),

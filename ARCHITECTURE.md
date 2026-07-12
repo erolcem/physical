@@ -1080,3 +1080,20 @@ habit now clears its events instead of stranding them.
 Tests: dead-grant 401 vs transient 502; validated `calendar_connected`
 (fresh token = no refresh round-trip, dead = false, blip = true); archived
 habits never written + their events pruned; ICS skips archived.
+
+## 29. Final QA sweep (July 2026) — archived habits are untouchable by title
+
+A last full-app audit of every raw `habits` read found one bug class left:
+title-matched and loop operations could land on ARCHIVED habits, where a
+"remove" is a permanent purge and an edit resurrects. Four fixes:
+`adjustTarget` matches active habits only (it rebuilt the match without
+`archivedAt` — the coach retuning "Protein" could silently resurrect a
+retired era of the same name); the planner's "Replace my current habits"
+retires the active roster only (it swept the whole list, purging all
+previously-archived history on every replace); the coach's `remove_habit`
+action matches active only; and archived tiles are not swipe-dismissable
+(a swipe on a history row was a no-confirmation permanent purge — the purge
+lives behind the detail sheet's deliberate "Delete forever"). Also verified
+in the sweep: every `api_client` path resolves to a registered backend
+route, all 11 routers are mounted, the backend byte-compiles, and both
+suites + analyzer are green.
